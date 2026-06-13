@@ -13,5 +13,6 @@ komodo_client.workspace = true
 svi.workspace = true
 #
 tokio.workspace = true
+tokio-util.workspace = true
 shlex.workspace = true
 libc.workspace = true

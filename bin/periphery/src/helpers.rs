@@ -5,8 +5,8 @@ use std::{
 
 use anyhow::Context;
 use command::{
-  KomodoCommandMode, run_komodo_command_with_sanitization,
-  run_standard_command,
+  CommandConfig, KomodoCommandMode,
+  run_komodo_command_with_sanitization, run_standard_command,
 };
 use environment::write_env_file;
 use interpolate::Interpolator;
@@ -367,7 +367,8 @@ async fn generate_self_signed_ssl_certs() {
   let command = format!(
     "openssl req -x509 -newkey rsa:4096 -keyout {key_path} -out {cert_path} -sha256 -days 3650 -nodes -subj \"/C=XX/CN=periphery\""
   );
-  let log = run_standard_command(&command, None).await;
+  let log =
+    run_standard_command(&command, None, CommandConfig::default()).await;
 
   if log.success() {
     info!("✅ SSL Certs generated");

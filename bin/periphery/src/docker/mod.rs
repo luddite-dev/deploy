@@ -1,6 +1,8 @@
 use anyhow::{Context, anyhow};
 use bollard::Docker;
-use command::{run_komodo_standard_command, run_shell_command};
+use command::{
+  CommandConfig, run_komodo_standard_command, run_shell_command,
+};
 use komodo_client::entities::{
   TerminationSignal,
   docker::{task::*, *},
@@ -53,7 +55,7 @@ pub async fn docker_login(
 
   let log = run_shell_command(&format!(
     "echo {registry_token} | docker login {domain} --username '{account}' --password-stdin",
-  ), None)
+  ), None, CommandConfig::default())
   .await;
 
   if log.success() {

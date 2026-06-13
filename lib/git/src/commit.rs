@@ -1,7 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
-use command::{run_komodo_standard_command, run_standard_command};
+use command::{
+  CommandConfig, run_komodo_standard_command, run_standard_command,
+};
 use formatting::format_serror;
 use komodo_client::entities::{
   RepoExecutionResponse, all_logs_success, update::Log,
@@ -213,22 +215,28 @@ async fn ensure_global_git_config_set() {
   let res = run_standard_command(
     "git config --global --get user.email",
     None,
+    CommandConfig::default(),
   )
   .await;
   if !res.success() {
     let _ = run_standard_command(
       "git config --global user.email komodo@komo.do",
       None,
+      CommandConfig::default(),
     )
     .await;
   }
-  let res =
-    run_standard_command("git config --global --get user.name", None)
-      .await;
+  let res = run_standard_command(
+    "git config --global --get user.name",
+    None,
+    CommandConfig::default(),
+  )
+  .await;
   if !res.success() {
     let _ = run_standard_command(
       "git config --global user.name komodo",
       None,
+      CommandConfig::default(),
     )
     .await;
   }

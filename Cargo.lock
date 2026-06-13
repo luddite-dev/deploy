@@ -1338,6 +1338,7 @@ dependencies = [
  "shlex 2.0.1",
  "svi",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

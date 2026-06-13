@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use anyhow::anyhow;
-use command::run_standard_command;
+use command::{CommandConfig, run_standard_command};
 use formatting::{bold, muted};
 use komodo_client::entities::{
   LatestCommit, komodo_timestamp, update::Log,
@@ -24,9 +24,12 @@ pub use crate::{
 pub async fn get_commit_hash_info(
   repo_dir: &Path,
 ) -> anyhow::Result<LatestCommit> {
-  let hash =
-    run_standard_command("git rev-parse --short HEAD", repo_dir)
-      .await;
+  let hash = run_standard_command(
+    "git rev-parse --short HEAD",
+    repo_dir,
+    CommandConfig::default(),
+  )
+  .await;
   let hash = if hash.status.success() {
     hash.stdout.trim().to_string()
   } else {
@@ -35,8 +38,12 @@ pub async fn get_commit_hash_info(
       hash.stderr
     ));
   };
-  let message =
-    run_standard_command("git log -1 --pretty=%B", repo_dir).await;
+  let message = run_standard_command(
+    "git log -1 --pretty=%B",
+    repo_dir,
+    CommandConfig::default(),
+  )
+  .await;
   let message = if message.status.success() {
     message.stdout.trim().to_string()
   } else {
@@ -76,8 +83,12 @@ pub async fn get_commit_hash_log(
 
 /// Gets the remote url, with `.git` stripped from the end.
 pub async fn get_remote_url(path: &Path) -> anyhow::Result<String> {
-  let output =
-    run_standard_command("git remote show origin", path).await;
+  let output = run_standard_command(
+    "git remote show origin",
+    path,
+    CommandConfig::default(),
+  )
+  .await;
   if output.success() {
     Ok(
       output
