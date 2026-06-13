@@ -2,6 +2,12 @@ use std::{path::Path, time::Duration};
 
 use tokio_util::sync::CancellationToken;
 
+/// A sensible timeout for quick read-only / inspection commands
+/// (listing, logs, stats, inspect, status, etc). These should resolve in
+/// at most a few seconds; the timeout exists purely to avoid hanging
+/// indefinitely on a stuck docker daemon, network mount, or git process.
+pub const QUICK_COMMAND_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// Controls for how a command is executed.
 ///
 /// When either timeout or cancel is set, the child is spawned in its own process group so

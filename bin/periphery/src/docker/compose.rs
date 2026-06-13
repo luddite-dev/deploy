@@ -1,5 +1,7 @@
 use anyhow::{Context, anyhow};
-use command::{CommandOptions, run_komodo_standard_command};
+use command::{
+  CommandOptions, QUICK_COMMAND_TIMEOUT, run_komodo_standard_command,
+};
 use komodo_client::entities::stack::ComposeProject;
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +21,7 @@ pub async fn list_compose_projects()
   let res = run_komodo_standard_command(
     "List Projects",
     format!("{docker_compose} ls --all --format json"),
-    CommandOptions::default(),
+    CommandOptions::default().timeout(QUICK_COMMAND_TIMEOUT),
   )
   .await;
 

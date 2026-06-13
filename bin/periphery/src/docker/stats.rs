@@ -3,7 +3,9 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::{Context, anyhow};
 use async_timing_util::wait_until_timelength;
 use bollard::{models, query_parameters::StatsOptionsBuilder};
-use command::{CommandOptions, run_standard_command};
+use command::{
+  CommandOptions, QUICK_COMMAND_TIMEOUT, run_standard_command,
+};
 use futures_util::StreamExt;
 use komodo_client::entities::docker::{
   container::ContainerStats,
@@ -65,8 +67,11 @@ pub async fn get_container_stats(
   };
   let command =
     format!("docker stats{container_name} --no-stream {format}");
-  let output =
-    run_standard_command(&command, CommandOptions::default()).await;
+  let output = run_standard_command(
+    &command,
+    CommandOptions::default().timeout(QUICK_COMMAND_TIMEOUT),
+  )
+  .await;
   if output.success() {
     output
       .stdout
