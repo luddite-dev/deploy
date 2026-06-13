@@ -1334,6 +1334,7 @@ name = "command"
 version = "2.3.0-dev-1"
 dependencies = [
  "komodo_client",
+ "libc",
  "shlex 2.0.1",
  "svi",
  "tokio",

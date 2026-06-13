@@ -14,3 +14,4 @@ svi.workspace = true
 #
 tokio.workspace = true
 shlex.workspace = true
+libc.workspace = true

@@ -85,6 +85,9 @@ url = "2.5.8"
 anyhow = "1.0.102"
 thiserror = "2.0.18"
 
+# SYSTEM
+libc = "0.2.186"
+
 # LOGGING
 tracing = "0.1.44"
 
