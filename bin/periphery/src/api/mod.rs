@@ -1,4 +1,4 @@
-use command::run_komodo_standard_command;
+use command::{CommandOptions, run_komodo_standard_command};
 use encoding::{EncodedJsonMessage, EncodedResponse};
 use komodo_client::entities::{
   config::{DockerRegistry, GitProvider},
@@ -260,8 +260,12 @@ impl Resolve<Args> for PruneSystem {
   async fn resolve(self, args: &Args) -> anyhow::Result<Log> {
     let command = String::from("docker system prune -a -f --volumes");
     Ok(
-      run_komodo_standard_command("Prune System", None, command)
-        .await,
+      run_komodo_standard_command(
+        "Prune System",
+        command,
+        CommandOptions::default(),
+      )
+      .await,
     )
   }
 }

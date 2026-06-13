@@ -1,45 +1,38 @@
-use std::{
-  path::{Path, PathBuf},
-  process::Stdio,
-  sync::OnceLock,
-  time::Duration,
-};
+use std::{path::PathBuf, process::Stdio, sync::OnceLock};
 
 use komodo_client::{
   entities::{komodo_timestamp, update::Log},
   parsers::parse_multiline_command,
 };
+use tokio::process::Command;
 
+mod options;
 mod output;
 
+pub use options::*;
 pub use output::*;
-use tokio::process::Command;
-use tokio_util::sync::CancellationToken;
 
 /// Commands are run directly, and cannot include '&&'
 pub async fn run_komodo_standard_command(
   stage: &str,
-  path: impl Into<Option<&Path>>,
   command: impl Into<String>,
+  options: CommandOptions<'_>,
 ) -> Log {
   let command = command.into();
   let start_ts = komodo_timestamp();
-  let output =
-    run_standard_command(&command, path, CommandConfig::default())
-      .await;
+  let output = run_standard_command(&command, options).await;
   output_into_log(stage, command, start_ts, output)
 }
 
 /// Commands are wrapped in 'sh -c', and can include '&&'
 pub async fn run_komodo_shell_command(
   stage: &str,
-  path: impl Into<Option<&Path>>,
   command: impl Into<String>,
+  options: CommandOptions<'_>,
 ) -> Log {
   let command = command.into();
   let start_ts = komodo_timestamp();
-  let output =
-    run_shell_command(&command, path, CommandConfig::default()).await;
+  let output = run_shell_command(&command, options).await;
   output_into_log(stage, command, start_ts, output)
 }
 
@@ -52,14 +45,14 @@ pub async fn run_komodo_shell_command(
 /// ie if all the lines are commented out.
 pub async fn run_komodo_multiline_command(
   stage: &str,
-  path: impl Into<Option<&Path>>,
   command: impl AsRef<str>,
+  options: CommandOptions<'_>,
 ) -> Option<Log> {
   let command = parse_multiline_command(command);
   if command.is_empty() {
     return None;
   }
-  Some(run_komodo_shell_command(stage, path, command).await)
+  Some(run_komodo_shell_command(stage, command, options).await)
 }
 
 pub enum KomodoCommandMode {
@@ -78,28 +71,24 @@ pub enum KomodoCommandMode {
 /// See [parse_multiline_command].
 pub async fn run_komodo_command_with_sanitization(
   stage: &str,
-  path: impl Into<Option<&Path>>,
   command: impl AsRef<str>,
+  options: CommandOptions<'_>,
   mode: KomodoCommandMode,
   replacers: &[(String, String)],
 ) -> Option<Log> {
   let mut log = match mode {
-    KomodoCommandMode::Standard => run_komodo_standard_command(
-      stage,
-      path,
-      command.as_ref().to_string(),
-    )
-    .await
-    .into(),
-    KomodoCommandMode::Shell => run_komodo_shell_command(
-      stage,
-      path,
-      command.as_ref().to_string(),
-    )
-    .await
-    .into(),
+    KomodoCommandMode::Standard => {
+      run_komodo_standard_command(stage, command.as_ref(), options)
+        .await
+        .into()
+    }
+    KomodoCommandMode::Shell => {
+      run_komodo_shell_command(stage, command.as_ref(), options)
+        .await
+        .into()
+    }
     KomodoCommandMode::Multiline => {
-      run_komodo_multiline_command(stage, path, command).await
+      run_komodo_multiline_command(stage, command, options).await
     }
   }?;
 
@@ -131,11 +120,10 @@ pub fn output_into_log(
 
 /// Commands are run directly, and cannot include '&&'.
 ///
-/// See [CommandConfig] for the available `timeout` / `cancel` controls.
+/// See [CommandOptions] for the available `timeout` / `cancel` controls.
 pub async fn run_standard_command(
   command: &str,
-  path: impl Into<Option<&Path>>,
-  config: CommandConfig,
+  options: CommandOptions<'_>,
 ) -> CommandOutput {
   let lexed = if let Some(lexed) = shlex::split(command)
     && !lexed.is_empty()
@@ -156,16 +144,7 @@ pub async fn run_standard_command(
     .stdout(Stdio::piped())
     .stderr(Stdio::piped());
 
-  if let Some(path) = path.into() {
-    match path.canonicalize() {
-      Ok(path) => {
-        cmd.current_dir(path);
-      }
-      Err(e) => return CommandOutput::from_err(e),
-    }
-  }
-
-  run_command(cmd, config).await
+  run_command(cmd, options).await
 }
 
 fn shell() -> &'static str {
@@ -188,11 +167,10 @@ fn shell() -> &'static str {
 
 /// Commands are wrapped in 'sh -c', and can include '&&'.
 ///
-/// See [CommandConfig] for the available `timeout` / `cancel` controls.
+/// See [CommandOptions] for the available `timeout` / `cancel` controls.
 pub async fn run_shell_command(
   command: &str,
-  path: impl Into<Option<&Path>>,
-  config: CommandConfig,
+  options: CommandOptions<'_>,
 ) -> CommandOutput {
   let mut cmd = Command::new(shell());
 
@@ -201,55 +179,12 @@ pub async fn run_shell_command(
     .kill_on_drop(true)
     .stdin(Stdio::null());
 
-  if let Some(path) = path.into() {
-    match path.canonicalize() {
-      Ok(path) => {
-        cmd.current_dir(path);
-      }
-      Err(e) => return CommandOutput::from_err(e),
-    }
-  }
-
-  run_command(cmd, config).await
-}
-
-/// Optional controls for how a command is executed.
-///
-/// When neither field is set the command simply runs to completion.
-/// When either is set, the child is spawned in its own process group so
-/// that, on timeout or cancellation, the entire group (the command and any
-/// descendants it spawned) is killed together — not just the direct child.
-#[derive(Default, Clone)]
-pub struct CommandConfig {
-  /// Kill the command (and its process group) if this duration elapses
-  /// before it finishes.
-  pub timeout: Option<Duration>,
-  /// Kill the command (and its process group) when this token is
-  /// cancelled, allowing cancellation from elsewhere.
-  pub cancel: Option<CancellationToken>,
-}
-
-impl CommandConfig {
-  pub fn timeout(
-    mut self,
-    timeout: impl Into<Option<Duration>>,
-  ) -> Self {
-    self.timeout = timeout.into();
-    self
-  }
-
-  pub fn cancel(
-    mut self,
-    cancel: impl Into<Option<CancellationToken>>,
-  ) -> Self {
-    self.cancel = cancel.into();
-    self
-  }
+  run_command(cmd, options).await
 }
 
 /// Runs the command to completion, returning its output.
 ///
-/// With an empty `config`, this is just `cmd.output()`.
+/// With an empty `options`, this is just `cmd.output()`.
 ///
 /// With a `timeout` and/or `cancel` token, the child is spawned in its own
 /// process group (via `process_group(0)`, so the child's pid is also its
@@ -260,9 +195,23 @@ impl CommandConfig {
 /// `kill_on_drop(true)` remains set as a backstop to reap the direct child.
 async fn run_command(
   mut cmd: Command,
-  config: CommandConfig,
+  options: CommandOptions<'_>,
 ) -> CommandOutput {
-  let CommandConfig { timeout, cancel } = config;
+  let CommandOptions {
+    path,
+    timeout,
+    cancel,
+  } = options;
+
+  // Attach the path to cmd as current dir
+  if let Some(path) = path {
+    match path.canonicalize() {
+      Ok(path) => {
+        cmd.current_dir(path);
+      }
+      Err(e) => return CommandOutput::from_err(e),
+    }
+  }
 
   // Fast path: nothing to wait on besides the command itself.
   if timeout.is_none() && cancel.is_none() {
@@ -336,6 +285,10 @@ fn kill_process_group(pid: Option<u32>) {
 
 #[cfg(test)]
 mod tests {
+  use std::time::Duration;
+
+  use tokio_util::sync::CancellationToken;
+
   use super::*;
 
   /// On timeout, a backgrounded grandchild (here `sleep 31337`, started
@@ -347,8 +300,7 @@ mod tests {
     let marker = "sleep 31337";
     let out = run_shell_command(
       &format!("{marker} & sleep 31336"),
-      None,
-      CommandConfig::default().timeout(Duration::from_millis(300)),
+      CommandOptions::default().timeout(Duration::from_millis(300)),
     )
     .await;
 
@@ -390,8 +342,7 @@ mod tests {
 
     let out = run_shell_command(
       &format!("{marker} & sleep 41336"),
-      None,
-      CommandConfig::default().cancel(cancel),
+      CommandOptions::default().cancel(cancel),
     )
     .await;
 

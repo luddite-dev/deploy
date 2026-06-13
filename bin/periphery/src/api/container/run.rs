@@ -2,7 +2,8 @@ use std::fmt::Write;
 
 use anyhow::Context;
 use command::{
-  KomodoCommandMode, run_komodo_command_with_sanitization,
+  CommandOptions, KomodoCommandMode,
+  run_komodo_command_with_sanitization,
 };
 use formatting::format_serror;
 use interpolate::Interpolator;
@@ -107,8 +108,8 @@ impl Resolve<crate::api::Args> for RunContainer {
     let span = info_span!("ExecuteDockerRun");
     let Some(log) = run_komodo_command_with_sanitization(
       "Docker Run",
-      None,
       command,
+      CommandOptions::default(),
       KomodoCommandMode::Shell,
       &replacers,
     )

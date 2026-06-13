@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use command::{
-  CommandConfig, run_komodo_standard_command, run_standard_command,
+  CommandOptions, run_komodo_standard_command, run_standard_command,
 };
 use formatting::format_serror;
 use komodo_client::entities::{
@@ -97,8 +97,8 @@ pub async fn commit_file_inner(
 
   let add_log = run_komodo_standard_command(
     "Add Files",
-    repo_dir,
     format!("git add {}", file.display()),
+    CommandOptions::default().path(repo_dir),
   )
   .await;
   res.logs.push(add_log);
@@ -108,10 +108,10 @@ pub async fn commit_file_inner(
 
   let commit_log = run_komodo_standard_command(
     "Commit",
-    repo_dir,
     format!(
       r#"git commit -m "[Komodo] {commit_msg}: update {file:?}""#,
     ),
+    CommandOptions::default().path(repo_dir),
   )
   .await;
 
@@ -142,8 +142,8 @@ pub async fn commit_file_inner(
 
   let push_log = run_komodo_standard_command(
     "Push",
-    repo_dir,
     format!("git push --set-upstream origin {branch}"),
+    CommandOptions::default().path(repo_dir),
   )
   .await;
 
@@ -166,9 +166,12 @@ pub async fn commit_all(
     commit_message: None,
   };
 
-  let add_log =
-    run_komodo_standard_command("Add Files", repo_dir, "git add -A")
-      .await;
+  let add_log = run_komodo_standard_command(
+    "Add Files",
+    "git add -A",
+    CommandOptions::default().path(repo_dir),
+  )
+  .await;
   res.logs.push(add_log);
   if !all_logs_success(&res.logs) {
     return res;
@@ -176,8 +179,8 @@ pub async fn commit_all(
 
   let commit_log = run_komodo_standard_command(
     "Commit",
-    repo_dir,
     format!(r#"git commit -m "[Komodo] {message}""#),
+    CommandOptions::default().path(repo_dir),
   )
   .await;
   res.logs.push(commit_log);
@@ -202,8 +205,8 @@ pub async fn commit_all(
 
   let push_log = run_komodo_standard_command(
     "Push",
-    repo_dir,
     format!("git push --set-upstream origin {branch}"),
+    CommandOptions::default().path(repo_dir),
   )
   .await;
   res.logs.push(push_log);
@@ -214,29 +217,25 @@ pub async fn commit_all(
 async fn ensure_global_git_config_set() {
   let res = run_standard_command(
     "git config --global --get user.email",
-    None,
-    CommandConfig::default(),
+    CommandOptions::default(),
   )
   .await;
   if !res.success() {
     let _ = run_standard_command(
       "git config --global user.email komodo@komo.do",
-      None,
-      CommandConfig::default(),
+      CommandOptions::default(),
     )
     .await;
   }
   let res = run_standard_command(
     "git config --global --get user.name",
-    None,
-    CommandConfig::default(),
+    CommandOptions::default(),
   )
   .await;
   if !res.success() {
     let _ = run_standard_command(
       "git config --global user.name komodo",
-      None,
-      CommandConfig::default(),
+      CommandOptions::default(),
     )
     .await;
   }

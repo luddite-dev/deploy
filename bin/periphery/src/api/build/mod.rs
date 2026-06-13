@@ -5,7 +5,8 @@ use std::{
 
 use anyhow::{Context, anyhow};
 use command::{
-  KomodoCommandMode, run_komodo_command_with_sanitization,
+  CommandOptions, KomodoCommandMode,
+  run_komodo_command_with_sanitization,
   run_komodo_standard_command,
 };
 use formatting::format_serror;
@@ -269,8 +270,8 @@ impl Resolve<crate::api::Args> for build::Build {
       let span = info_span!("RunPreBuild");
       if let Some(log) = run_komodo_command_with_sanitization(
         "Pre Build",
-        pre_build_path.as_path(),
         &pre_build.command,
+        CommandOptions::default().path(pre_build_path.as_path()),
         if pre_build.shell_mode {
           KomodoCommandMode::Shell
         } else {
@@ -329,8 +330,8 @@ impl Resolve<crate::api::Args> for build::Build {
     let span = info_span!("RunDockerBuild");
     if let Some(build_log) = run_komodo_command_with_sanitization(
       "Docker Build",
-      build_path.as_ref(),
       command,
+      CommandOptions::default().path(build_path.as_path()),
       KomodoCommandMode::Shell,
       &replacers,
     )
@@ -361,8 +362,12 @@ impl Resolve<crate::api::Args> for PruneBuilders {
   ) -> anyhow::Result<Log> {
     let command = String::from("docker builder prune -a -f");
     Ok(
-      run_komodo_standard_command("Prune Builders", None, command)
-        .await,
+      run_komodo_standard_command(
+        "Prune Builders",
+        command,
+        CommandOptions::default(),
+      )
+      .await,
     )
   }
 }
@@ -384,8 +389,12 @@ impl Resolve<crate::api::Args> for PruneBuildx {
   ) -> anyhow::Result<Log> {
     let command = String::from("docker buildx prune -a -f");
     Ok(
-      run_komodo_standard_command("Prune Buildx", None, command)
-        .await,
+      run_komodo_standard_command(
+        "Prune Buildx",
+        command,
+        CommandOptions::default(),
+      )
+      .await,
     )
   }
 }

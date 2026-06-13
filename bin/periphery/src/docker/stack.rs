@@ -1,5 +1,5 @@
 use anyhow::{Context, anyhow};
-use command::run_komodo_standard_command;
+use command::{CommandOptions, run_komodo_standard_command};
 use futures_util::{StreamExt, stream::FuturesOrdered};
 use komodo_client::entities::{
   docker::{
@@ -71,8 +71,8 @@ pub async fn list_swarm_stacks(
 ) -> anyhow::Result<Vec<SwarmStackListItem>> {
   let res = run_komodo_standard_command(
     "List Swarm Stacks",
-    None,
     "docker stack ls --format json",
+    CommandOptions::default(),
   )
   .await;
 
@@ -130,8 +130,8 @@ pub async fn list_swarm_stack_service_ids(
 ) -> anyhow::Result<Vec<String>> {
   let res = run_komodo_standard_command(
     "List Swarm Stack Services",
-    None,
     format!("docker stack services --format json {stack}"),
+    CommandOptions::default(),
   )
   .await;
 
@@ -160,8 +160,8 @@ pub async fn list_swarm_stack_tasks(
 ) -> anyhow::Result<Vec<SwarmStackTaskListItem>> {
   let res = run_komodo_standard_command(
     "List Swarm Stack Tasks",
-    None,
     format!("docker stack ps --format json --no-trunc {stack}"),
+    CommandOptions::default(),
   )
   .await;
 

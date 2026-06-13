@@ -3,7 +3,7 @@ use std::{
   sync::OnceLock,
 };
 
-use command::run_komodo_standard_command;
+use command::{CommandOptions, run_komodo_standard_command};
 use formatting::format_serror;
 use komodo_client::entities::{
   RepoExecutionArgs, RepoExecutionResponse, all_logs_success,
@@ -78,8 +78,8 @@ where
     // Set remote url
     let mut set_remote = run_komodo_standard_command(
       "Set Git Remote",
-      res.path.as_ref(),
       format!("git remote set-url origin {repo_url}"),
+      CommandOptions::default().path(res.path.as_ref()),
     )
     .await;
     // Sanitize the output
@@ -99,8 +99,8 @@ where
     // First fetch remote branches before checkout
     let fetch = run_komodo_standard_command(
       "Git Fetch",
-      res.path.as_ref(),
       "git fetch --all --prune",
+      CommandOptions::default().path(res.path.as_ref()),
     )
     .await;
     if !fetch.success {
@@ -110,8 +110,8 @@ where
 
     let checkout = run_komodo_standard_command(
       "Checkout branch",
-      res.path.as_ref(),
       format!("git checkout -f {}", args.branch),
+      CommandOptions::default().path(res.path.as_ref()),
     )
     .await;
     res.logs.push(checkout);
@@ -121,8 +121,8 @@ where
 
     let pull_log = run_komodo_standard_command(
       "Git pull",
-      res.path.as_ref(),
       format!("git pull --rebase --force origin {}", args.branch),
+      CommandOptions::default().path(res.path.as_ref()),
     )
     .await;
     res.logs.push(pull_log);
@@ -133,8 +133,8 @@ where
     if let Some(commit) = args.commit {
       let reset_log = run_komodo_standard_command(
         "Set commit",
-        res.path.as_ref(),
         format!("git reset --hard {commit}"),
+        CommandOptions::default().path(res.path.as_ref()),
       )
       .await;
       res.logs.push(reset_log);

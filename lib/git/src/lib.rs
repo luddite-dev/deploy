@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use anyhow::anyhow;
-use command::{CommandConfig, run_standard_command};
+use command::{CommandOptions, run_standard_command};
 use formatting::{bold, muted};
 use komodo_client::entities::{
   LatestCommit, komodo_timestamp, update::Log,
@@ -26,8 +26,7 @@ pub async fn get_commit_hash_info(
 ) -> anyhow::Result<LatestCommit> {
   let hash = run_standard_command(
     "git rev-parse --short HEAD",
-    repo_dir,
-    CommandConfig::default(),
+    CommandOptions::default().path(repo_dir),
   )
   .await;
   let hash = if hash.status.success() {
@@ -40,8 +39,7 @@ pub async fn get_commit_hash_info(
   };
   let message = run_standard_command(
     "git log -1 --pretty=%B",
-    repo_dir,
-    CommandConfig::default(),
+    CommandOptions::default().path(repo_dir),
   )
   .await;
   let message = if message.status.success() {
@@ -85,8 +83,7 @@ pub async fn get_commit_hash_log(
 pub async fn get_remote_url(path: &Path) -> anyhow::Result<String> {
   let output = run_standard_command(
     "git remote show origin",
-    path,
-    CommandConfig::default(),
+    CommandOptions::default().path(path),
   )
   .await;
   if output.success() {

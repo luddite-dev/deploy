@@ -1,7 +1,7 @@
 use std::{io::ErrorKind, path::Path};
 
 use anyhow::Context;
-use command::run_komodo_standard_command;
+use command::{CommandOptions, run_komodo_standard_command};
 use formatting::format_serror;
 use komodo_client::entities::{
   RepoExecutionArgs, RepoExecutionResponse, all_logs_success,
@@ -70,8 +70,12 @@ where
     args.branch
   );
 
-  let mut log =
-    run_komodo_standard_command("Clone Repo", None, command).await;
+  let mut log = run_komodo_standard_command(
+    "Clone Repo",
+    command,
+    CommandOptions::default(),
+  )
+  .await;
 
   if let Some(token) = access_token {
     log.command = log.command.replace(&token, "<TOKEN>");
@@ -88,8 +92,8 @@ where
   if let Some(commit) = args.commit {
     let reset_log = run_komodo_standard_command(
       "set commit",
-      res.path.as_path(),
       format!("git reset --hard {commit}",),
+      CommandOptions::default().path(res.path.as_path()),
     )
     .await;
     res.logs.push(reset_log);

@@ -2,8 +2,9 @@ use std::fmt::Write;
 
 use anyhow::Context as _;
 use command::{
-  KomodoCommandMode, run_komodo_command_with_sanitization,
-  run_komodo_shell_command, run_komodo_standard_command,
+  CommandOptions, KomodoCommandMode,
+  run_komodo_command_with_sanitization, run_komodo_shell_command,
+  run_komodo_standard_command,
 };
 use formatting::format_serror;
 use interpolate::Interpolator;
@@ -87,8 +88,8 @@ impl Resolve<crate::api::Args> for GetSwarmServiceLog {
     Ok(
       run_komodo_standard_command(
         "Get Swarm Service Log",
-        None,
         command,
+        CommandOptions::default(),
       )
       .await,
     )
@@ -137,8 +138,8 @@ impl Resolve<crate::api::Args> for GetSwarmServiceLogSearch {
     Ok(
       run_komodo_shell_command(
         "Search Swarm Service Log",
-        None,
         command,
+        CommandOptions::default(),
       )
       .await,
     )
@@ -167,8 +168,8 @@ impl Resolve<crate::api::Args> for RemoveSwarmServices {
     Ok(
       run_komodo_standard_command(
         "Remove Swarm Services",
-        None,
         command,
+        CommandOptions::default(),
       )
       .await,
     )
@@ -192,8 +193,8 @@ impl Resolve<crate::api::Args> for RollbackSwarmService {
     Ok(
       run_komodo_standard_command(
         "Rollback Swarm Service",
-        None,
         format!("docker service rollback {}", self.service),
+        CommandOptions::default(),
       )
       .await,
     )
@@ -293,8 +294,8 @@ impl Resolve<crate::api::Args> for CreateSwarmService {
     let span = info_span!("ExecuteDockerServiceCreate");
     if let Some(log) = run_komodo_command_with_sanitization(
       "Docker Service Create",
-      None,
       command,
+      CommandOptions::default(),
       KomodoCommandMode::Shell,
       &replacers,
     )
@@ -435,8 +436,8 @@ impl Resolve<crate::api::Args> for UpdateSwarmService {
     let span = info_span!("ExecuteDockerServiceCreate");
     let log = run_komodo_standard_command(
       "Docker Service Create",
-      None,
       command,
+      CommandOptions::default(),
     )
     .instrument(span)
     .await;

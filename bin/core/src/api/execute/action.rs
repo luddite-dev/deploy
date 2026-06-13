@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::Context;
-use command::run_komodo_standard_command;
+use command::{CommandOptions, run_komodo_standard_command};
 use database::mungos::{
   by_id::update_one_by_id, mongodb::bson::to_document,
 };
@@ -200,11 +200,11 @@ impl Resolve<ExecuteArgs> for RunAction {
       let mut res = run_komodo_standard_command(
         // Keep this stage name as is, the UI will find the latest update log by matching the stage name
         "Execute Action",
-        None,
         format!(
           "deno run --allow-all{https_cert_flag}{reload} {}",
           path.display()
         ),
+        CommandOptions::default(),
       )
       .await;
 

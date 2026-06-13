@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use command::run_komodo_standard_command;
+use command::{CommandOptions, run_komodo_standard_command};
 use formatting::format_serror;
 use komodo_client::entities::{
   RepoExecutionArgs, all_logs_success, update::Log,
@@ -13,9 +13,12 @@ pub async fn init_folder_as_repo(
   logs: &mut Vec<Log>,
 ) {
   // Initialize the folder as a git repo
-  let init_repo =
-    run_komodo_standard_command("Git Init", folder_path, "git init")
-      .await;
+  let init_repo = run_komodo_standard_command(
+    "Git Init",
+    "git init",
+    CommandOptions::default().path(folder_path),
+  )
+  .await;
   logs.push(init_repo);
   if !all_logs_success(logs) {
     return;
@@ -33,8 +36,8 @@ pub async fn init_folder_as_repo(
   // Set remote url
   let mut set_remote = run_komodo_standard_command(
     "Add git remote",
-    folder_path,
     format!("git remote add origin {repo_url}"),
+    CommandOptions::default().path(folder_path),
   )
   .await;
   // Sanitize the output
@@ -51,8 +54,8 @@ pub async fn init_folder_as_repo(
   // Set branch.
   let init_repo = run_komodo_standard_command(
     "Set Branch",
-    folder_path,
     format!("git switch -c {}", args.branch),
+    CommandOptions::default().path(folder_path),
   )
   .await;
   if !init_repo.success {
