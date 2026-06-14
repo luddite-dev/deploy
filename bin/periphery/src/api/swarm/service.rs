@@ -1,8 +1,8 @@
-use std::fmt::Write;
+use std::{fmt::Write, time::Duration};
 
 use anyhow::Context as _;
 use command::{
-  CommandOptions, KomodoCommandMode, QUICK_COMMAND_TIMEOUT,
+  CommandOptions, KomodoCommandMode,
   run_komodo_command_with_sanitization, run_komodo_shell_command,
   run_komodo_standard_command,
 };
@@ -89,7 +89,7 @@ impl Resolve<crate::api::Args> for GetSwarmServiceLog {
       run_komodo_standard_command(
         "Get Swarm Service Log",
         command,
-        CommandOptions::default().timeout(QUICK_COMMAND_TIMEOUT),
+        CommandOptions::default().timeout(Duration::from_secs(3)),
       )
       .await,
     )
@@ -139,7 +139,7 @@ impl Resolve<crate::api::Args> for GetSwarmServiceLogSearch {
       run_komodo_shell_command(
         "Search Swarm Service Log",
         command,
-        CommandOptions::default().timeout(QUICK_COMMAND_TIMEOUT),
+        CommandOptions::default().timeout(Duration::from_secs(3)),
       )
       .await,
     )

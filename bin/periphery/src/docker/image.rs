@@ -1,8 +1,8 @@
+use std::time::Duration;
+
 use anyhow::Context;
 use bollard::query_parameters::ListImagesOptions;
-use command::{
-  CommandOptions, QUICK_COMMAND_TIMEOUT, run_komodo_standard_command,
-};
+use command::{CommandOptions, run_komodo_standard_command};
 use komodo_client::entities::docker::{
   GraphDriverData, HealthConfig, container::ContainerListItem,
   image::*,
@@ -198,7 +198,7 @@ pub async fn get_image_digest_from_registry(
   let log = run_komodo_standard_command(
     "",
     command,
-    CommandOptions::default().timeout(QUICK_COMMAND_TIMEOUT),
+    CommandOptions::default().timeout(Duration::from_secs(3)),
   )
   .await;
   if !log.success {

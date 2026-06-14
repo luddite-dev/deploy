@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use anyhow::Context;
 use command::{
-  CommandOptions, QUICK_COMMAND_TIMEOUT, run_komodo_shell_command,
+  CommandOptions, run_komodo_shell_command,
   run_komodo_standard_command,
 };
 use futures_util::future::join_all;
@@ -65,7 +67,7 @@ impl Resolve<crate::api::Args> for GetContainerLog {
       run_komodo_standard_command(
         "Get container log",
         command,
-        CommandOptions::default().timeout(QUICK_COMMAND_TIMEOUT),
+        CommandOptions::default().timeout(Duration::from_secs(3)),
       )
       .await,
     )
@@ -99,7 +101,7 @@ impl Resolve<crate::api::Args> for GetContainerLogSearch {
       run_komodo_shell_command(
         "Get container log grep",
         command,
-        CommandOptions::default().timeout(QUICK_COMMAND_TIMEOUT),
+        CommandOptions::default().timeout(Duration::from_secs(3)),
       )
       .await,
     )

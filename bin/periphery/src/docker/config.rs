@@ -1,8 +1,8 @@
-use std::fmt::Write;
+use std::{fmt::Write, time::Duration};
 
 use anyhow::{Context, anyhow};
 use command::{
-  CommandOptions, QUICK_COMMAND_TIMEOUT, run_komodo_shell_command,
+  CommandOptions, run_komodo_shell_command,
   run_komodo_standard_command,
 };
 use data_encoding::BASE64URL;
@@ -25,7 +25,7 @@ pub async fn list_swarm_configs(
   let res = run_komodo_standard_command(
     "List Swarm Configs",
     "docker config ls --format json",
-    CommandOptions::default().timeout(QUICK_COMMAND_TIMEOUT),
+    CommandOptions::default().timeout(Duration::from_secs(1)),
   )
   .await;
 
@@ -70,7 +70,7 @@ pub async fn inspect_swarm_config(
   let res = run_komodo_standard_command(
     "Inspect Swarm Config",
     format!(r#"docker config inspect "{config}""#),
-    CommandOptions::default().timeout(QUICK_COMMAND_TIMEOUT),
+    CommandOptions::default().timeout(Duration::from_secs(3)),
   )
   .await;
 

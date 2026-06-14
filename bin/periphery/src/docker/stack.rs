@@ -1,7 +1,7 @@
+use std::time::Duration;
+
 use anyhow::{Context, anyhow};
-use command::{
-  CommandOptions, QUICK_COMMAND_TIMEOUT, run_komodo_standard_command,
-};
+use command::{CommandOptions, run_komodo_standard_command};
 use futures_util::{StreamExt, stream::FuturesOrdered};
 use komodo_client::entities::{
   docker::{
@@ -74,7 +74,7 @@ pub async fn list_swarm_stacks(
   let res = run_komodo_standard_command(
     "List Swarm Stacks",
     "docker stack ls --format json",
-    CommandOptions::default().timeout(QUICK_COMMAND_TIMEOUT),
+    CommandOptions::default().timeout(Duration::from_secs(3)),
   )
   .await;
 
@@ -133,7 +133,7 @@ pub async fn list_swarm_stack_service_ids(
   let res = run_komodo_standard_command(
     "List Swarm Stack Services",
     format!("docker stack services --format json {stack}"),
-    CommandOptions::default().timeout(QUICK_COMMAND_TIMEOUT),
+    CommandOptions::default().timeout(Duration::from_secs(3)),
   )
   .await;
 
@@ -163,7 +163,7 @@ pub async fn list_swarm_stack_tasks(
   let res = run_komodo_standard_command(
     "List Swarm Stack Tasks",
     format!("docker stack ps --format json --no-trunc {stack}"),
-    CommandOptions::default().timeout(QUICK_COMMAND_TIMEOUT),
+    CommandOptions::default().timeout(Duration::from_secs(3)),
   )
   .await;
 

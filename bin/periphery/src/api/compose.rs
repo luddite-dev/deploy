@@ -1,8 +1,8 @@
-use std::{borrow::Cow, fmt::Write, path::PathBuf};
+use std::{borrow::Cow, fmt::Write, path::PathBuf, time::Duration};
 
 use anyhow::{Context, anyhow};
 use command::{
-  CommandOptions, KomodoCommandMode, QUICK_COMMAND_TIMEOUT,
+  CommandOptions, KomodoCommandMode,
   run_komodo_command_with_sanitization, run_komodo_shell_command,
   run_komodo_standard_command,
 };
@@ -62,7 +62,7 @@ impl Resolve<crate::api::Args> for GetComposeLog {
       run_komodo_standard_command(
         "Get Stack Log",
         command,
-        CommandOptions::default().timeout(QUICK_COMMAND_TIMEOUT),
+        CommandOptions::default().timeout(Duration::from_secs(3)),
       )
       .await,
     )
@@ -97,7 +97,7 @@ impl Resolve<crate::api::Args> for GetComposeLogSearch {
       run_komodo_shell_command(
         "Search Stack Log",
         command,
-        CommandOptions::default().timeout(QUICK_COMMAND_TIMEOUT),
+        CommandOptions::default().timeout(Duration::from_secs(3)),
       )
       .await,
     )
