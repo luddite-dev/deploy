@@ -6,12 +6,19 @@ use komodo_client::entities::{
   RepoExecutionArgs, all_logs_success, update::Log,
 };
 
+use crate::check_installed;
+
 pub async fn init_folder_as_repo(
   folder_path: &Path,
   args: &RepoExecutionArgs,
   access_token: Option<&str>,
   logs: &mut Vec<Log>,
 ) {
+  if let Err(e) = check_installed().await {
+    logs.push(Log::error("Git Init", format_serror(&e.into())));
+    return;
+  };
+
   // Initialize the folder as a git repo
   let init_repo = run_komodo_standard_command(
     "Git Init",

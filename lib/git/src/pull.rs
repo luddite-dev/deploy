@@ -11,7 +11,7 @@ use komodo_client::entities::{
 };
 use mogh_cache::TimeoutCache;
 
-use crate::get_commit_hash_log;
+use crate::{check_installed, get_commit_hash_log};
 
 /// Wait this long after a pull to allow another pull through
 const PULL_TIMEOUT: i64 = 5_000;
@@ -27,7 +27,6 @@ fn pull_cache()
 /// This will pull in a way that handles edge cases
 /// from possible state of the repo. For example, the user
 /// can change branch after clone, or even the remote.
-#[allow(clippy::too_many_arguments)]
 pub async fn pull<T>(
   clone_args: T,
   root_repo_dir: &Path,
@@ -36,6 +35,8 @@ pub async fn pull<T>(
 where
   T: Into<RepoExecutionArgs> + std::fmt::Debug,
 {
+  check_installed().await?;
+
   let args: RepoExecutionArgs = clone_args.into();
   let repo_url = args.remote_url(access_token.as_deref())?;
 

@@ -8,7 +8,7 @@ use komodo_client::entities::{
   update::Log,
 };
 
-use crate::get_commit_hash_log;
+use crate::{check_installed, get_commit_hash_log};
 
 /// Will delete the existing repo folder,
 /// clone the repo, get the latest hash / message,
@@ -24,6 +24,8 @@ pub async fn clone<T>(
 where
   T: Into<RepoExecutionArgs> + std::fmt::Debug,
 {
+  check_installed().await?;
+
   let args: RepoExecutionArgs = clone_args.into();
   let repo_url = args.remote_url(access_token.as_deref())?;
 

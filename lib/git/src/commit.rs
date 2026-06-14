@@ -9,7 +9,7 @@ use komodo_client::entities::{
   RepoExecutionResponse, all_logs_success, update::Log,
 };
 
-use crate::get_commit_hash_log;
+use crate::{check_installed, get_commit_hash_log};
 
 /// Write file, add, commit, force push.
 /// Repo must be cloned.
@@ -93,6 +93,13 @@ pub async fn commit_file_inner(
   file: &Path,
   branch: &str,
 ) {
+  if let Err(e) = check_installed().await {
+    res
+      .logs
+      .push(Log::error("Commit", format_serror(&e.into())));
+    return;
+  };
+
   ensure_global_git_config_set().await;
 
   let add_log = run_komodo_standard_command(
@@ -157,14 +164,21 @@ pub async fn commit_all(
   message: &str,
   branch: &str,
 ) -> RepoExecutionResponse {
-  ensure_global_git_config_set().await;
-
   let mut res = RepoExecutionResponse {
     path: repo_dir.to_path_buf(),
     logs: Vec::new(),
     commit_hash: None,
     commit_message: None,
   };
+
+  if let Err(e) = check_installed().await {
+    res
+      .logs
+      .push(Log::error("Commit", format_serror(&e.into())));
+    return res;
+  };
+
+  ensure_global_git_config_set().await;
 
   let add_log = run_komodo_standard_command(
     "Add Files",

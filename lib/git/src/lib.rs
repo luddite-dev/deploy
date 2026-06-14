@@ -10,6 +10,7 @@ use komodo_client::entities::{
 mod clone;
 mod commit;
 mod init;
+mod installed;
 mod pull;
 mod pull_or_clone;
 
@@ -17,6 +18,7 @@ pub use crate::{
   clone::clone,
   commit::{commit_all, commit_file, write_commit_file},
   init::init_folder_as_repo,
+  installed::check_installed,
   pull::pull,
   pull_or_clone::pull_or_clone,
 };
@@ -24,6 +26,7 @@ pub use crate::{
 pub async fn get_commit_hash_info(
   repo_dir: &Path,
 ) -> anyhow::Result<LatestCommit> {
+  check_installed().await?;
   let hash = run_standard_command(
     "git rev-parse --short HEAD",
     CommandOptions::default()
@@ -85,6 +88,7 @@ pub async fn get_commit_hash_log(
 
 /// Gets the remote url, with `.git` stripped from the end.
 pub async fn get_remote_url(path: &Path) -> anyhow::Result<String> {
+  check_installed().await?;
   let output = run_standard_command(
     "git remote show origin",
     CommandOptions::default()
