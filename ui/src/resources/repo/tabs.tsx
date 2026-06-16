@@ -1,10 +1,7 @@
 import { useLocalStorage } from "@mantine/hooks";
 import { useRepo } from ".";
 import { useMemo } from "react";
-import {
-  MobileFriendlyTabsSelector,
-  TabNoContent,
-} from "mogh_ui";
+import { MobileFriendlyTabsSelector, TabNoContent } from "mogh_ui";
 import { ICONS } from "@/lib/icons";
 import { repoStateIntention } from "@/lib/color";
 import { Tabs } from "@mantine/core";
@@ -16,7 +13,7 @@ type RepoTabsView = "Config" | "Resources";
 
 export default function RepoTabs({ id }: { id: string }) {
   const [view, setView] = useLocalStorage<RepoTabsView>({
-    key: "repo-tabs-v1",
+    key: `repo-${id}-tab-v2`,
     defaultValue: "Config",
   });
   const info = useRepo(id)?.info;
