@@ -4,6 +4,8 @@ import SwarmServiceTasksSection, {
   SwarmServiceTasksSectionProps,
 } from "@/pages/swarm/service/tasks";
 import { useState } from "react";
+import { Section } from "mogh_ui";
+import { Text } from "@mantine/core";
 
 export interface DeploymentTasksSectionProps extends Omit<
   Omit<SwarmServiceTasksSectionProps, "id">,
@@ -25,7 +27,13 @@ export default function DeploymentTasksSection({
   ).data?.find((service) => service.Name === deployment?.name);
   const _search = useState("");
 
-  if (!swarmId || !service) return;
+  if (!swarmId || !service) {
+    return (
+      <Section {...props}>
+        <Text>Did not find {!swarmId ? "Swarm" : "Swarm Service"}</Text>
+      </Section>
+    );
+  }
 
   return (
     <SwarmServiceTasksSection
