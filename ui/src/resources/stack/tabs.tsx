@@ -3,10 +3,7 @@ import { useStack } from ".";
 import { usePermissions, useRead } from "@/lib/hooks";
 import { Types } from "komodo_client";
 import { useMemo } from "react";
-import {
-  MobileFriendlyTabsSelector,
-  TabNoContent,
-} from "mogh_ui";
+import { MobileFriendlyTabsSelector, TabNoContent } from "mogh_ui";
 import { Tabs } from "@mantine/core";
 import { ICONS } from "@/lib/icons";
 import { stackStateIntention } from "@/lib/color";
@@ -45,6 +42,8 @@ export default function StackTabs({ id }: { id: string }) {
   const terminalDisabled =
     !specificTerminal ||
     containerTerminalsDisabled ||
+    // Not attached to swarm
+    !!info?.swarm_id ||
     // All services are not running
     services?.every(
       (service) =>

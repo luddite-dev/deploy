@@ -42,7 +42,8 @@ export default function DeploymentTabs({ id }: { id: string }) {
   const terminalDisabled =
     !specificTerminal ||
     containerTerminalsDisabled ||
-    state !== Types.DeploymentState.Running;
+    state !== Types.DeploymentState.Running ||
+    !!info?.swarm_id;
 
   const view =
     (logsDisabled && _view === "Log") ||
@@ -78,7 +79,6 @@ export default function DeploymentTabs({ id }: { id: string }) {
         value: "Terminals",
         icon: ICONS.Terminal,
         disabled: terminalDisabled,
-        hidden: !!info?.swarm_id,
       },
     ],
     [logsDisabled, inspectDisabled, terminalDisabled, info?.swarm_id],
