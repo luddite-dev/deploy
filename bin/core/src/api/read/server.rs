@@ -46,6 +46,7 @@ use periphery_client::api::{
 };
 use reqwest::StatusCode;
 use tokio::sync::Mutex;
+use wildcard::Wildcard;
 
 use crate::{
   helpers::{periphery_client, query::get_all_tags},
@@ -404,6 +405,11 @@ impl Resolve<ReadArgs> for ListAllDockerContainers {
     )
     .await?;
 
+    let wildcards = self
+      .containers
+      .into_iter()
+      .flat_map(|c| Wildcard::from_owned(c.into_bytes()))
+      .collect::<Vec<_>>();
     let mut containers = Vec::<ContainerListItem>::new();
 
     for server in servers {
@@ -417,8 +423,10 @@ impl Resolve<ReadArgs> for ListAllDockerContainers {
         .containers
         .iter()
         .filter(|container| {
-          self.containers.is_empty()
-            || self.containers.contains(&container.name)
+          wildcards.is_empty()
+            || wildcards
+              .iter()
+              .any(|wc| wc.is_match(container.name.as_bytes()))
         })
         .cloned();
       containers.extend(more);
