@@ -264,7 +264,7 @@ export function useOmniSearch(): {
                   ?.name,
               onClick: () =>
                 nav(`/stacks/${service.stack_id}/service/${service.service}`),
-              leftSection: <ICONS.Service size="1rem" color={color} />,
+              leftSection: <ICONS.Service size="1.3rem" color={color} />,
             };
           }) ?? [],
       },
