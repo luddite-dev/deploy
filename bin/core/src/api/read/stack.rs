@@ -9,7 +9,10 @@ use komodo_client::{
       container::Container, service::SwarmService, stack::SwarmStack,
     },
     permission::PermissionLevel,
-    stack::{Stack, StackActionState, StackListItem, StackState},
+    stack::{
+      Stack, StackActionState, StackListItem, StackQuery,
+      StackService, StackState,
+    },
   },
 };
 use mogh_error::AddStatusCodeError as _;
@@ -19,6 +22,7 @@ use periphery_client::api::{
   container::InspectContainer,
 };
 use reqwest::StatusCode;
+use wildcard::Wildcard;
 
 use crate::{
   helpers::{
@@ -67,6 +71,64 @@ impl Resolve<ReadArgs> for ListStackServices {
       .curr
       .services
       .clone();
+
+    Ok(services)
+  }
+}
+
+impl Resolve<ReadArgs> for ListAllStackServices {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<ListStackServicesResponse> {
+    let stacks = resource::list_for_user::<Stack>(
+      StackQuery::builder()
+        .names(self.stacks.clone())
+        .tags(self.tags)
+        .build(),
+      user,
+      PermissionLevel::Read.into(),
+      &[],
+    )
+    .await?;
+
+    let terms = self
+      .services
+      .iter()
+      .flat_map(|term| {
+        anyhow::Ok((term, Wildcard::new(term.as_bytes())?))
+      })
+      .collect::<Vec<_>>();
+
+    let mut services = Vec::<StackService>::new();
+    let mut skipped = 0;
+    let limit_usize = self.limit as usize;
+
+    for stack in stacks {
+      let cache =
+        stack_status_cache().get_or_insert_default(&stack.id).await;
+      let more = cache.curr.services
+        .iter()
+        .filter(|service| {
+          terms.is_empty()
+            // Match when all terms contained within a name.
+            || terms.iter().all(|(term, _)| service.service.contains(*term))
+            // Match when any wildcard term directly matches.
+            || terms.iter().any(|(_, wc)| wc.is_match(service.service.as_bytes()))
+        });
+      for service in more {
+        if skipped < self.limit * self.page {
+          // Eg. page 1 skips until after 300 services, page 2 after 600.
+          skipped += 1;
+        } else {
+          // push and maybe early return
+          services.push(service.clone());
+          if services.len() >= limit_usize {
+            return Ok(services);
+          }
+        }
+      }
+    }
 
     Ok(services)
   }

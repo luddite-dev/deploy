@@ -4901,6 +4901,21 @@ export interface ContainerListItem {
     labels?: Record<string, string>;
 }
 export type ListAllDockerContainersResponse = ContainerListItem[];
+export interface StackService {
+    /** The stack which the service is a part of. */
+    stack_id: string;
+    /** The service name */
+    service: string;
+    /** The service image */
+    image: string;
+    /** The container (Server mode) */
+    container?: ContainerListItem;
+    /** The service (Swarm mode) */
+    swarm_service?: SwarmServiceListItem;
+    /** The service image digests */
+    image_digests?: ImageDigest[];
+}
+export type ListAllStackServicesResponse = StackService[];
 /** An api key used to authenticate requests via request headers. */
 export interface ApiKey {
     /** Unique key associated with secret */
@@ -5278,18 +5293,6 @@ export interface ServerListItemInfo {
 }
 export type ServerListItem = ResourceListItem<ServerListItemInfo>;
 export type ListServersResponse = ServerListItem[];
-export interface StackService {
-    /** The service name */
-    service: string;
-    /** The service image */
-    image: string;
-    /** The container (Server mode) */
-    container?: ContainerListItem;
-    /** The service (Swarm mode) */
-    swarm_service?: SwarmServiceListItem;
-    /** The service image digests */
-    image_digests?: ImageDigest[];
-}
 export type ListStackServicesResponse = StackService[];
 export declare enum StackState {
     /** The stack is currently re/deploying */
@@ -8167,6 +8170,8 @@ export interface ListAlertsResponse {
 export interface ListAllDockerContainers {
     /** Filter by server id or name. */
     servers?: string[];
+    /** Filter servers by tag. */
+    tags?: string[];
     /**
      * Filter by container name.
      * Supports wildcard matching syntax.
@@ -8179,6 +8184,34 @@ export interface ListAllDockerContainers {
     page?: U64;
     /**
      * Set the limit for number of containers per-page.
+     * `limit: 300` is default.
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit: U64;
+}
+/**
+ * List all stack services part of the target stacks.
+ * Response: [ListStackServicesResponse].
+ */
+export interface ListAllStackServices {
+    /** Filter by stack name. */
+    stacks?: string[];
+    /** Filter stacks by tag. */
+    tags?: string[];
+    /**
+     * Filter by service name.
+     * Supports wildcard matching syntax.
+     */
+    services?: string[];
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of services per-page.
      * `limit: 300` is default.
      *
      * Note: the page logic relies on this being consistent
@@ -10587,6 +10620,9 @@ export type ReadRequest = {
 } | {
     type: "ListStackServices";
     params: ListStackServices;
+} | {
+    type: "ListAllStackServices";
+    params: ListAllStackServices;
 } | {
     type: "ListCommonStackExtraArgs";
     params: ListCommonStackExtraArgs;

@@ -5,6 +5,7 @@ import {
   useRead,
   useResourceParamType,
   useSetTitle,
+  useTagsFilter,
   useTemplatesQueryBehavior,
   useUser,
 } from "@/lib/hooks";
@@ -32,14 +33,16 @@ export default function Resources({ _type }: { _type?: UsableResource }) {
   const [search, setSearch] = useState("");
   const [filterUpdateAvailable, toggleFilterUpdateAvailable] =
     useFilterByUpdateAvailable();
+  const tags = useTagsFilter();
   const query =
     type === "Stack" || type === "Deployment"
       ? {
+          tags,
           query: {
             specific: { update_available: filterUpdateAvailable },
           },
         }
-      : {};
+      : { tags };
   const [templatesQueryBehavior] = useTemplatesQueryBehavior();
   const resources = useRead(`List${type}s`, query).data;
   const templatesFilterFn =

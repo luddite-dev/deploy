@@ -63,6 +63,7 @@ async fn list_containers(
         .collect::<HashMap<_, _>>())),
     client.read(ListAllDockerContainers {
       servers: Default::default(),
+      tags: Default::default(),
       containers: names.clone(),
       limit: 300,
       page: *page,
@@ -148,6 +149,7 @@ pub async fn inspect_container(
         .collect::<HashMap<_, _>>())),
     client.read(ListAllDockerContainers {
       servers: inspect.servers.clone(),
+      tags: Default::default(),
       containers: vec![inspect.container.clone()],
       limit: 300,
       page: 0,

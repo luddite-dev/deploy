@@ -807,6 +807,8 @@ pub struct StackServiceNames {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct StackService {
+  /// The stack which the service is a part of.
+  pub stack_id: String,
   /// The service name
   pub service: String,
   /// The service image

@@ -59,6 +59,7 @@ use crate::api::read;
     read::get_stack_action_state,
     read::get_stacks_summary,
     read::list_stack_services,
+    read::list_all_stack_services,
     read::inspect_stack_container,
     read::inspect_stack_swarm_service,
     read::inspect_stack_swarm_info,

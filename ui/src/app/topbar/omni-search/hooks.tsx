@@ -19,6 +19,8 @@ import { useNavigate } from "react-router-dom";
 import { TemplateMarker } from "@/components/template-marker";
 import { DOCKER_LINK_ICONS } from "@/components/docker/link";
 import { Types } from "komodo_client";
+import { hexColorByIntention, useDebounce } from "mogh_ui";
+import { containerStateIntention, swarmStateIntention } from "@/lib/color";
 
 const ITEM_LIMIT = 7;
 let count = 0;
@@ -47,11 +49,33 @@ export function useOmniSearch(): {
     [search],
   );
 
-  const containers = useRead(
-    "ListAllDockerContainers",
-    { containers: searchTerms, limit: 300, page: 0 },
-    { refetchInterval: 15_000 },
-  ).data;
+  const debouncedTerms = useDebounce(searchTerms, 700);
+
+  const containersQuery = useMemo(
+    () => ({
+      containers: debouncedTerms,
+      limit: 300,
+      page: 0,
+    }),
+    [debouncedTerms],
+  );
+
+  const containers = useRead("ListAllDockerContainers", containersQuery, {
+    refetchInterval: 15_000,
+  }).data;
+
+  const servicesQuery = useMemo(
+    () => ({
+      services: debouncedTerms,
+      limit: 300,
+      page: 0,
+    }),
+    [debouncedTerms],
+  );
+
+  const services = useRead("ListAllStackServices", servicesQuery, {
+    refetchInterval: 15_000,
+  }).data;
 
   const _terminals = useRead(
     "ListTerminals",
@@ -221,6 +245,28 @@ export function useOmniSearch(): {
               />
             ),
           })) ?? [],
+      },
+
+      {
+        group: "Services",
+        actions:
+          services?.map((service) => {
+            const intention = service?.swarm_service?.State
+              ? swarmStateIntention(service?.swarm_service?.State)
+              : containerStateIntention(service?.container?.state);
+            const color = hexColorByIntention(intention);
+            return {
+              id: service.stack_id + " " + service.service,
+              label: service.service,
+              description:
+                "Stack: " +
+                resources.Stack?.find((stack) => service.stack_id === stack.id)
+                  ?.name,
+              onClick: () =>
+                nav(`/stacks/${service.stack_id}/service/${service.service}`),
+              leftSection: <ICONS.Service size="1rem" color={color} />,
+            };
+          }) ?? [],
       },
 
       {

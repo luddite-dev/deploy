@@ -84,6 +84,10 @@ pub struct ListAllDockerContainers {
   #[serde(default)]
   pub servers: Vec<String>,
 
+  /// Filter servers by tag.
+  #[serde(default)]
+  pub tags: Vec<String>,
+
   /// Filter by container name.
   /// Supports wildcard matching syntax.
   #[serde(default)]

@@ -80,6 +80,63 @@ pub type ListStackServicesResponse = Vec<StackService>;
 #[cfg(feature = "utoipa")]
 #[utoipa::path(
   post,
+  path = "/ListAllStackServices",
+  description = "List all stack services on the target servers / stacks.",
+  request_body(content = ListAllStackServices),
+  responses(
+    (status = 200, description = "The list of stack services", body = ListAllStackServicesResponse),
+  ),
+)]
+pub fn list_all_stack_services() {}
+
+/// List all stack services part of the target stacks.
+/// Response: [ListStackServicesResponse].
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(ListAllStackServicesResponse)]
+#[error(mogh_error::Error)]
+pub struct ListAllStackServices {
+  /// Filter by stack name.
+  #[serde(default)]
+  pub stacks: Vec<String>,
+
+  /// Filter stacks by tag.
+  #[serde(default)]
+  pub tags: Vec<String>,
+
+  /// Filter by service name.
+  /// Supports wildcard matching syntax.
+  #[serde(default)]
+  pub services: Vec<String>,
+
+  /// Retrieve more results by incrementing the page.
+  /// `page: 0` is default.
+  #[serde(default)]
+  pub page: U64,
+
+  /// Set the limit for number of services per-page.
+  /// `limit: 300` is default.
+  ///
+  /// Note: the page logic relies on this being consistent
+  /// across queries for more pages.
+  #[serde(default = "default_limit")]
+  pub limit: U64,
+}
+
+fn default_limit() -> u64 {
+  300
+}
+
+#[typeshare]
+pub type ListAllStackServicesResponse = Vec<StackService>;
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
   path = "/InspectStackContainer",
   description = "Inspect a docker container associated with a Stack.",
   request_body(content = InspectStackContainer),

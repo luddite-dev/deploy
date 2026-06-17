@@ -1,7 +1,7 @@
 import ContainerPorts from "@/components/docker/container-ports";
 import DockerResourceLink from "@/components/docker/link";
 import { containerStateIntention } from "@/lib/color";
-import { useRead } from "@/lib/hooks";
+import { useRead, useTagsFilter } from "@/lib/hooks";
 import { ICONS } from "@/lib/icons";
 import { DataTable, SortableHeader, useDebounce } from "mogh_ui";
 import { Page } from "mogh_ui";
@@ -11,6 +11,7 @@ import { useCallback, useMemo, useState } from "react";
 import { DividedChildren } from "mogh_ui";
 import ResourceLink from "@/resources/link";
 import { SearchInput } from "mogh_ui";
+import TagsFilter from "@/components/tags/filter";
 
 export default function Containers() {
   const [search, setSearch] = useState("");
@@ -34,10 +35,13 @@ export default function Containers() {
     [servers],
   );
 
+  const tags = useTagsFilter();
+
   const containers =
     useRead("ListAllDockerContainers", {
       containers: containersQuery,
       servers: serverNames,
+      tags,
       page,
       limit: 300,
     }).data ?? [];
@@ -205,7 +209,7 @@ export default function Containers() {
     >
       <Stack>
         <Group justify="space-between">
-          <Group>
+          <Group w={{ base: "100%", xs: "fit-content" }}>
             <MultiSelect
               placeholder="Filter by Servers"
               value={selectedServers}
@@ -228,7 +232,11 @@ export default function Containers() {
               </Group>
             </Pagination.Root>
           </Group>
-          <SearchInput value={search} onSearch={setSearch} />
+
+          <Group w={{ base: "100%", xs: "fit-content" }}>
+            <TagsFilter />
+            <SearchInput value={search} onSearch={setSearch} />
+          </Group>
         </Group>
 
         {Table}

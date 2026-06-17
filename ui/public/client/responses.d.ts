@@ -63,6 +63,7 @@ export type ReadResponses = {
     ListStacks: Types.ListStacksResponse;
     ListFullStacks: Types.ListFullStacksResponse;
     ListStackServices: Types.ListStackServicesResponse;
+    ListAllStackServices: Types.ListAllStackServicesResponse;
     ListCommonStackExtraArgs: Types.ListCommonStackExtraArgsResponse;
     ListCommonStackBuildExtraArgs: Types.ListCommonStackBuildExtraArgsResponse;
     GetDeploymentsSummary: Types.GetDeploymentsSummaryResponse;

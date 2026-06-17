@@ -154,5 +154,7 @@ function NetCell({ id }: { id: string }) {
   if (!stats) {
     return <Text c="dimmed">N/A</Text>;
   }
-  return <Text>{fmtRateBytes(ingress + egress)}</Text>;
+  return (
+    <Text style={{ textWrap: "nowrap" }}>{fmtRateBytes(ingress + egress)}</Text>
+  );
 }

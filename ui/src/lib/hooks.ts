@@ -242,17 +242,14 @@ export function useFilterResources<Info>(
   resources?: Types.ResourceListItem<Info>[],
   search?: string,
 ) {
-  const tags = useTagsFilter();
   const searchSplit = search?.toLowerCase()?.split(" ") || [];
   return (
-    resources?.filter(
-      (resource) =>
-        tags.every((tag: string) => resource.tags.includes(tag)) &&
-        (searchSplit.length > 0
-          ? searchSplit.every((search) =>
-              resource.name.toLowerCase().includes(search),
-            )
-          : true),
+    resources?.filter((resource) =>
+      searchSplit.length > 0
+        ? searchSplit.every((search) =>
+            resource.name.toLowerCase().includes(search),
+          )
+        : true,
     ) ?? []
   );
 }

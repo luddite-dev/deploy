@@ -44,6 +44,7 @@ mod alerter;
 mod build;
 mod builder;
 mod deployment;
+mod docker;
 mod onboarding_key;
 mod permission;
 mod procedure;
@@ -151,6 +152,7 @@ enum ReadRequest {
   ListStacks(ListStacks),
   ListFullStacks(ListFullStacks),
   ListStackServices(ListStackServices),
+  ListAllStackServices(ListAllStackServices),
   ListCommonStackExtraArgs(ListCommonStackExtraArgs),
   ListCommonStackBuildExtraArgs(ListCommonStackBuildExtraArgs),
 

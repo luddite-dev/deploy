@@ -96,6 +96,7 @@ pub async fn update_swarm_stack_cache(
             ));
 
           StackService {
+            stack_id: stack.id.clone(),
             service: service_name.clone(),
             container: None,
             swarm_service,
@@ -177,6 +178,7 @@ pub async fn update_server_stack_cache(
         ));
 
       StackService {
+        stack_id: stack.id.clone(),
         service: service_name.clone(),
         image: image.clone(),
         container,
