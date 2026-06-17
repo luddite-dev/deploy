@@ -405,12 +405,17 @@ impl Resolve<ReadArgs> for ListAllDockerContainers {
     )
     .await?;
 
-    let wildcards = self
+    let terms = self
       .containers
-      .into_iter()
-      .flat_map(|c| Wildcard::from_owned(c.into_bytes()))
+      .iter()
+      .flat_map(|term| {
+        anyhow::Ok((term, Wildcard::new(term.as_bytes())?))
+      })
       .collect::<Vec<_>>();
+
     let mut containers = Vec::<ContainerListItem>::new();
+    let mut skipped = 0;
+    let limit_usize = self.limit as usize;
 
     for server in servers {
       let cache = server_status_cache()
@@ -423,13 +428,24 @@ impl Resolve<ReadArgs> for ListAllDockerContainers {
         .containers
         .iter()
         .filter(|container| {
-          wildcards.is_empty()
-            || wildcards
-              .iter()
-              .any(|wc| wc.is_match(container.name.as_bytes()))
-        })
-        .cloned();
-      containers.extend(more);
+          terms.is_empty()
+            // Match when all terms contained within a name.
+            || terms.iter().all(|(term, _)| container.name.contains(*term))
+            // Match when any wildcard term directly matches.
+            || terms.iter().any(|(_, wc)| wc.is_match(container.name.as_bytes()))
+        });
+      for container in more {
+        if skipped < self.limit * self.page {
+          // Eg. page 1 skips until after 300 containers, page 2 after 600.
+          skipped += 1;
+        } else {
+          // push and maybe early return
+          containers.push(container.clone());
+          if containers.len() >= limit_usize {
+            return Ok(containers);
+          }
+        }
+      }
     }
 
     Ok(containers)

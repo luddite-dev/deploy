@@ -47,20 +47,11 @@ export function useOmniSearch(): {
     [search],
   );
 
-  const _containers = useRead(
+  const containers = useRead(
     "ListAllDockerContainers",
-    {},
+    { containers: searchTerms, limit: 300, page: 0 },
     { refetchInterval: 15_000 },
   ).data;
-  const containers = useMemo(() => {
-    return _containers?.filter((c) => {
-      if (searchTerms.length === 0) return true;
-      const lower = c.name.toLowerCase();
-      return searchTerms.every(
-        (term) => lower.includes(term) || "containers".includes(term),
-      );
-    });
-  }, [_containers, searchTerms]);
 
   const _terminals = useRead(
     "ListTerminals",

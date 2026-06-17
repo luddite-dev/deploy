@@ -49,6 +49,7 @@ async fn list_containers(
     networks,
     servers,
     format,
+    page,
     command: _,
   }: &Container,
 ) -> anyhow::Result<()> {
@@ -62,7 +63,9 @@ async fn list_containers(
         .collect::<HashMap<_, _>>())),
     client.read(ListAllDockerContainers {
       servers: Default::default(),
-      containers: Default::default(),
+      containers: names.clone(),
+      limit: 300,
+      page: *page,
     }),
   )?;
 
@@ -78,7 +81,6 @@ async fn list_containers(
     (Some(server.name.as_str()), c)
   });
 
-  let names = parse_wildcards(names);
   let servers = parse_wildcards(servers);
   let images = parse_wildcards(images);
   let networks = parse_wildcards(networks);
@@ -105,7 +107,6 @@ async fn list_containers(
       );
       state_check
         && network_check
-        && matches_wildcards(&names, &[c.name.as_str()])
         && matches_wildcards(
           &servers,
           &server_name
@@ -146,8 +147,10 @@ pub async fn inspect_container(
         .map(|s| (s.id.clone(), s))
         .collect::<HashMap<_, _>>())),
     client.read(ListAllDockerContainers {
-      servers: Default::default(),
-      containers: Default::default()
+      servers: inspect.servers.clone(),
+      containers: vec![inspect.container.clone()],
+      limit: 300,
+      page: 0,
     }),
   )?;
 
@@ -162,22 +165,8 @@ pub async fn inspect_container(
     c.server_id = Some(server.name.clone());
   });
 
-  let names = [inspect.container.to_string()];
-  let names = parse_wildcards(&names);
-  let servers = parse_wildcards(&inspect.servers);
-
   let mut containers = containers
     .into_iter()
-    .filter(|c| {
-      matches_wildcards(&names, &[c.name.as_str()])
-        && matches_wildcards(
-          &servers,
-          &c.server_id
-            .as_deref()
-            .map(|i| vec![i])
-            .unwrap_or_default(),
-        )
-    })
     .map(|c| async move {
       client
         .read(InspectDockerContainer {

@@ -88,6 +88,23 @@ pub struct ListAllDockerContainers {
   /// Supports wildcard matching syntax.
   #[serde(default)]
   pub containers: Vec<String>,
+
+  /// Retrieve more results by incrementing the page.
+  /// `page: 0` is default.
+  #[serde(default)]
+  pub page: U64,
+
+  /// Set the limit for number of containers per-page.
+  /// `limit: 300` is default.
+  ///
+  /// Note: the page logic relies on this being consistent
+  /// across queries for more pages.
+  #[serde(default = "default_limit")]
+  pub limit: U64,
+}
+
+fn default_limit() -> u64 {
+  300
 }
 
 #[typeshare]

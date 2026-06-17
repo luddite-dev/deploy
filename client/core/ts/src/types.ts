@@ -8577,8 +8577,24 @@ export interface ListAlertsResponse {
 export interface ListAllDockerContainers {
 	/** Filter by server id or name. */
 	servers?: string[];
-	/** Filter by container name. */
+	/**
+	 * Filter by container name.
+	 * Supports wildcard matching syntax.
+	 */
 	containers?: string[];
+	/**
+	 * Retrieve more results by incrementing the page.
+	 * `page: 0` is default.
+	 */
+	page?: U64;
+	/**
+	 * Set the limit for number of containers per-page.
+	 * `limit: 300` is default.
+	 * 
+	 * Note: the page logic relies on this being consistent
+	 * across queries for more pages.
+	 */
+	limit: U64;
 }
 
 /**

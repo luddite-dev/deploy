@@ -3,11 +3,10 @@ import DockerResourceLink from "@/components/docker/link";
 import { containerStateIntention } from "@/lib/color";
 import { useRead } from "@/lib/hooks";
 import { ICONS } from "@/lib/icons";
-import { filterBySplit } from "mogh_ui";
 import { DataTable, SortableHeader, useDebounce } from "mogh_ui";
 import { Page } from "mogh_ui";
 import { StatusBadge } from "mogh_ui";
-import { Group, MultiSelect, Stack } from "@mantine/core";
+import { Group, MultiSelect, Pagination, Stack } from "@mantine/core";
 import { useCallback, useMemo, useState } from "react";
 import { DividedChildren } from "mogh_ui";
 import ResourceLink from "@/resources/link";
@@ -15,17 +14,18 @@ import { SearchInput } from "mogh_ui";
 
 export default function Containers() {
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
   const [selectedServers, setSelectedServers] = useState<string[]>([]);
 
   const debouncedSearch = useDebounce(search, 300);
+  const containersQuery = useMemo(
+    () => debouncedSearch.split(" ").filter((term) => term),
+    [debouncedSearch],
+  );
 
   const servers = useRead("ListServers", {}).data;
-  const serverOptions = useMemo(
-    () =>
-      servers?.map((server) => ({
-        label: server.name,
-        value: server.id,
-      })) || [],
+  const serverNames = useMemo(
+    () => servers?.map((server) => server.name) || [],
     [servers],
   );
 
@@ -34,15 +34,15 @@ export default function Containers() {
     [servers],
   );
 
-  const _containers = useRead("ListAllDockerContainers", {}).data?.filter(
+  const containers = useRead("ListAllDockerContainers", {
+    containers: containersQuery,
+    servers: serverNames,
+    page,
+    limit: 300,
+  }).data?.filter(
     (container) =>
       !selectedServers.length ||
       (container.server_id && selectedServers.includes(container.server_id)),
-  );
-
-  const containers = useMemo(
-    () => filterBySplit(_containers, debouncedSearch, (item) => item.name),
-    [_containers, debouncedSearch],
   );
 
   return (
@@ -53,14 +53,29 @@ export default function Containers() {
     >
       <Stack>
         <Group justify="space-between">
-          <MultiSelect
-            placeholder="Filter by Servers"
-            value={selectedServers}
-            onChange={setSelectedServers}
-            data={serverOptions}
-            searchable
-            clearable
-          />
+          <Group>
+            <MultiSelect
+              placeholder="Filter by Servers"
+              value={selectedServers}
+              onChange={setSelectedServers}
+              data={serverNames}
+              searchable
+              clearable
+            />
+            {/* PAGINATION */}
+            <Pagination.Root
+              total={page + 2}
+              value={page + 1}
+              onChange={(page) => setPage(page - 1)}
+            >
+              <Group gap="0.2rem" justify="center">
+                <Pagination.First />
+                <Pagination.Previous />
+                <Pagination.Items />
+                <Pagination.Next />
+              </Group>
+            </Pagination.Root>
+          </Group>
           <SearchInput value={search} onSearch={setSearch} />
         </Group>
 

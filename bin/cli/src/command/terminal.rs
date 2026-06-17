@@ -118,6 +118,8 @@ async fn get_server(
   server: Option<String>,
   container: &str,
 ) -> anyhow::Result<String> {
+  // Don't need to find server for terminal,
+  // user provided it, early return.
   if let Some(server) = server {
     return Ok(server);
   }
@@ -128,6 +130,8 @@ async fn get_server(
     .read(ListAllDockerContainers {
       servers: Default::default(),
       containers: vec![container.to_string()],
+      limit: 300,
+      page: 0,
     })
     .await?;
 
