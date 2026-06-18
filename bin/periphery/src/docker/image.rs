@@ -198,7 +198,7 @@ pub async fn get_image_digest_from_registry(
   let log = run_komodo_standard_command(
     "",
     command,
-    CommandOptions::default().timeout(Duration::from_secs(3)),
+    CommandOptions::default().timeout(Duration::from_secs(10)),
   )
   .await;
   if !log.success {
