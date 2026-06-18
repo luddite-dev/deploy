@@ -119,11 +119,14 @@ impl Resolve<ReadArgs> for ListAllDockerContainers {
         .containers
         .iter()
         .filter(|container| {
-          terms.is_empty()
+          // Apply state filter if defined.
+          (self.state.is_empty() || self.state.contains(&container.state)) &&
+          // Apply terms filter if defined
+          (terms.is_empty()
             // Match when all terms contained within a name.
             || terms.iter().all(|(term, _)| container.name.contains(*term))
             // Match when any wildcard term directly matches.
-            || terms.iter().any(|(_, wc)| wc.is_match(container.name.as_bytes()))
+            || terms.iter().any(|(_, wc)| wc.is_match(container.name.as_bytes())))
         });
       for container in more {
         if skipped < self.limit * self.page {

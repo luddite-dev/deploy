@@ -4901,6 +4901,37 @@ export interface ContainerListItem {
     labels?: Record<string, string>;
 }
 export type ListAllDockerContainersResponse = ContainerListItem[];
+/**
+ * Combined state options for
+ * both Server and Swarm based Stacks.
+ */
+export declare enum StackServiceState {
+    /** (Swarm) All tasks OK */
+    Healthy = "Healthy",
+    /** (Swarm) Some tasks don't match desired state */
+    Unhealthy = "Unhealthy",
+    /** (Swarm) All tasks down. */
+    Down = "Down",
+    /** (Container) Container is running */
+    Running = "Running",
+    /** (Container) Container is created */
+    Created = "Created",
+    /** (Container) Container is paused */
+    Paused = "Paused",
+    /** (Container) Container is restarting */
+    Restarting = "Restarting",
+    /** (Container) Container is exited */
+    Exited = "Exited",
+    /** (Container) Container is stopping */
+    Stopping = "Stopping",
+    /** (Container) Container is removing */
+    Removing = "Removing",
+    /** (Container) Container is dead */
+    Dead = "Dead",
+    /** Unknown case */
+    Unknown = "Unknown"
+}
+/** A stack service, whether server or swarm based. */
 export interface StackService {
     /** The stack which the service is a part of. */
     stack_id: string;
@@ -4912,6 +4943,8 @@ export interface StackService {
     container?: ContainerListItem;
     /** The service (Swarm mode) */
     swarm_service?: SwarmServiceListItem;
+    /** The service state */
+    state: StackServiceState;
     /** The service image digests */
     image_digests?: ImageDigest[];
 }
@@ -8177,6 +8210,8 @@ export interface ListAllDockerContainers {
      * Supports wildcard matching syntax.
      */
     containers?: string[];
+    /** Filter by container state. */
+    state?: ContainerStateStatusEnum[];
     /**
      * Retrieve more results by incrementing the page.
      * `page: 0` is default.
@@ -8205,6 +8240,8 @@ export interface ListAllStackServices {
      * Supports wildcard matching syntax.
      */
     services?: string[];
+    /** Filter by service state. */
+    state?: StackServiceState[];
     /**
      * Retrieve more results by incrementing the page.
      * `page: 0` is default.

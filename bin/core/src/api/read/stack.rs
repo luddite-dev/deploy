@@ -110,6 +110,9 @@ impl Resolve<ReadArgs> for ListAllStackServices {
       let more = cache.curr.services
         .iter()
         .filter(|service| {
+          // Apply state filter if defined.
+          (self.state.is_empty() || self.state.contains(&service.state)) &&
+          // Apply terms filter if defined
           terms.is_empty()
             // Match when all terms contained within a name.
             || terms.iter().all(|(term, _)| service.service.contains(*term))

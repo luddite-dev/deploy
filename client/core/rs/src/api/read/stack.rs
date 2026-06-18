@@ -9,6 +9,7 @@ use crate::entities::{
   },
   stack::{
     Stack, StackActionState, StackListItem, StackQuery, StackService,
+    StackServiceState,
   },
   update::Log,
 };
@@ -110,6 +111,10 @@ pub struct ListAllStackServices {
   /// Supports wildcard matching syntax.
   #[serde(default)]
   pub services: Vec<String>,
+
+  /// Filter by service state.
+  #[serde(default)]
+  pub state: Vec<StackServiceState>,
 
   /// Retrieve more results by incrementing the page.
   /// `page: 0` is default.

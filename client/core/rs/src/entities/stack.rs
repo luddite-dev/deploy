@@ -22,7 +22,12 @@ use crate::{
   },
   entities::{
     EnvironmentVar, ImageDigest,
-    docker::service::SwarmServiceListItem, environment_vars_from_str,
+    docker::{
+      container::ContainerStateStatusEnum,
+      service::SwarmServiceListItem,
+    },
+    environment_vars_from_str,
+    swarm::SwarmState,
   },
 };
 
@@ -803,6 +808,7 @@ pub struct StackServiceNames {
   pub image_digest: Option<ImageDigest>,
 }
 
+/// A stack service, whether server or swarm based.
 #[typeshare]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
@@ -817,8 +823,88 @@ pub struct StackService {
   pub container: Option<ContainerListItem>,
   /// The service (Swarm mode)
   pub swarm_service: Option<SwarmServiceListItem>,
+  /// The service state
+  pub state: StackServiceState,
   /// The service image digests
   pub image_digests: Option<Vec<ImageDigest>>,
+}
+
+/// Combined state options for
+/// both Server and Swarm based Stacks.
+#[typeshare]
+#[derive(
+  Debug,
+  Clone,
+  Copy,
+  PartialEq,
+  Eq,
+  PartialOrd,
+  Ord,
+  Default,
+  Serialize,
+  Deserialize,
+  Display,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub enum StackServiceState {
+  /// (Swarm) All tasks OK
+  Healthy,
+  /// (Swarm) Some tasks don't match desired state
+  Unhealthy,
+  /// (Swarm) All tasks down.
+  Down,
+  /// (Container) Container is running
+  Running,
+  /// (Container) Container is created
+  Created,
+  /// (Container) Container is paused
+  Paused,
+  /// (Container) Container is restarting
+  Restarting,
+  /// (Container) Container is exited
+  Exited,
+  /// (Container) Container is stopping
+  Stopping,
+  /// (Container) Container is removing
+  Removing,
+  /// (Container) Container is dead
+  Dead,
+  /// Unknown case
+  #[default]
+  Unknown,
+}
+
+impl From<SwarmState> for StackServiceState {
+  fn from(value: SwarmState) -> Self {
+    match value {
+      SwarmState::Healthy => StackServiceState::Healthy,
+      SwarmState::Unhealthy => StackServiceState::Unhealthy,
+      SwarmState::Down => StackServiceState::Down,
+      SwarmState::Unknown => StackServiceState::Unknown,
+    }
+  }
+}
+
+impl From<ContainerStateStatusEnum> for StackServiceState {
+  fn from(value: ContainerStateStatusEnum) -> Self {
+    match value {
+      ContainerStateStatusEnum::Running => StackServiceState::Running,
+      ContainerStateStatusEnum::Created => StackServiceState::Created,
+      ContainerStateStatusEnum::Paused => StackServiceState::Paused,
+      ContainerStateStatusEnum::Restarting => {
+        StackServiceState::Restarting
+      }
+      ContainerStateStatusEnum::Exited => StackServiceState::Exited,
+      ContainerStateStatusEnum::Stopping => {
+        StackServiceState::Stopping
+      }
+      ContainerStateStatusEnum::Removing => {
+        StackServiceState::Removing
+      }
+      ContainerStateStatusEnum::Dead => StackServiceState::Dead,
+      ContainerStateStatusEnum::Empty => StackServiceState::Unknown,
+    }
+  }
 }
 
 #[typeshare]

@@ -6,8 +6,7 @@ use std::{
 use anyhow::{Context, anyhow};
 use command::{
   CommandOptions, KomodoCommandMode,
-  run_komodo_command_with_sanitization,
-  run_komodo_standard_command,
+  run_komodo_command_with_sanitization, run_komodo_standard_command,
 };
 use formatting::format_serror;
 use interpolate::Interpolator;

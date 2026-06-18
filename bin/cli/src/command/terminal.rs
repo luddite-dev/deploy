@@ -129,8 +129,9 @@ async fn get_server(
   let mut containers = client
     .read(ListAllDockerContainers {
       servers: Default::default(),
-      containers: vec![container.to_string()],
       tags: Default::default(),
+      containers: vec![container.to_string()],
+      state: Default::default(),
       limit: 300,
       page: 0,
     })

@@ -5,7 +5,9 @@ use typeshare::typeshare;
 use crate::entities::{
   ResourceTarget, SearchCombinator, U64,
   docker::{
-    container::{Container, ContainerListItem},
+    container::{
+      Container, ContainerListItem, ContainerStateStatusEnum,
+    },
     image::{Image, ImageHistoryResponseItem, ImageListItem},
     network::{Network, NetworkListItem},
     volume::{Volume, VolumeListItem},
@@ -92,6 +94,10 @@ pub struct ListAllDockerContainers {
   /// Supports wildcard matching syntax.
   #[serde(default)]
   pub containers: Vec<String>,
+
+  /// Filter by container state.
+  #[serde(default)]
+  pub state: Vec<ContainerStateStatusEnum>,
 
   /// Retrieve more results by incrementing the page.
   /// `page: 0` is default.

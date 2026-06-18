@@ -14,6 +14,8 @@ pub async fn check_installed() -> anyhow::Result<()> {
   {
     Ok(())
   } else {
-    Err(anyhow!("Failed: 'git' is not installed or available on $PATH"))
+    Err(anyhow!(
+      "Failed: 'git' is not installed or available on $PATH"
+    ))
   }
 }

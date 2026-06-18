@@ -691,6 +691,37 @@ export var PortTypeEnum;
     PortTypeEnum["UDP"] = "udp";
     PortTypeEnum["SCTP"] = "sctp";
 })(PortTypeEnum || (PortTypeEnum = {}));
+/**
+ * Combined state options for
+ * both Server and Swarm based Stacks.
+ */
+export var StackServiceState;
+(function (StackServiceState) {
+    /** (Swarm) All tasks OK */
+    StackServiceState["Healthy"] = "Healthy";
+    /** (Swarm) Some tasks don't match desired state */
+    StackServiceState["Unhealthy"] = "Unhealthy";
+    /** (Swarm) All tasks down. */
+    StackServiceState["Down"] = "Down";
+    /** (Container) Container is running */
+    StackServiceState["Running"] = "Running";
+    /** (Container) Container is created */
+    StackServiceState["Created"] = "Created";
+    /** (Container) Container is paused */
+    StackServiceState["Paused"] = "Paused";
+    /** (Container) Container is restarting */
+    StackServiceState["Restarting"] = "Restarting";
+    /** (Container) Container is exited */
+    StackServiceState["Exited"] = "Exited";
+    /** (Container) Container is stopping */
+    StackServiceState["Stopping"] = "Stopping";
+    /** (Container) Container is removing */
+    StackServiceState["Removing"] = "Removing";
+    /** (Container) Container is dead */
+    StackServiceState["Dead"] = "Dead";
+    /** Unknown case */
+    StackServiceState["Unknown"] = "Unknown";
+})(StackServiceState || (StackServiceState = {}));
 export var ProcedureState;
 (function (ProcedureState) {
     /** Currently running */

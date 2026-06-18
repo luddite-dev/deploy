@@ -6,7 +6,10 @@ use komodo_client::entities::{
     container::ContainerListItem, image::ImageListItem,
     service::SwarmServiceListItem, stack::SwarmStackListItem,
   },
-  stack::{Stack, StackService, StackServiceNames, StackState},
+  stack::{
+    Stack, StackService, StackServiceNames, StackServiceState,
+    StackState,
+  },
   swarm::SwarmState,
 };
 
@@ -95,11 +98,17 @@ pub async fn update_swarm_stack_cache(
               None,
             ));
 
+          let state = swarm_service
+            .as_ref()
+            .map(|c| c.state.into())
+            .unwrap_or(StackServiceState::Unknown);
+
           StackService {
             stack_id: stack.id.clone(),
             service: service_name.clone(),
             container: None,
             swarm_service,
+            state,
             image,
             image_digests,
           }
@@ -177,12 +186,18 @@ pub async fn update_server_stack_cache(
           None
         ));
 
+      let state = container
+        .as_ref()
+        .map(|c| c.state.into())
+        .unwrap_or(StackServiceState::Unknown);
+
       StackService {
         stack_id: stack.id.clone(),
         service: service_name.clone(),
         image: image.clone(),
         container,
         swarm_service: None,
+        state,
         image_digests,
       }
     }).collect::<Vec<_>>();
