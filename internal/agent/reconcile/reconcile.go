@@ -31,17 +31,17 @@ func (s *Service) Apply(ctx context.Context, desired control.DesiredDeployment) 
 
 	composeDir := filepath.Join(s.root, desired.Spec.Name)
 	composePath := filepath.Join(composeDir, "compose.yaml")
-	if err := os.MkdirAll(composeDir, 0o755); err != nil {
-		return control.ObservedDeployment{}, err
-	}
-	if err := os.WriteFile(composePath, []byte(desired.Spec.ComposeYAML), 0o644); err != nil {
-		return control.ObservedDeployment{}, err
-	}
 
 	if desired.Deleted {
 		if s.appliedByApp[desired.Spec.Name] != 0 {
 			if err := s.runner.Remove(ctx, desired.Spec.Name, composePath); err != nil {
-				return control.ObservedDeployment{}, err
+				return control.ObservedDeployment{
+					NodeID:         desired.NodeID,
+					Name:           desired.Spec.Name,
+					AppliedVersion: desired.Version,
+					State:          control.ApplyFailed,
+					Message:        err.Error(),
+				}, nil
 			}
 			delete(s.appliedByApp, desired.Spec.Name)
 		}
@@ -51,6 +51,13 @@ func (s *Service) Apply(ctx context.Context, desired control.DesiredDeployment) 
 			AppliedVersion: desired.Version,
 			State:          control.ApplySucceeded,
 		}, nil
+	}
+
+	if err := os.MkdirAll(composeDir, 0o755); err != nil {
+		return control.ObservedDeployment{}, err
+	}
+	if err := os.WriteFile(composePath, []byte(desired.Spec.ComposeYAML), 0o644); err != nil {
+		return control.ObservedDeployment{}, err
 	}
 
 	if s.appliedByApp[desired.Spec.Name] != desired.Version {
