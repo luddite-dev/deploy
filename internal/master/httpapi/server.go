@@ -104,11 +104,19 @@ func (s *Server) handleDeployment(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		// If publish fails after persist, a retry produces a new version with the same spec; this is intentional — the agent converges to the latest version.
 		dep, err := s.store.PutDesiredDeployment(nodeID, control.DeploymentSpec{Name: name, ComposeYAML: req.ComposeYAML})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		obs := control.ObservedDeployment{
+			NodeID:         nodeID,
+			Name:           name,
+			AppliedVersion: dep.Version,
+			State:          control.ApplyPending,
+		}
+		_ = s.store.PutObservedDeployment(obs)
 		if err := s.publisher.PublishDesired(r.Context(), node.EndpointAddr, dep); err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
@@ -127,6 +135,13 @@ func (s *Server) handleDeployment(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		obs := control.ObservedDeployment{
+			NodeID:         nodeID,
+			Name:           name,
+			AppliedVersion: dep.Version,
+			State:          control.ApplyPending,
+		}
+		_ = s.store.PutObservedDeployment(obs)
 		if err := s.publisher.PublishDesired(r.Context(), node.EndpointAddr, dep); err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return

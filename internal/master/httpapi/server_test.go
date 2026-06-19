@@ -87,3 +87,90 @@ func TestServerPublishesDesiredAndDeleteToRegisteredNode(t *testing.T) {
 		t.Fatalf("delete publish = %+v, want deleted version", publisher.published)
 	}
 }
+
+func TestServerGetStatusReturnsDesiredAndObservedView(t *testing.T) {
+	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertNode(control.NodeRecord{NodeID: "node-a", EndpointAddr: `{"node_id":"agent-sidecar"}`, Connected: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	h := New(store, &fakePublisher{}, `{"node_id":"master-sidecar"}`)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/nodes/node-a/deployments/web", strings.NewReader(`{"compose_yaml":"services:\n  web:\n    image: nginx:latest\n"}`))
+	createRec := httptest.NewRecorder()
+	h.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusAccepted {
+		t.Fatalf("create status = %d, want %d", createRec.Code, http.StatusAccepted)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/nodes/node-a/deployments/web", nil)
+	getRec := httptest.NewRecorder()
+	h.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("get status = %d, want %d", getRec.Code, http.StatusOK)
+	}
+	body := getRec.Body.String()
+	if !strings.Contains(body, `"version":1`) {
+		t.Fatalf("get body = %s, want desired.version == 1", body)
+	}
+	if !strings.Contains(body, `"state":"pending"`) {
+		t.Fatalf("get body = %s, want observed.state == pending", body)
+	}
+}
+
+func TestServerPostUnknownNodeReturns404(t *testing.T) {
+	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h := New(store, &fakePublisher{}, `{"node_id":"master-sidecar"}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/nodes/ghost/deployments/web", strings.NewReader(`{"compose_yaml":"x"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestServerPostMalformedJSONReturns400(t *testing.T) {
+	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertNode(control.NodeRecord{NodeID: "node-a", EndpointAddr: `{"node_id":"agent-sidecar"}`, Connected: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	h := New(store, &fakePublisher{}, `{"node_id":"master-sidecar"}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/nodes/node-a/deployments/web", strings.NewReader(`not json`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestServerWrongMethodReturns405(t *testing.T) {
+	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertNode(control.NodeRecord{NodeID: "node-a", EndpointAddr: `{"node_id":"agent-sidecar"}`, Connected: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	h := New(store, &fakePublisher{}, `{"node_id":"master-sidecar"}`)
+
+	req := httptest.NewRequest(http.MethodPut, "/nodes/node-a/deployments/web", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+	}
+}
