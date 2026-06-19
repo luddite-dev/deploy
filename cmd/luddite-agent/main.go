@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -69,6 +70,9 @@ func registerWithMaster(masterAPI, nodeID, endpointAddr string) (string, error) 
 		return "", err
 	}
 	defer res.Body.Close()
+	if res.StatusCode >= 300 {
+		return "", fmt.Errorf("register status %d", res.StatusCode)
+	}
 	var out registerNodeResponse
 	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
 		return "", err

@@ -36,6 +36,10 @@ impl AppState {
         self.desired_outbound.lock().await.push_back(dispatch);
     }
 
+    pub async fn push_front_desired_outbound(&self, dispatch: DesiredDispatch) {
+        self.desired_outbound.lock().await.push_front(dispatch);
+    }
+
     pub async fn take_next_desired_outbound(&self) -> Option<DesiredDispatch> {
         self.desired_outbound.lock().await.pop_front()
     }
@@ -50,6 +54,10 @@ impl AppState {
 
     pub async fn push_observed_outbound(&self, dispatch: ObservedDispatch) {
         self.observed_outbound.lock().await.push_back(dispatch);
+    }
+
+    pub async fn push_front_observed_outbound(&self, dispatch: ObservedDispatch) {
+        self.observed_outbound.lock().await.push_front(dispatch);
     }
 
     pub async fn take_next_observed_outbound(&self) -> Option<ObservedDispatch> {

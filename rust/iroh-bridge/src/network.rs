@@ -45,10 +45,22 @@ impl Network {
 
     pub async fn flush_outbound_once(&self) -> Result<()> {
         if let Some(dispatch) = self.state.take_next_desired_outbound().await {
-            self.send(dispatch.endpoint_addr_json.as_str(), Envelope::Desired { deployment: dispatch.deployment }).await?;
+            if let Err(e) = self
+                .send(&dispatch.endpoint_addr_json, Envelope::Desired { deployment: dispatch.deployment.clone() })
+                .await
+            {
+                self.state.push_front_desired_outbound(dispatch).await;
+                return Err(e);
+            }
         }
         if let Some(dispatch) = self.state.take_next_observed_outbound().await {
-            self.send(dispatch.endpoint_addr_json.as_str(), Envelope::Observed { deployment: dispatch.deployment }).await?;
+            if let Err(e) = self
+                .send(&dispatch.endpoint_addr_json, Envelope::Observed { deployment: dispatch.deployment.clone() })
+                .await
+            {
+                self.state.push_front_observed_outbound(dispatch).await;
+                return Err(e);
+            }
         }
         Ok(())
     }

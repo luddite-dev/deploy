@@ -18,7 +18,9 @@ async fn main() -> Result<()> {
         let network = network.clone();
         async move {
             loop {
-                let _ = network.flush_outbound_once().await;
+                if let Err(e) = network.flush_outbound_once().await {
+                    eprintln!("flush_outbound: {e}");
+                }
                 tokio::time::sleep(Duration::from_millis(200)).await;
             }
         }
