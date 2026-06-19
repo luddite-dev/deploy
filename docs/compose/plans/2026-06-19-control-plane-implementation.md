@@ -1,47 +1,80 @@
 # Multi-Node Control Plane Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use compose:subagent (recommended) or compose:execute to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use compose:subagent
+> (recommended) or compose:execute to implement this plan task-by-task. Steps
+> use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the first milestone control plane: a Go master accepts node registrations and deployment intent over HTTP, a Go agent reconciles Podman deployments, and a Rust sidecar on each side carries desired-state and observed-status messages over Iroh.
+**Goal:** Build the first milestone control plane: a Go master accepts node
+registrations and deployment intent over HTTP, a Go agent reconciles Podman
+deployments, and a Rust sidecar on each side carries desired-state and
+observed-status messages over Iroh.
 
-**Architecture:** Keep application logic in Go and isolate Iroh inside a small Rust sidecar process. The master owns versioned desired state, node records, and the operator API; the agent owns reconcile logic and Podman execution; each Rust sidecar owns Iroh connectivity plus a narrow local HTTP boundary for queueing outbound messages and polling inbound ones.
+**Architecture:** Keep application logic in Go and isolate Iroh inside a small
+Rust sidecar process. The master owns versioned desired state, node records, and
+the operator API; the agent owns reconcile logic and Podman execution; each Rust
+sidecar owns Iroh connectivity plus a narrow local HTTP boundary for queueing
+outbound messages and polling inbound ones.
 
-**Tech Stack:** Go, standard library HTTP/testing, Podman Compose CLI, Rust, Tokio, Axum, Serde, Iroh.
+**Tech Stack:** Go, standard library HTTP/testing, Podman Compose CLI, Rust,
+Tokio, Axum, Serde, Iroh.
 
 ---
 
 ## File Structure
 
 - `go.mod`: Go module definition for the control-plane services.
-- `internal/control/types.go`: Shared Go types for nodes, desired state, observed state, and API views.
-- `internal/master/state/store.go`: File-backed persistence for node records, desired deployments, and observed deployments.
-- `internal/master/state/store_test.go`: Persistence and versioning coverage for the store.
-- `internal/master/httpapi/server.go`: Operator-facing HTTP API for node registration, node listing, deployment create/remove, and deployment status reads.
-- `internal/master/httpapi/server_test.go`: API tests using `httptest` and a fake sidecar publisher.
-- `internal/agent/runtime/podman.go`: Small wrapper around Podman Compose CLI operations.
-- `internal/agent/reconcile/reconcile.go`: Idempotent reconcile logic for apply and delete operations.
-- `internal/agent/reconcile/reconcile_test.go`: Reconcile behavior tests, including repeated versions and delete handling.
-- `internal/sidecar/client/client.go`: Go client for the local Rust sidecar HTTP API.
+- `internal/control/types.go`: Shared Go types for nodes, desired state,
+  observed state, and API views.
+- `internal/master/state/store.go`: File-backed persistence for node records,
+  desired deployments, and observed deployments.
+- `internal/master/state/store_test.go`: Persistence and versioning coverage for
+  the store.
+- `internal/master/httpapi/server.go`: Operator-facing HTTP API for node
+  registration, node listing, deployment create/remove, and deployment status
+  reads.
+- `internal/master/httpapi/server_test.go`: API tests using `httptest` and a
+  fake sidecar publisher.
+- `internal/agent/runtime/podman.go`: Small wrapper around Podman Compose CLI
+  operations.
+- `internal/agent/reconcile/reconcile.go`: Idempotent reconcile logic for apply
+  and delete operations.
+- `internal/agent/reconcile/reconcile_test.go`: Reconcile behavior tests,
+  including repeated versions and delete handling.
+- `internal/sidecar/client/client.go`: Go client for the local Rust sidecar HTTP
+  API.
 - `internal/sidecar/client/client_test.go`: Client request/response tests.
-- `cmd/luddite-master/main.go`: Wires the master store, API server, and poll loop for observed reports coming back from the sidecar.
-- `cmd/luddite-agent/main.go`: Wires node registration, desired-state polling, reconcile, and observed-status reporting.
+- `cmd/luddite-master/main.go`: Wires the master store, API server, and poll
+  loop for observed reports coming back from the sidecar.
+- `cmd/luddite-agent/main.go`: Wires node registration, desired-state polling,
+  reconcile, and observed-status reporting.
 - `rust/iroh-bridge/Cargo.toml`: Rust crate manifest for the sidecar.
-- `rust/iroh-bridge/src/lib.rs`: Library entrypoint for sidecar modules so Rust integration tests can import them.
-- `rust/iroh-bridge/src/messages.rs`: Rust transport and local-API message types.
-- `rust/iroh-bridge/src/state.rs`: Local queue state for outbound and inbound messages plus sidecar identity.
-- `rust/iroh-bridge/src/http.rs`: Local sidecar HTTP API used by the Go master and Go agent.
-- `rust/iroh-bridge/src/network.rs`: Iroh endpoint setup, accept loop, and outbound flush logic.
-- `rust/iroh-bridge/src/main.rs`: Sidecar bootstrap that serves the local HTTP API and runs Iroh background loops.
-- `rust/iroh-bridge/tests/http_smoke.rs`: Local sidecar API tests without live networking.
-- `rust/iroh-bridge/tests/iroh_loopback.rs`: Rust loopback test proving desired state and observed status cross the Iroh transport.
-- `README.md`: Short current-milestone section so the repo reflects the approved first slice.
-- `docs/architecture.md`: Updated architecture note matching the Go-plus-sidecar split.
+- `rust/iroh-bridge/src/lib.rs`: Library entrypoint for sidecar modules so Rust
+  integration tests can import them.
+- `rust/iroh-bridge/src/messages.rs`: Rust transport and local-API message
+  types.
+- `rust/iroh-bridge/src/state.rs`: Local queue state for outbound and inbound
+  messages plus sidecar identity.
+- `rust/iroh-bridge/src/http.rs`: Local sidecar HTTP API used by the Go master
+  and Go agent.
+- `rust/iroh-bridge/src/network.rs`: Iroh endpoint setup, accept loop, and
+  outbound flush logic.
+- `rust/iroh-bridge/src/main.rs`: Sidecar bootstrap that serves the local HTTP
+  API and runs Iroh background loops.
+- `rust/iroh-bridge/tests/http_smoke.rs`: Local sidecar API tests without live
+  networking.
+- `rust/iroh-bridge/tests/iroh_loopback.rs`: Rust loopback test proving desired
+  state and observed status cross the Iroh transport.
+- `README.md`: Short current-milestone section so the repo reflects the approved
+  first slice.
+- `docs/architecture.md`: Updated architecture note matching the Go-plus-sidecar
+  split.
 
 ### Task 1: Shared Types, Node Registry, And Persistent Master State
 
 **Covers:** [S1], [S2], [S3], [S5], [S6], [S8], [S9]
 
 **Files:**
+
 - Create: `go.mod`
 - Create: `internal/control/types.go`
 - Create: `internal/master/state/store.go`
@@ -51,7 +84,7 @@
 
 ```go
 // go.mod
-module github.com/acheong/luddite/deploy
+module github.com/luddite-dev/deploy
 
 go 1.24.0
 ```
@@ -64,7 +97,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/acheong/luddite/deploy/internal/control"
+	"github.com/luddite-dev/deploy/internal/control"
 )
 
 func TestStorePersistsNodesDesiredAndObservedState(t *testing.T) {
@@ -129,7 +162,8 @@ func TestStorePersistsNodesDesiredAndObservedState(t *testing.T) {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `go test ./internal/master/state -run TestStorePersistsNodesDesiredAndObservedState -count=1`
+Run:
+`go test ./internal/master/state -run TestStorePersistsNodesDesiredAndObservedState -count=1`
 
 Expected: FAIL with an undefined symbol error such as `undefined: Open`.
 
@@ -192,7 +226,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/acheong/luddite/deploy/internal/control"
+	"github.com/luddite-dev/deploy/internal/control"
 )
 
 type snapshot struct {
@@ -361,7 +395,8 @@ func (s *Store) flushLocked() error {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `go test ./internal/master/state -run TestStorePersistsNodesDesiredAndObservedState -count=1`
+Run:
+`go test ./internal/master/state -run TestStorePersistsNodesDesiredAndObservedState -count=1`
 
 Expected: PASS.
 
@@ -377,6 +412,7 @@ git commit -m "feat: add persistent control-plane state store"
 **Covers:** [S2], [S3], [S5], [S6], [S7], [S8], [S9]
 
 **Files:**
+
 - Create: `internal/master/httpapi/server.go`
 - Test: `internal/master/httpapi/server_test.go`
 
@@ -394,8 +430,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/acheong/luddite/deploy/internal/control"
-	"github.com/acheong/luddite/deploy/internal/master/state"
+	"github.com/luddite-dev/deploy/internal/control"
+	"github.com/luddite-dev/deploy/internal/master/state"
 )
 
 type fakePublisher struct {
@@ -477,7 +513,8 @@ func TestServerPublishesDesiredAndDeleteToRegisteredNode(t *testing.T) {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `go test ./internal/master/httpapi -run 'TestServer(RegistersNodeAndListsNodes|PublishesDesiredAndDeleteToRegisteredNode)' -count=1`
+Run:
+`go test ./internal/master/httpapi -run 'TestServer(RegistersNodeAndListsNodes|PublishesDesiredAndDeleteToRegisteredNode)' -count=1`
 
 Expected: FAIL with an undefined symbol error such as `undefined: New`.
 
@@ -493,8 +530,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/acheong/luddite/deploy/internal/control"
-	"github.com/acheong/luddite/deploy/internal/master/state"
+	"github.com/luddite-dev/deploy/internal/control"
+	"github.com/luddite-dev/deploy/internal/master/state"
 )
 
 type Publisher interface {
@@ -637,7 +674,8 @@ func (s *Server) handleDeployment(w http.ResponseWriter, r *http.Request) {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `go test ./internal/master/httpapi -run 'TestServer(RegistersNodeAndListsNodes|PublishesDesiredAndDeleteToRegisteredNode)' -count=1`
+Run:
+`go test ./internal/master/httpapi -run 'TestServer(RegistersNodeAndListsNodes|PublishesDesiredAndDeleteToRegisteredNode)' -count=1`
 
 Expected: PASS.
 
@@ -653,6 +691,7 @@ git commit -m "feat: add master control-plane API"
 **Covers:** [S3], [S4], [S6], [S7], [S8], [S9]
 
 **Files:**
+
 - Create: `internal/agent/runtime/podman.go`
 - Create: `internal/agent/reconcile/reconcile.go`
 - Test: `internal/agent/reconcile/reconcile_test.go`
@@ -667,7 +706,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/acheong/luddite/deploy/internal/control"
+	"github.com/luddite-dev/deploy/internal/control"
 )
 
 type fakeRunner struct {
@@ -727,7 +766,8 @@ func TestServiceApplySkipsSameVersionAndHandlesDelete(t *testing.T) {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `go test ./internal/agent/reconcile -run TestServiceApplySkipsSameVersionAndHandlesDelete -count=1`
+Run:
+`go test ./internal/agent/reconcile -run TestServiceApplySkipsSameVersionAndHandlesDelete -count=1`
 
 Expected: FAIL with an undefined symbol error such as `undefined: New`.
 
@@ -770,8 +810,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/acheong/luddite/deploy/internal/agent/runtime"
-	"github.com/acheong/luddite/deploy/internal/control"
+	"github.com/luddite-dev/deploy/internal/agent/runtime"
+	"github.com/luddite-dev/deploy/internal/control"
 )
 
 type Service struct {
@@ -841,7 +881,8 @@ func (s *Service) Apply(ctx context.Context, desired control.DesiredDeployment) 
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `go test ./internal/agent/reconcile -run TestServiceApplySkipsSameVersionAndHandlesDelete -count=1`
+Run:
+`go test ./internal/agent/reconcile -run TestServiceApplySkipsSameVersionAndHandlesDelete -count=1`
 
 Expected: PASS.
 
@@ -857,6 +898,7 @@ git commit -m "feat: add agent reconcile service"
 **Covers:** [S2], [S3], [S4], [S6], [S7], [S9]
 
 **Files:**
+
 - Create: `internal/sidecar/client/client.go`
 - Create: `internal/sidecar/client/client_test.go`
 - Create: `rust/iroh-bridge/Cargo.toml`
@@ -880,7 +922,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/acheong/luddite/deploy/internal/control"
+	"github.com/luddite-dev/deploy/internal/control"
 )
 
 func TestClientIdentityAndPublishDesired(t *testing.T) {
@@ -959,11 +1001,13 @@ async fn publish_route_queues_outbound_message_and_identity_is_visible() {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `go test ./internal/sidecar/client -run TestClientIdentityAndPublishDesired -count=1`
+Run:
+`go test ./internal/sidecar/client -run TestClientIdentityAndPublishDesired -count=1`
 
 Expected: FAIL with an undefined symbol error such as `undefined: New`.
 
-Run: `cargo test --manifest-path rust/iroh-bridge/Cargo.toml publish_route_queues_outbound_message_and_identity_is_visible -- --exact`
+Run:
+`cargo test --manifest-path rust/iroh-bridge/Cargo.toml publish_route_queues_outbound_message_and_identity_is_visible -- --exact`
 
 Expected: FAIL because the Rust sidecar crate does not exist yet.
 
@@ -980,7 +1024,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/acheong/luddite/deploy/internal/control"
+	"github.com/luddite-dev/deploy/internal/control"
 )
 
 type Client struct {
@@ -1292,11 +1336,13 @@ async fn main() -> Result<()> {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `go test ./internal/sidecar/client -run TestClientIdentityAndPublishDesired -count=1`
+Run:
+`go test ./internal/sidecar/client -run TestClientIdentityAndPublishDesired -count=1`
 
 Expected: PASS.
 
-Run: `cargo test --manifest-path rust/iroh-bridge/Cargo.toml publish_route_queues_outbound_message_and_identity_is_visible -- --exact`
+Run:
+`cargo test --manifest-path rust/iroh-bridge/Cargo.toml publish_route_queues_outbound_message_and_identity_is_visible -- --exact`
 
 Expected: PASS.
 
@@ -1312,6 +1358,7 @@ git commit -m "feat: add local sidecar boundary"
 **Covers:** [S3], [S4], [S5], [S6], [S7], [S8], [S9], [S10]
 
 **Files:**
+
 - Create: `cmd/luddite-master/main.go`
 - Create: `cmd/luddite-agent/main.go`
 - Create: `rust/iroh-bridge/src/network.rs`
@@ -1383,9 +1430,11 @@ async fn desired_state_and_observed_status_cross_the_iroh_transport() {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cargo test --manifest-path rust/iroh-bridge/Cargo.toml desired_state_and_observed_status_cross_the_iroh_transport -- --exact`
+Run:
+`cargo test --manifest-path rust/iroh-bridge/Cargo.toml desired_state_and_observed_status_cross_the_iroh_transport -- --exact`
 
-Expected: FAIL with an undefined module or symbol error such as `could not find network in iroh_bridge`.
+Expected: FAIL with an undefined module or symbol error such as
+`could not find network in iroh_bridge`.
 
 - [ ] **Step 3: Write the minimal transport and wiring implementation**
 
@@ -1549,9 +1598,9 @@ import (
 	"os"
 	"time"
 
-	masterhttp "github.com/acheong/luddite/deploy/internal/master/httpapi"
-	"github.com/acheong/luddite/deploy/internal/master/state"
-	"github.com/acheong/luddite/deploy/internal/sidecar/client"
+	masterhttp "github.com/luddite-dev/deploy/internal/master/httpapi"
+	"github.com/luddite-dev/deploy/internal/master/state"
+	"github.com/luddite-dev/deploy/internal/sidecar/client"
 )
 
 func main() {
@@ -1598,9 +1647,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/acheong/luddite/deploy/internal/agent/reconcile"
-	"github.com/acheong/luddite/deploy/internal/agent/runtime"
-	"github.com/acheong/luddite/deploy/internal/sidecar/client"
+	"github.com/luddite-dev/deploy/internal/agent/reconcile"
+	"github.com/luddite-dev/deploy/internal/agent/runtime"
+	"github.com/luddite-dev/deploy/internal/sidecar/client"
 )
 
 type registerNodeRequest struct {
@@ -1668,33 +1717,42 @@ func registerWithMaster(masterAPI, nodeID, endpointAddr string) (string, error) 
 
 ```md
 <!-- README.md -->
+
 ## Current Milestone
 
 The first implementation milestone is the remote control plane only.
 
 - Go master: node registration, desired-state persistence, operator HTTP API
 - Go agent: Podman reconcile loop for node-scoped deployments
-- Rust `iroh-bridge`: local sidecar that moves desired state and observed status over Iroh
+- Rust `iroh-bridge`: local sidecar that moves desired state and observed status
+  over Iroh
 
-Persistent storage, backups, DNS, HTTPS, and rollback semantics remain out of scope for this milestone.
+Persistent storage, backups, DNS, HTTPS, and rollback semantics remain out of
+scope for this milestone.
 ```
 
 ```md
 <!-- docs/architecture.md -->
+
 # Architecture
 
 The first milestone uses three runtime pieces:
 
-- a Go master service for operator HTTP requests, node records, and desired-state persistence
+- a Go master service for operator HTTP requests, node records, and
+  desired-state persistence
 - a Go agent service for local Podman reconciliation on each node
-- a Rust `iroh-bridge` sidecar on both the master and agent machines for Iroh connectivity
+- a Rust `iroh-bridge` sidecar on both the master and agent machines for Iroh
+  connectivity
 
-Nodes still connect outward from constrained networks, but the application logic stays almost entirely in Go because the Iroh-specific work is isolated behind the sidecar boundary.
+Nodes still connect outward from constrained networks, but the application logic
+stays almost entirely in Go because the Iroh-specific work is isolated behind
+the sidecar boundary.
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cargo test --manifest-path rust/iroh-bridge/Cargo.toml desired_state_and_observed_status_cross_the_iroh_transport -- --exact`
+Run:
+`cargo test --manifest-path rust/iroh-bridge/Cargo.toml desired_state_and_observed_status_cross_the_iroh_transport -- --exact`
 
 Expected: PASS.
 
