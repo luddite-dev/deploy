@@ -31,6 +31,20 @@ func TestStorePersistsNodesDesiredAndObservedState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if desired.Version != 1 {
+		t.Fatalf("first desired version = %d, want 1", desired.Version)
+	}
+
+	desired, err = store.PutDesiredDeployment("node-a", control.DeploymentSpec{
+		Name:        "web",
+		ComposeYAML: "services:\n  web:\n    image: nginx:1.27\n",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if desired.Version != 2 {
+		t.Fatalf("second desired version = %d, want 2", desired.Version)
+	}
 
 	if err := store.PutObservedDeployment(control.ObservedDeployment{
 		NodeID:         "node-a",
@@ -39,6 +53,17 @@ func TestStorePersistsNodesDesiredAndObservedState(t *testing.T) {
 		State:          control.ApplySucceeded,
 	}); err != nil {
 		t.Fatal(err)
+	}
+
+	desired, err = store.DeleteDesiredDeployment("node-a", "web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if desired.Version != 3 {
+		t.Fatalf("deleted desired version = %d, want 3", desired.Version)
+	}
+	if !desired.Deleted {
+		t.Fatal("deleted desired deployment = false, want true")
 	}
 
 	reopened, err := Open(path)
@@ -58,10 +83,13 @@ func TestStorePersistsNodesDesiredAndObservedState(t *testing.T) {
 	if !ok {
 		t.Fatal("deployment status missing after reopen")
 	}
-	if view.Desired.Version != 1 {
-		t.Fatalf("desired version = %d, want 1", view.Desired.Version)
+	if view.Desired.Version != 3 {
+		t.Fatalf("desired version = %d, want 3", view.Desired.Version)
 	}
-	if view.Observed == nil || view.Observed.AppliedVersion != 1 {
-		t.Fatalf("observed version = %+v, want 1", view.Observed)
+	if !view.Desired.Deleted {
+		t.Fatal("desired deployment not marked deleted after reopen")
+	}
+	if view.Observed == nil || view.Observed.AppliedVersion != 2 {
+		t.Fatalf("observed version = %+v, want 2", view.Observed)
 	}
 }
