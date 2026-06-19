@@ -21,6 +21,8 @@ The first implementation milestone is the remote control plane only.
 - Go agent: Podman reconcile loop for node-scoped deployments
 - Rust `iroh-bridge`: local sidecar that moves desired state and observed status
   over Iroh
+- See [`docs/running.md`](docs/running.md) to build, run, and test the control
+  plane end-to-end.
 
 Persistent storage, backups, DNS, HTTPS, and rollback semantics remain out of
 scope for this milestone.
