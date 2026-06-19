@@ -15,8 +15,8 @@ the operator API; the agent owns reconcile logic and Podman execution; each Rust
 sidecar owns Iroh connectivity plus a narrow local HTTP boundary for queueing
 outbound messages and polling inbound ones.
 
-**Tech Stack:** Go, standard library HTTP/testing, Podman Compose CLI, Rust,
-Tokio, Axum, Serde, Iroh.
+**Tech Stack:** Go, standard library HTTP/testing, Podman Compose CLI, Rust
+(stable >= 1.91 required for `iroh 1.0.0`), Tokio, Axum, Serde, Iroh.
 
 ---
 
@@ -66,6 +66,8 @@ Tokio, Axum, Serde, Iroh.
   state and observed status cross the Iroh transport.
 - `README.md`: Short current-milestone section so the repo reflects the approved
   first slice.
+- `.gitignore`: Exclude `rust/iroh-bridge/target/` so Rust build artifacts are
+  not committed.
 - `docs/architecture.md`: Updated architecture note matching the Go-plus-sidecar
   split.
 
@@ -1349,7 +1351,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add internal/sidecar/client/client.go internal/sidecar/client/client_test.go rust/iroh-bridge
+git add .gitignore internal/sidecar/client/client.go internal/sidecar/client/client_test.go rust/iroh-bridge
 git commit -m "feat: add local sidecar boundary"
 ```
 
@@ -1373,11 +1375,14 @@ git commit -m "feat: add local sidecar boundary"
 
 ```rust
 // rust/iroh-bridge/tests/iroh_loopback.rs
+use std::time::Duration;
+
 use iroh_bridge::{
     messages::{DeploymentSpec, DesiredDeployment, DesiredDispatch, ObservedDeployment, ObservedDispatch},
     network::Network,
     state::AppState,
 };
+use tokio::time::timeout;
 
 #[tokio::test]
 async fn desired_state_and_observed_status_cross_the_iroh_transport() {
@@ -1387,8 +1392,14 @@ async fn desired_state_and_observed_status_cross_the_iroh_transport() {
     let master = Network::bind(master_state.clone()).await.unwrap();
     let agent = Network::bind(agent_state.clone()).await.unwrap();
 
-    master.refresh_identity().await.unwrap();
-    agent.refresh_identity().await.unwrap();
+    timeout(Duration::from_secs(30), master.refresh_identity())
+        .await
+        .expect("master refresh should not hang")
+        .unwrap();
+    timeout(Duration::from_secs(30), agent.refresh_identity())
+        .await
+        .expect("agent refresh should not hang")
+        .unwrap();
 
     master_state.push_desired_outbound(DesiredDispatch {
         endpoint_addr_json: agent_state.identity().await,
@@ -1403,7 +1414,10 @@ async fn desired_state_and_observed_status_cross_the_iroh_transport() {
         },
     }).await;
 
-    master.flush_outbound_once().await.unwrap();
+    timeout(Duration::from_secs(30), master.flush_outbound_once())
+        .await
+        .expect("master flush should not hang")
+        .unwrap();
 
     let desired = agent_state.take_desired_inbound().await;
     assert_eq!(desired.len(), 1);
@@ -1420,7 +1434,10 @@ async fn desired_state_and_observed_status_cross_the_iroh_transport() {
         },
     }).await;
 
-    agent.flush_outbound_once().await.unwrap();
+    timeout(Duration::from_secs(30), agent.flush_outbound_once())
+        .await
+        .expect("agent flush should not hang")
+        .unwrap();
 
     let observed = master_state.take_observed_inbound().await;
     assert_eq!(observed.len(), 1);
@@ -1448,7 +1465,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1"
 axum = "0.8"
-iroh = "1.0.0"
+iroh = "1.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "net", "time"] }
@@ -1467,11 +1484,11 @@ pub mod state;
 // rust/iroh-bridge/src/network.rs
 use anyhow::{anyhow, Result};
 use iroh::{endpoint::presets, Endpoint, EndpointAddr};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::{messages::{DesiredDispatch, Envelope, ObservedDispatch}, state::AppState};
 
 const ALPN: &[u8] = b"luddite/control/1";
+const ACK: &[u8] = b"ok";
 
 #[derive(Clone)]
 pub struct Network {
@@ -1506,7 +1523,10 @@ impl Network {
     }
 
     pub async fn refresh_identity(&self) -> Result<()> {
-        let addr = self.endpoint.addr().await?;
+        // Wait for the endpoint to discover its relay URL; after this, addr()
+        // includes both direct addresses and the relay address.
+        self.endpoint.online().await;
+        let addr = self.endpoint.addr();
         self.state.set_identity(serde_json::to_string(&addr)?).await;
         Ok(())
     }
@@ -1528,8 +1548,8 @@ impl Network {
         send.write_all(&serde_json::to_vec(&envelope)?).await?;
         send.finish()?;
         let ack = recv.read_to_end(32).await?;
-        if ack != b"ok" {
-            return Err(anyhow!("unexpected ack"));
+        if ack != ACK {
+            return Err(anyhow!("unexpected ack: {:?}", ack));
         }
         conn.close(0u32.into(), b"done");
         Ok(())
@@ -1546,7 +1566,7 @@ async fn handle_connection(state: AppState, connection: iroh::endpoint::Connecti
         Envelope::Observed { deployment } => state.push_observed_inbound(deployment).await,
     }
 
-    send.write_all(b"ok").await?;
+    send.write_all(ACK).await?;
     send.finish()?;
     connection.closed().await;
     Ok(())
@@ -1756,9 +1776,14 @@ Run:
 
 Expected: PASS.
 
+> The loopback test reaches the n0 relay while waiting for `online()`. If the
+> relay is unreachable, the test can be made hermetic by binding
+> `127.0.0.1:0` and constructing the dial address as
+> `EndpointAddr::new(endpoint.id()).with_ip_addr(endpoint.bound_sockets()[0])`.
+
 - [ ] **Step 5: Commit**
 
 ```bash
-git add cmd/luddite-master/main.go cmd/luddite-agent/main.go rust/iroh-bridge/Cargo.toml rust/iroh-bridge/src/lib.rs rust/iroh-bridge/src/network.rs rust/iroh-bridge/src/main.rs rust/iroh-bridge/tests/iroh_loopback.rs README.md docs/architecture.md
+git add .gitignore cmd/luddite-master/main.go cmd/luddite-agent/main.go rust/iroh-bridge/Cargo.toml rust/iroh-bridge/src/lib.rs rust/iroh-bridge/src/network.rs rust/iroh-bridge/src/main.rs rust/iroh-bridge/tests/iroh_loopback.rs README.md docs/architecture.md
 git commit -m "feat: wire Iroh sidecars into the control plane"
 ```
