@@ -1,2 +1,3 @@
 .compose/
 .worktrees/
+/rust/iroh-bridge/target/
