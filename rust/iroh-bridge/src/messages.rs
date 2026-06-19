@@ -20,6 +20,7 @@ pub struct ObservedDeployment {
     pub name: String,
     pub applied_version: u64,
     pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
 }
 

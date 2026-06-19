@@ -43,6 +43,9 @@ func (c *Client) Identity(ctx context.Context) (string, error) {
 		return "", err
 	}
 	defer res.Body.Close()
+	if res.StatusCode >= 300 {
+		return "", fmt.Errorf("sidecar status %d", res.StatusCode)
+	}
 	var out identityResponse
 	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
 		return "", err
@@ -97,6 +100,9 @@ func getSlice[T any](ctx context.Context, client *http.Client, url string) ([]T,
 		return nil, err
 	}
 	defer res.Body.Close()
+	if res.StatusCode >= 300 {
+		return nil, fmt.Errorf("sidecar status %d", res.StatusCode)
+	}
 	var out []T
 	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
 		return nil, err
