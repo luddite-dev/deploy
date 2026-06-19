@@ -1,5 +1,10 @@
 # Help Flags and Human Running Docs Implementation Plan
 
+> [!NOTE]
+> This document may not reflect the current implementation.
+> See the final report for up-to-date state:
+> [Final Report](../reports/help-and-running-docs.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use compose:subagent (recommended) or compose:execute to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give the three control-plane binaries a proper `--help` (config surfaced as CLI flags with env-var defaults) and write `docs/running.md` so a human can build, run, and test the whole control plane.
