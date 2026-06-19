@@ -1,2 +1,3 @@
 .compose/
 .worktrees/
+rust/**/target/
