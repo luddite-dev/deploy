@@ -12,3 +12,15 @@ allocation.
 It shall be a wrapper around podman, and strive to use extend standards where
 possible, rather than creating things from scratch. For example, using compose
 for multiple services in one deployment.
+
+## Current Milestone
+
+The first implementation milestone is the remote control plane only.
+
+- Go master: node registration, desired-state persistence, operator HTTP API
+- Go agent: Podman reconcile loop for node-scoped deployments
+- Rust `iroh-bridge`: local sidecar that moves desired state and observed status
+  over Iroh
+
+Persistent storage, backups, DNS, HTTPS, and rollback semantics remain out of
+scope for this milestone.
