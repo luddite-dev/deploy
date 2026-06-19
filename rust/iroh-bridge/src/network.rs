@@ -4,6 +4,7 @@ use iroh::{endpoint::presets, Endpoint, EndpointAddr};
 use crate::{messages::Envelope, state::AppState};
 
 const ALPN: &[u8] = b"luddite/control/1";
+const ACK: &[u8] = b"ok";
 
 #[derive(Clone)]
 pub struct Network {
@@ -38,6 +39,7 @@ impl Network {
     }
 
     pub async fn refresh_identity(&self) -> Result<()> {
+        self.endpoint.online().await;
         let addr = self.endpoint.addr();
         self.state.set_identity(serde_json::to_string(&addr)?).await;
         Ok(())
@@ -72,8 +74,8 @@ impl Network {
         send.write_all(&serde_json::to_vec(&envelope)?).await?;
         send.finish()?;
         let ack = recv.read_to_end(32).await?;
-        if ack != b"ok" {
-            return Err(anyhow!("unexpected ack"));
+        if ack != ACK {
+            return Err(anyhow!("unexpected ack: {:?}", ack));
         }
         conn.close(0u32.into(), b"done");
         Ok(())
@@ -90,7 +92,7 @@ async fn handle_connection(state: AppState, connection: iroh::endpoint::Connecti
         Envelope::Observed { deployment } => state.push_observed_inbound(deployment).await,
     }
 
-    send.write_all(b"ok").await?;
+    send.write_all(ACK).await?;
     send.finish()?;
     connection.closed().await;
     Ok(())

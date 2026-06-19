@@ -1,8 +1,11 @@
+use std::time::Duration;
+
 use iroh_bridge::{
     messages::{DeploymentSpec, DesiredDeployment, DesiredDispatch, ObservedDeployment, ObservedDispatch},
     network::Network,
     state::AppState,
 };
+use tokio::time::timeout;
 
 #[tokio::test]
 async fn desired_state_and_observed_status_cross_the_iroh_transport() {
@@ -12,8 +15,14 @@ async fn desired_state_and_observed_status_cross_the_iroh_transport() {
     let master = Network::bind(master_state.clone()).await.unwrap();
     let agent = Network::bind(agent_state.clone()).await.unwrap();
 
-    master.refresh_identity().await.unwrap();
-    agent.refresh_identity().await.unwrap();
+    timeout(Duration::from_secs(30), master.refresh_identity())
+        .await
+        .expect("master refresh should not hang")
+        .unwrap();
+    timeout(Duration::from_secs(30), agent.refresh_identity())
+        .await
+        .expect("agent refresh should not hang")
+        .unwrap();
 
     master_state.push_desired_outbound(DesiredDispatch {
         endpoint_addr_json: agent_state.identity().await,
@@ -28,7 +37,10 @@ async fn desired_state_and_observed_status_cross_the_iroh_transport() {
         },
     }).await;
 
-    master.flush_outbound_once().await.unwrap();
+    timeout(Duration::from_secs(30), master.flush_outbound_once())
+        .await
+        .expect("master flush should not hang")
+        .unwrap();
 
     let desired = agent_state.take_desired_inbound().await;
     assert_eq!(desired.len(), 1);
@@ -45,7 +57,10 @@ async fn desired_state_and_observed_status_cross_the_iroh_transport() {
         },
     }).await;
 
-    agent.flush_outbound_once().await.unwrap();
+    timeout(Duration::from_secs(30), agent.flush_outbound_once())
+        .await
+        .expect("agent flush should not hang")
+        .unwrap();
 
     let observed = master_state.take_observed_inbound().await;
     assert_eq!(observed.len(), 1);
