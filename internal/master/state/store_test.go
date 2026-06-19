@@ -1,6 +1,7 @@
 package state
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -91,5 +92,64 @@ func TestStorePersistsNodesDesiredAndObservedState(t *testing.T) {
 	}
 	if view.Observed == nil || view.Observed.AppliedVersion != 2 {
 		t.Fatalf("observed version = %+v, want 2", view.Observed)
+	}
+}
+
+func TestStoreDoesNotAdvanceMemoryWhenFlushFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := store.PutDesiredDeployment("node-a", control.DeploymentSpec{
+		Name:        "web",
+		ComposeYAML: "services:\n  web:\n    image: nginx:latest\n",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Version != 1 {
+		t.Fatalf("first desired version = %d, want 1", first.Version)
+	}
+
+	blockedDir := filepath.Join(t.TempDir(), "blocked")
+	if err := os.Mkdir(blockedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blockedDir, "state.json"), []byte("not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	store.path = filepath.Join(blockedDir, "state.json", "nested.json")
+
+	if _, err := store.PutDesiredDeployment("node-a", control.DeploymentSpec{
+		Name:        "web",
+		ComposeYAML: "services:\n  web:\n    image: nginx:1.27\n",
+	}); err == nil {
+		t.Fatal("PutDesiredDeployment error = nil, want flush failure")
+	}
+
+	view, ok := store.GetDeploymentStatus("node-a", "web")
+	if !ok {
+		t.Fatal("deployment status missing after failed flush")
+	}
+	if view.Desired.Version != 1 {
+		t.Fatalf("desired version after failed flush = %d, want 1", view.Desired.Version)
+	}
+	if view.Desired.Spec.ComposeYAML != "services:\n  web:\n    image: nginx:latest\n" {
+		t.Fatalf("compose after failed flush = %q", view.Desired.Spec.ComposeYAML)
+	}
+
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, ok = reopened.GetDeploymentStatus("node-a", "web")
+	if !ok {
+		t.Fatal("persisted deployment status missing after failed flush")
+	}
+	if view.Desired.Version != 1 {
+		t.Fatalf("persisted desired version after failed flush = %d, want 1", view.Desired.Version)
 	}
 }

@@ -61,8 +61,13 @@ func (s *Store) UpsertNode(node control.NodeRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.data.Nodes[node.NodeID] = node
-	return s.flushLocked()
+	next := cloneSnapshot(s.data)
+	next.Nodes[node.NodeID] = node
+	if err := s.flushLocked(next); err != nil {
+		return err
+	}
+	s.data = next
+	return nil
 }
 
 func (s *Store) ListNodes() []control.NodeRecord {
@@ -89,20 +94,22 @@ func (s *Store) PutDesiredDeployment(nodeID string, spec control.DeploymentSpec)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.data.Desired[nodeID] == nil {
-		s.data.Desired[nodeID] = map[string]control.DesiredDeployment{}
+	updated := cloneSnapshot(s.data)
+	if updated.Desired[nodeID] == nil {
+		updated.Desired[nodeID] = map[string]control.DesiredDeployment{}
 	}
-	current := s.data.Desired[nodeID][spec.Name]
+	current := updated.Desired[nodeID][spec.Name]
 	next := control.DesiredDeployment{
 		NodeID:  nodeID,
 		Version: current.Version + 1,
 		Spec:    spec,
 	}
-	s.data.Desired[nodeID][spec.Name] = next
+	updated.Desired[nodeID][spec.Name] = next
 
-	if err := s.flushLocked(); err != nil {
+	if err := s.flushLocked(updated); err != nil {
 		return control.DesiredDeployment{}, err
 	}
+	s.data = updated
 
 	return next, nil
 }
@@ -111,10 +118,11 @@ func (s *Store) DeleteDesiredDeployment(nodeID, name string) (control.DesiredDep
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.data.Desired[nodeID] == nil {
-		s.data.Desired[nodeID] = map[string]control.DesiredDeployment{}
+	updated := cloneSnapshot(s.data)
+	if updated.Desired[nodeID] == nil {
+		updated.Desired[nodeID] = map[string]control.DesiredDeployment{}
 	}
-	current := s.data.Desired[nodeID][name]
+	current := updated.Desired[nodeID][name]
 	next := control.DesiredDeployment{
 		NodeID:  nodeID,
 		Version: current.Version + 1,
@@ -123,11 +131,12 @@ func (s *Store) DeleteDesiredDeployment(nodeID, name string) (control.DesiredDep
 		},
 		Deleted: true,
 	}
-	s.data.Desired[nodeID][name] = next
+	updated.Desired[nodeID][name] = next
 
-	if err := s.flushLocked(); err != nil {
+	if err := s.flushLocked(updated); err != nil {
 		return control.DesiredDeployment{}, err
 	}
+	s.data = updated
 
 	return next, nil
 }
@@ -136,11 +145,16 @@ func (s *Store) PutObservedDeployment(obs control.ObservedDeployment) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.data.Observed[obs.NodeID] == nil {
-		s.data.Observed[obs.NodeID] = map[string]control.ObservedDeployment{}
+	next := cloneSnapshot(s.data)
+	if next.Observed[obs.NodeID] == nil {
+		next.Observed[obs.NodeID] = map[string]control.ObservedDeployment{}
 	}
-	s.data.Observed[obs.NodeID][obs.Name] = obs
-	return s.flushLocked()
+	next.Observed[obs.NodeID][obs.Name] = obs
+	if err := s.flushLocked(next); err != nil {
+		return err
+	}
+	s.data = next
+	return nil
 }
 
 func (s *Store) GetDeploymentStatus(nodeID, name string) (control.DeploymentStatusView, bool) {
@@ -167,15 +181,78 @@ func (s *Store) GetDeploymentStatus(nodeID, name string) (control.DeploymentStat
 	return control.DeploymentStatusView{Desired: desired, Observed: observed}, true
 }
 
-func (s *Store) flushLocked() error {
+func (s *Store) flushLocked(data snapshot) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
 
-	buf, err := json.MarshalIndent(s.data, "", "  ")
+	buf, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(s.path, buf, 0o644)
+	tmp, err := os.CreateTemp(filepath.Dir(s.path), filepath.Base(s.path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmp.Write(buf); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0o644); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(tmpPath, s.path)
+}
+
+func cloneSnapshot(src snapshot) snapshot {
+	return snapshot{
+		Nodes:    cloneNodes(src.Nodes),
+		Desired:  cloneDesired(src.Desired),
+		Observed: cloneObserved(src.Observed),
+	}
+}
+
+func cloneNodes(src map[string]control.NodeRecord) map[string]control.NodeRecord {
+	dst := make(map[string]control.NodeRecord, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
+}
+
+func cloneDesired(src map[string]map[string]control.DesiredDeployment) map[string]map[string]control.DesiredDeployment {
+	dst := make(map[string]map[string]control.DesiredDeployment, len(src))
+	for nodeID, deployments := range src {
+		copy := make(map[string]control.DesiredDeployment, len(deployments))
+		for name, deployment := range deployments {
+			copy[name] = deployment
+		}
+		dst[nodeID] = copy
+	}
+	return dst
+}
+
+func cloneObserved(src map[string]map[string]control.ObservedDeployment) map[string]map[string]control.ObservedDeployment {
+	dst := make(map[string]map[string]control.ObservedDeployment, len(src))
+	for nodeID, deployments := range src {
+		copy := make(map[string]control.ObservedDeployment, len(deployments))
+		for name, deployment := range deployments {
+			copy[name] = deployment
+		}
+		dst[nodeID] = copy
+	}
+	return dst
 }
