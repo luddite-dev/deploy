@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/luddite-dev/deploy/internal/agent/reconcile"
 	"github.com/luddite-dev/deploy/internal/agent/runtime"
+	"github.com/luddite-dev/deploy/internal/envutil"
 	"github.com/luddite-dev/deploy/internal/sidecar/client"
 )
 
@@ -25,16 +26,38 @@ type registerNodeResponse struct {
 }
 
 func main() {
-	sidecar := client.New(os.Getenv("LUDDITE_AGENT_SIDECAR"))
-	reconciler := reconcile.New(os.Getenv("LUDDITE_AGENT_ROOT"), runtime.Podman{})
-	nodeID := os.Getenv("LUDDITE_NODE_ID")
-	masterAPI := os.Getenv("LUDDITE_MASTER_API")
+	sidecarAddr := flag.String("sidecar",
+		envutil.EnvOrDefault("LUDDITE_AGENT_SIDECAR", "127.0.0.1:7777"),
+		"address of the local iroh-bridge sidecar (env LUDDITE_AGENT_SIDECAR)")
+	root := flag.String("root",
+		envutil.EnvOrDefault("LUDDITE_AGENT_ROOT", ""),
+		"path to the agent's deployment working root (env LUDDITE_AGENT_ROOT)")
+	nodeID := flag.String("node-id",
+		envutil.EnvOrDefault("LUDDITE_NODE_ID", ""),
+		"unique id for this node, registered with the master (env LUDDITE_NODE_ID)")
+	masterAPI := flag.String("master-api",
+		envutil.EnvOrDefault("LUDDITE_MASTER_API", "http://127.0.0.1:8080"),
+		"URL of the master HTTP API (env LUDDITE_MASTER_API)")
+	flag.Parse()
+
+	if *root == "" {
+		log.Fatal("--root (env LUDDITE_AGENT_ROOT) is required")
+	}
+	if *nodeID == "" {
+		log.Fatal("--node-id (env LUDDITE_NODE_ID) is required")
+	}
+
+	sidecar := client.New(*sidecarAddr)
+	reconciler := reconcile.New(*root, runtime.Podman{})
 
 	agentEndpointAddr, err := sidecar.Identity(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}
-	masterEndpointAddr, err := registerWithMaster(masterAPI, nodeID, agentEndpointAddr)
+	log.Printf("luddite-agent: node-id=%s root=%s sidecar=%s master-api=%s agent-addr=%s",
+		*nodeID, *root, *sidecarAddr, *masterAPI, agentEndpointAddr)
+
+	masterEndpointAddr, err := registerWithMaster(*masterAPI, *nodeID, agentEndpointAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
