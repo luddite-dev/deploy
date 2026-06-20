@@ -40,7 +40,7 @@ export default function Containers() {
   const containers =
     useRead("ListAllDockerContainers", {
       containers: containersQuery,
-      servers: serverNames,
+      servers: selectedServers,
       tags,
       page,
       limit: 300,
