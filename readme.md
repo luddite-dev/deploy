@@ -1,3 +1,61 @@
+# Luddite Deploy
+
+> [!NOTE] This project is a hard fork of [Komodo](https://github.com/moghtech/komodo)
+> (GPL-V3). The original Komodo README is preserved in the details block below.
+
+Kubernetes is just a tad too complicated, podman itself a bit too limited.
+
+The goal of this project is to simplify small self-hosted deployments with
+built-in support for persistent storage, backups, DNS, HTTPS, and port-based
+allocation. It is a wrapper around Podman, striving to use existing standards
+where possible rather than creating things from scratch (e.g. compose for
+multi-service deployments).
+
+## Why fork Komodo?
+
+Komodo provides the closest existing open-source foundation for what luddite
+needs: a Core/Periphery desired-state control plane, GitOps sync, mTLS auth,
+and a REST API with OpenAPI. Rather than rebuild from scratch, we fork and
+adapt:
+
+- **Drop Swarm mode** — small self-hosted deployments don't need a second
+  orchestration model. This removes `swarm_id`, the `docker stack` executor,
+  and Swarm-only entity types.
+- **Typed port and volume config** — replace Komodo's free-text `String`
+  fields with structured `Vec<PortMapping>` and `Vec<VolumeMount>`. Bind
+  mounts are unrepresentable by typing; only named volumes are allowed.
+- **Placement scheduler** — auto-assign deployments to Periphery nodes based
+  on host-port availability, instead of requiring operators to manually
+  pin each deployment to a server. `server_id` becomes an optional hint.
+- **S3-backed volume lifecycle** — export/import named volumes to S3-compatible
+  storage via `podman volume export`/`import`. Enables node draining with
+  data migration: backup volumes on the source, restore on the target, then
+  deploy.
+- **Node draining** — mark a server `Drain`; Core walks its deployments and
+  migrates them to other nodes with volume data intact.
+
+## Current milestone
+
+The active milestone adds three interlocking capabilities:
+
+1. **Placement scheduler & port allocation** — Core picks a target node by
+   probing free host ports via `netstat2` (`/proc/net/tcp` reads, no
+   shell-out). HTTP-proxied services get a random high port; fixed-port
+   services (DNS, SSH) land only on nodes where those ports are free.
+2. **Volume management & backup/restore** — named-volumes-only enforcement,
+   S3-backed export/import, on-demand and scheduled backups.
+3. **Node draining & migration orchestration** — operator marks a server
+   `Drain`; Core orchestrates backup → restore → deploy → stop migrations
+   to other nodes.
+
+Design spec: [`docs/compose/specs/2026-06-25-adaptive-placement-design.md`](docs/compose/specs/2026-06-25-adaptive-placement-design.md)
+
+Out of scope for this milestone: Iroh transport swap, MongoDB replacement,
+Caddy reverse-proxy integration (only the data contract for assigned ports).
+
+<details>
+<summary>Original Komodo README</summary>
+
 # Komodo 🦎
 
 A tool to build and deploy software across many servers. 
@@ -31,7 +89,7 @@ there are no warranties. Use at your own risk.
 ### Light Theme
 
 ![Dashboard](https://raw.githubusercontent.com/moghtech/komodo/main/screenshots/Light-Dashboard.png)
-![Stack](https://raw.githubusercontent.com/moghtech/komodo/main/screenshots/Light-Stack.png)
+![Stack](https://raw.githubusercontent.com/moghtech/komodo/blob/main/screenshots/Light-Stack.png)
 ![Compose](https://raw.githubusercontent.com/moghtech/komodo/main/screenshots/Light-Compose.png)
 ![Env](https://raw.githubusercontent.com/moghtech/komodo/main/screenshots/Light-Env.png)
 ![Sync](https://raw.githubusercontent.com/moghtech/komodo/main/screenshots/Light-Sync.png)
@@ -42,10 +100,12 @@ there are no warranties. Use at your own risk.
 ### Dark Theme
 
 ![Dashboard](https://raw.githubusercontent.com/moghtech/komodo/main/screenshots/Dark-Dashboard.png)
-![Stack](https://raw.githubusercontent.com/moghtech/komodo/main/screenshots/Dark-Stack.png)
+![Stack](https://raw.githubusercontent.com/moghtech/komodo/blob/main/screenshots/Dark-Stack.png)
 ![Compose](https://raw.githubusercontent.com/moghtech/komodo/main/screenshots/Dark-Compose.png)
 ![Env](https://raw.githubusercontent.com/moghtech/komodo/main/screenshots/Dark-Env.png)
 ![Sync](https://raw.githubusercontent.com/moghtech/komodo/main/screenshots/Dark-Sync.png)
 ![Update](https://raw.githubusercontent.com/moghtech/komodo/main/screenshots/Dark-Update.png)
 ![Stats](https://raw.githubusercontent.com/moghtech/komodo/main/screenshots/Dark-Stats.png)
 ![Export](https://raw.githubusercontent.com/moghtech/komodo/main/screenshots/Dark-Export.png)
+
+</details>
