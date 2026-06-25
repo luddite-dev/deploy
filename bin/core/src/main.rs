@@ -11,6 +11,7 @@ use crate::config::{core_config, core_keys};
 mod alert;
 mod api;
 mod auth;
+mod backup;
 mod cloud;
 mod config;
 mod connection;
@@ -72,6 +73,7 @@ async fn app() -> anyhow::Result<()> {
     resource::spawn_action_state_refresh_loop();
     schedule::spawn_schedule_executor();
     helpers::prune::spawn_prune_loop();
+    tokio::spawn(backup::scheduler::run_scheduler());
   }
   .instrument(startup_span)
   .await;
