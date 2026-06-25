@@ -7,3 +7,5 @@ deno.lock
 .DS_Store
 .idea
 .dev
+.compose
+.worktrees
