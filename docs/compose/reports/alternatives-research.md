@@ -165,6 +165,76 @@ Not direct competitors to a multi-node control plane, but adjacent:
 
 Unless you are happy to switch to Docker, **Option 1 is justified**, but treat **Komodo** as the primary competitor and **Portainer CE** as the Podman-compatible reference implementation. The current Iroh-backed master/agent design is a meaningful network differentiator in constrained environments, but Komodo's simpler HTTPS/agent model should be the benchmark for whether that complexity is worth it.
 
+## Appendix: Komodo details — volumes, ports, networking
+
+Komodo has two deployment resource types:
+
+1. **Deployment** — a single container. The agent translates the config into a `docker run` command.
+2. **Stack** — a Docker Compose project.
+
+### Persistent storage (Deployment resource)
+
+The `Deployment` resource has a `volumes` field that accepts **bind mounts** in `host_path:container_path` format. There is no dedicated managed-volume abstraction; persistence is host paths mounted into the container. If you want named volumes or more complex storage, you use a `Stack` instead.
+
+Example from the docs:
+
+```toml
+[[deployment]]
+name = "my-app"
+[deployment.config]
+server = "server-prod"
+network = "host"
+volumes = """
+/data/my-app/data:/app/data
+/data/my-app/config:/app/config
+"""
+```
+
+See <https://komo.do/docs/deploy/containers>.
+
+### Exposing ports (Deployment resource)
+
+Port mappings are explicit `host_port:container_port` entries in the `ports` field. The default network is `host`, which bypasses Docker's port-mapping layer entirely. If you use a non-host network, you list mappings.
+
+```toml
+[deployment.config]
+ports = ["27018:27017"]
+```
+
+There is no automatic port allocation, no built-in reverse proxy, and no automatic DNS/HTTPS. You decide which host port is exposed and reverse-proxy it yourself (Caddy, Traefik, nginx, Cloudflare Tunnel).
+
+### Persistent storage & ports (Stack resource)
+
+For multi-service apps, the `Stack` resource is a standard Docker Compose project. You provide `compose.yaml` either in the UI, from files on the host, or from a Git repo. Anything Compose supports — named volumes, bind mounts, port mappings, networks, secrets, configs — works. Komodo redeploys the project and can auto-redeploy on Git push via a webhook.
+
+Example Stack config:
+
+```toml
+[[stack]]
+name = "my-stack"
+[stack.config]
+server = "server-prod"
+run_directory = "/opt/stacks/my-stack"
+file_paths = ["compose.yaml"]
+repo = "myorg/stacks"
+environment = """
+DB_HOST = db.example.com
+LOG_LEVEL = info
+"""
+```
+
+See <https://komo.do/docs/deploy/compose>.
+
+### Networking across nodes
+
+Komodo has no own overlay network. It relies on:
+
+- **Host networking or Docker networks** on the local server for single-node stacks.
+- **Docker Swarm** for cross-node service mesh (Stacks and Deployments can target a Swarm instead of a single server).
+- **WireGuard / Tailscale / Cloudflare Tunnel** for private connectivity between Core, Periphery agents and operator access. The docs and community guides frequently combine Komodo with a WireGuard mesh.
+
+So Komodo gives you a central control plane and lifecycle operations, but it does **not** provide: automatic DNS records, built-in reverse proxy, TLS termination, automatic port allocation, distributed storage, or backup orchestration. Those are all external concerns you bring yourself.
+
 ## Sources
 
 - Coolify GitHub: <https://github.com/coollabsio/coolify>
