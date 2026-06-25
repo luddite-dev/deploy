@@ -680,6 +680,36 @@ pub struct VolumeBackupRecord {
 }
 
 #[typeshare]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct BackupDestination {
+  pub endpoint: String,
+  pub region: String,
+  pub bucket: String,
+  pub access_key: String,
+  pub secret_key: String,
+}
+
+#[typeshare]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct BackupResult {
+  pub s3_key: String,
+  pub size_bytes: u64,
+  pub checksum: String,
+}
+
+#[typeshare]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct RestoreResult {
+  pub bytes_restored: u64,
+}
+
+#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "params")]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]

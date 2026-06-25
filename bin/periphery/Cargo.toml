@@ -63,6 +63,10 @@ axum.workspace = true
 clap.workspace = true
 envy.workspace = true
 uuid.workspace = true
+rust-s3.workspace = true
+md-5.workspace = true
+digest.workspace = true
+chrono.workspace = true
 
 [dev-dependencies]
 netstat2.workspace = true

@@ -8,7 +8,7 @@ use komodo_client::entities::{
 use mogh_resolver::Resolve;
 use periphery_client::api::{
   build::*, compose::*, container::*, docker::*, git::*, keys::*,
-  placement::*, poll::*, stats::*, terminal::*, *,
+  placement::*, poll::*, stats::*, terminal::*, volume_backup::*, *,
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumDiscriminants;
@@ -26,6 +26,7 @@ mod git;
 mod keys;
 mod placement;
 mod poll;
+mod volume_backup;
 
 #[derive(Debug)]
 pub struct Args {
@@ -136,6 +137,11 @@ pub enum PeripheryRequest {
   // Placement (Read)
   CheckHostPorts(CheckHostPorts),
   ReadContainerPorts(ReadContainerPorts),
+
+  // Volume Backup
+  BackupVolume(BackupVolume),
+  RestoreVolume(RestoreVolume),
+  ListVolumeBackups(ListVolumeBackups),
 
   // All in one (Write)
   PruneSystem(PruneSystem),
