@@ -81,8 +81,6 @@ impl<'a> Interpolator<'a> {
     }
     self
       .interpolate_string(&mut deployment.config.environment)?
-      .interpolate_string(&mut deployment.config.ports)?
-      .interpolate_string(&mut deployment.config.volumes)?
       .interpolate_string(&mut deployment.config.labels)?
       .interpolate_string(&mut deployment.config.command)?
       .interpolate_extra_args(&mut deployment.config.extra_args)

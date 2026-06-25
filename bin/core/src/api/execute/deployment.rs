@@ -233,6 +233,10 @@ impl Resolve<ExecuteArgs> for Deploy {
       &deployment_id,
       &DeploymentInfo {
         latest_image_digest: Default::default(),
+        assigned_server: Default::default(),
+        host_ports: Default::default(),
+        last_backup: Default::default(),
+        migration_state: Default::default(),
       },
     )
     .await

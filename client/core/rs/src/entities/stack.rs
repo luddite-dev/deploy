@@ -33,6 +33,9 @@ use super::{
   FileContents, SystemCommand,
   docker::container::ContainerListItem,
   resource::{Resource, ResourceListItem, ResourceQuery},
+  deployment::{
+    AssignedPort, BackupConfig, MigrationState, VolumeBackupRecord,
+  },
 };
 
 #[cfg(feature = "utoipa")]
@@ -284,6 +287,19 @@ pub struct StackInfo {
   pub latest_hash: Option<String>,
   /// Latest commit message, or null
   pub latest_message: Option<String>,
+
+  /// The server the stack is assigned to by the scheduler.
+  #[serde(default)]
+  pub assigned_server: String,
+  /// Host ports assigned by the container runtime, keyed by compose service name.
+  #[serde(default)]
+  pub host_ports: std::collections::HashMap<String, Vec<AssignedPort>>,
+  /// The last backup record for each volume.
+  #[serde(default)]
+  pub last_backup: std::collections::HashMap<String, VolumeBackupRecord>,
+  /// The current migration state, if any. A stack migrates as a single unit.
+  #[serde(default)]
+  pub migration_state: Option<MigrationState>,
 }
 
 #[typeshare(serialized_as = "Partial<StackConfig>")]
@@ -535,6 +551,12 @@ pub struct StackConfig {
   #[builder(default)]
   pub registry_account: String,
 
+  /// Backup configuration for the stack's volumes.
+  #[serde(default)]
+  #[partial_attr(serde(default))]
+  #[builder(default)]
+  pub backup: Option<BackupConfig>,
+
   /// The optional command to run before the Stack is deployed.
   #[serde(default)]
   #[builder(default)]
@@ -725,6 +747,7 @@ impl Default for StackConfig {
       webhook_force_deploy: Default::default(),
       send_alerts: default_send_alerts(),
       links: Default::default(),
+      backup: Default::default(),
     }
   }
 }

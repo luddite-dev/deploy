@@ -10,7 +10,7 @@ use interpolate::Interpolator;
 use komodo_client::entities::{
   deployment::{
     Deployment, DeploymentConfig, DeploymentImage, RestartMode,
-    conversions_from_str, extract_registry_domain,
+    extract_registry_domain,
   },
   environment_vars_from_str,
   update::Log,
@@ -25,7 +25,7 @@ use crate::{
   config::periphery_config,
   docker::{docker_login, pull_image},
   helpers::{
-    push_conversions, push_environment, push_extra_args, push_labels,
+    push_environment, push_extra_args, push_labels,
   },
 };
 
@@ -147,17 +147,18 @@ fn docker_run_command(
   let mut res =
     format!("docker run -d --name {name} --network {network}");
 
-  push_conversions(
-    &mut res,
-    &conversions_from_str(ports).context("Invalid ports")?,
-    "-p",
-  )?;
+  for pm in ports {
+    match pm.host {
+      Some(host) => {
+        write!(&mut res, " -p {host}:{}", pm.container)?
+      }
+      None => write!(&mut res, " -p {}", pm.container)?,
+    }
+  }
 
-  push_conversions(
-    &mut res,
-    &conversions_from_str(volumes).context("Invalid volumes")?,
-    "-v",
-  )?;
+  for vm in volumes {
+    write!(&mut res, " -v {}:{}", vm.volume, vm.mount_path)?;
+  }
 
   push_environment(
     &mut res,

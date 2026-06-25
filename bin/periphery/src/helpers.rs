@@ -14,7 +14,6 @@ use komodo_client::{
   entities::{
     EnvironmentVar, RepoExecutionArgs, RepoExecutionResponse,
     SearchCombinator, SystemCommand, all_logs_success,
-    deployment::Conversion,
   },
   parsers::QUOTE_PATTERN,
 };
@@ -80,18 +79,6 @@ pub fn push_labels(
       )
     }
     .context("Failed to write labels to command")?;
-  }
-  Ok(())
-}
-
-pub fn push_conversions(
-  command: &mut String,
-  conversions: &[Conversion],
-  flag: &str,
-) -> anyhow::Result<()> {
-  for Conversion { local, container } in conversions {
-    write!(command, " {flag} {local}:{container}")
-      .context("Failed to format conversions")?;
   }
   Ok(())
 }

@@ -262,6 +262,10 @@ impl Resolve<ExecuteArgs> for DeployStack {
           .then_some(remote_errors),
         latest_hash: commit_hash,
         latest_message: commit_message,
+        assigned_server: Default::default(),
+        host_ports: Default::default(),
+        last_backup: Default::default(),
+        migration_state: Default::default(),
       };
 
       let info = to_document(&info)

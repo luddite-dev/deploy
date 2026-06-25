@@ -10,7 +10,8 @@ use komodo_client::{
     alert::{Alert, AlertData, SeverityLevel},
     deployment::{
       Deployment, DeploymentImage, DeploymentInfo, DeploymentState,
-      PartialDeploymentConfig, RestartMode, extract_registry_domain,
+      PartialDeploymentConfig, PortMapping, RestartMode, VolumeMount,
+      extract_registry_domain,
     },
     docker::container::RestartPolicyNameEnum,
     komodo_timestamp, optional_string,
@@ -168,24 +169,42 @@ impl Resolve<WriteArgs> for CreateDeploymentFromContainer {
         .into();
     }
     if let Some(host_config) = container.host_config {
-      config.volumes = host_config
-        .binds
-        .into_iter()
-        .map(|bind| format!("  {bind}"))
-        .collect::<Vec<_>>()
-        .join("\n")
-        .into();
+      config.volumes = Some(
+        host_config
+          .binds
+          .into_iter()
+          .filter_map(|bind| {
+            let parts: Vec<&str> = bind.splitn(3, ':').collect();
+            if parts.len() >= 2 && !parts[0].contains('/') {
+              Some(VolumeMount {
+                volume: parts[0].to_string(),
+                mount_path: parts[1].to_string(),
+              })
+            } else {
+              None
+            }
+          })
+          .collect(),
+      );
       config.network = host_config.network_mode;
-      config.ports = host_config
-        .port_bindings
-        .into_iter()
-        .filter_map(|(container, mut host)| {
-          let host = host.pop()?.host_port?;
-          Some(format!("  {host}:{}", container.replace("/tcp", "")))
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-        .into();
+      config.ports = Some(
+        host_config
+          .port_bindings
+          .into_iter()
+          .filter_map(|(container, mut host)| {
+            let container_port: u16 = container
+              .split('/')
+              .next()?
+              .parse()
+              .ok()?;
+            let host_port = host.pop()?.host_port?.parse().ok()?;
+            Some(PortMapping {
+              container: container_port,
+              host: Some(host_port),
+            })
+          })
+          .collect(),
+      );
       config.restart = host_config.restart_policy.map(|restart| {
         match restart.name {
           RestartPolicyNameEnum::Always => RestartMode::Always,
@@ -463,6 +482,10 @@ pub async fn check_deployment_for_update_inner(
     &deployment.id,
     &DeploymentInfo {
       latest_image_digest: latest_digest.clone(),
+      assigned_server: Default::default(),
+      host_ports: Default::default(),
+      last_backup: Default::default(),
+      migration_state: Default::default(),
     },
   )
   .await?;

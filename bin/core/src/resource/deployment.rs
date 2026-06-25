@@ -9,7 +9,7 @@ use komodo_client::entities::{
     Deployment, DeploymentConfig, DeploymentConfigDiff,
     DeploymentImage, DeploymentInfo, DeploymentListItem,
     DeploymentListItemInfo, DeploymentQuerySpecifics,
-    DeploymentState, PartialDeploymentConfig, conversions_from_str,
+    DeploymentState, PartialDeploymentConfig,
   },
   environment_vars_from_str,
   permission::{
@@ -358,12 +358,6 @@ async fn validate_config(
       build_id: build.id,
       version: *version,
     });
-  }
-  if let Some(volumes) = &config.volumes {
-    conversions_from_str(volumes).context("Invalid volumes")?;
-  }
-  if let Some(ports) = &config.ports {
-    conversions_from_str(ports).context("Invalid ports")?;
   }
   if let Some(environment) = &config.environment {
     environment_vars_from_str(environment)

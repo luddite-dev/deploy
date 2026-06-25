@@ -9,8 +9,8 @@ use typeshare::typeshare;
 
 use crate::{
   deserializers::{
-    conversions_deserializer, env_vars_deserializer,
-    labels_deserializer, option_conversions_deserializer,
+    env_vars_deserializer,
+    labels_deserializer,
     option_env_vars_deserializer, option_labels_deserializer,
     option_string_list_deserializer, option_term_labels_deserializer,
     string_list_deserializer, term_labels_deserializer,
@@ -69,6 +69,18 @@ pub struct DeploymentInfo {
   /// This includes both the image name / tag, and the specific digest hash.
   #[serde(default)]
   pub latest_image_digest: ImageDigest,
+  /// The server the deployment is assigned to by the scheduler.
+  #[serde(default)]
+  pub assigned_server: String,
+  /// The host ports assigned by the container runtime, keyed by container port.
+  #[serde(default)]
+  pub host_ports: Vec<AssignedPort>,
+  /// The last backup record for each volume.
+  #[serde(default)]
+  pub last_backup: std::collections::HashMap<String, VolumeBackupRecord>,
+  /// The current migration state, if any.
+  #[serde(default)]
+  pub migration_state: Option<MigrationState>,
 }
 
 #[typeshare(serialized_as = "Partial<DeploymentConfig>")]
@@ -210,26 +222,19 @@ pub struct DeploymentConfig {
   #[builder(default)]
   pub term_signal_labels: String,
 
-  /// The container port mapping.
+  /// The container port mappings.
   /// Irrelevant if container network is `host`.
-  /// Maps ports on host to ports on container.
-  #[serde(default, deserialize_with = "conversions_deserializer")]
-  #[partial_attr(serde(
-    default,
-    deserialize_with = "option_conversions_deserializer"
-  ))]
+  #[serde(default)]
+  #[partial_attr(serde(default))]
   #[builder(default)]
-  pub ports: String,
+  pub ports: Vec<PortMapping>,
 
-  /// The container volume mapping.
-  /// Maps files / folders on host to files / folders in container.
-  #[serde(default, deserialize_with = "conversions_deserializer")]
-  #[partial_attr(serde(
-    default,
-    deserialize_with = "option_conversions_deserializer"
-  ))]
+  /// The container volume mounts.
+  /// Only named volumes are representable — no host paths.
+  #[serde(default)]
+  #[partial_attr(serde(default))]
   #[builder(default)]
-  pub volumes: String,
+  pub volumes: Vec<VolumeMount>,
 
   /// The environment variables passed to the container / service.
   #[serde(default, deserialize_with = "env_vars_deserializer")]
@@ -248,6 +253,12 @@ pub struct DeploymentConfig {
   ))]
   #[builder(default)]
   pub labels: String,
+
+  /// Backup configuration for the deployment's volumes.
+  #[serde(default)]
+  #[partial_attr(serde(default))]
+  #[builder(default)]
+  pub backup: Option<BackupConfig>,
 }
 
 impl DeploymentConfig {
@@ -301,6 +312,7 @@ impl Default for DeploymentConfig {
       volumes: Default::default(),
       environment: Default::default(),
       labels: Default::default(),
+      backup: Default::default(),
     }
   }
 }
@@ -387,29 +399,6 @@ impl DeploymentImage {
     };
     optional_str(image)
   }
-}
-
-#[typeshare]
-#[derive(
-  Debug, Clone, Default, PartialEq, Serialize, Deserialize,
-)]
-#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
-pub struct Conversion {
-  /// reference on the server.
-  pub local: String,
-  /// reference in the container.
-  pub container: String,
-}
-
-pub fn conversions_from_str(
-  input: &str,
-) -> anyhow::Result<Vec<Conversion>> {
-  parse_key_value_list(input).map(|conversions| {
-    conversions
-      .into_iter()
-      .map(|(local, container)| Conversion { local, container })
-      .collect()
-  })
 }
 
 /// Variants de/serialized from/to snake_case.
@@ -620,4 +609,88 @@ pub fn extract_registry_domain(
   } else {
     Ok(String::from("docker.io"))
   }
+}
+
+#[typeshare]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct PortMapping {
+  /// The container port to expose.
+  pub container: u16,
+  /// The host port to bind. None = container-only, Podman assigns random high port.
+  pub host: Option<u16>,
+}
+
+#[typeshare]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct VolumeMount {
+  /// The named volume (no host paths allowed).
+  pub volume: String,
+  /// The path inside the container where the volume is mounted.
+  pub mount_path: String,
+}
+
+#[typeshare]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct BackupConfig {
+  /// Cron expression for scheduled backups. None = on-demand only.
+  pub schedule: Option<String>,
+  /// Maximum number of backups to retain per volume.
+  #[serde(default = "default_max_backups")]
+  pub max_backups: u32,
+}
+
+fn default_max_backups() -> u32 {
+  7
+}
+
+#[typeshare]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct AssignedPort {
+  pub container: u16,
+  pub host: u16,
+}
+
+#[typeshare]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct VolumeBackupInfo {
+  pub s3_key: String,
+  pub timestamp: i64,
+  pub size_bytes: u64,
+}
+
+#[typeshare]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct VolumeBackupRecord {
+  pub s3_key: String,
+  pub timestamp: i64,
+  pub size_bytes: u64,
+  pub checksum: String,
+}
+
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "params")]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub enum MigrationState {
+  Migrating {
+    target_server_id: String,
+    started_at: i64,
+  },
+  Failed {
+    reason: String,
+    at: i64,
+  },
 }
