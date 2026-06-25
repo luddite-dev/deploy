@@ -259,6 +259,23 @@ impl super::KomodoResource for Stack {
     created: &Resource<Self::Config, Self::Info>,
     update: &mut Update,
   ) -> anyhow::Result<()> {
+    // Write the placement decision into info.assigned_server.
+    let assigned_server = created.config.server_id.clone();
+    if !assigned_server.is_empty() {
+      database::mungos::by_id::update_one_by_id(
+        &db_client().stacks,
+        &created.id,
+        database::mungos::update::Update::Set(
+          database::mungos::mongodb::bson::doc! {
+            "info.assigned_server": &assigned_server
+          },
+        ),
+        None,
+      )
+      .await
+      .context("Failed to set info.assigned_server")?;
+    }
+    // TODO(Task 8): ReadContainerPorts readback to populate info.host_ports.
     if let Err(e) = (RefreshStackCache {
       stack: created.name.clone(),
     })
@@ -425,6 +442,20 @@ async fn validate_config(
     // in case it comes in as name
     config.server_id = Some(server.id);
   }
+  // Placement scheduling. Stacks carry their service ports inside the
+  // compose YAML rather than typed PortMappings, so fixed-port detection
+  // is deferred to compose parsing (Task 5). For now we run pick_target
+  // with no fixed ports: any healthy server is eligible.
+  //
+  // TODO(Task 5): extract fixed_ports from compose YAML.
+  // TODO(Task 8): preserve the user's original hint here and write only
+  // info.assigned_server. For now we stash the chosen id back into
+  // config.server_id so post_create / post_update can copy it across.
+  let hint = config.server_id.clone().unwrap_or_default();
+  let chosen = crate::placement::pick_target(&[], &hint)
+    .await
+    .map_err(|e| anyhow::anyhow!("Placement failed: {e}"))?;
+  config.server_id = Some(chosen);
   if let Some(linked_repo) = &config.linked_repo
     && !linked_repo.is_empty()
   {

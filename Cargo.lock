@@ -3547,6 +3547,7 @@ dependencies = [
  "slack_client_rs",
  "strum 0.28.0",
  "svi",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-util",
  "toml",

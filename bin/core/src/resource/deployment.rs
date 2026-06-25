@@ -189,6 +189,23 @@ impl super::KomodoResource for Deployment {
     created: &Resource<Self::Config, Self::Info>,
     _update: &mut Update,
   ) -> anyhow::Result<()> {
+    // Write the placement decision into info.assigned_server.
+    let assigned_server = created.config.server_id.clone();
+    if !assigned_server.is_empty() {
+      database::mungos::by_id::update_one_by_id(
+        &db_client().deployments,
+        &created.id,
+        database::mungos::update::Update::Set(
+          database::mungos::mongodb::bson::doc! {
+            "info.assigned_server": &assigned_server
+          },
+        ),
+        None,
+      )
+      .await
+      .context("Failed to set info.assigned_server")?;
+    }
+    // TODO(Task 8): ReadContainerPorts readback to populate info.host_ports.
     if created.config.server_id.is_empty() {
       return Ok(());
     }
@@ -343,6 +360,24 @@ async fn validate_config(
     .context("Cannot attach Deployment to this Server")?;
     config.server_id = Some(server.id);
   }
+  // Placement scheduling. The user's `config.server_id` (possibly empty)
+  // is treated as a hint; the scheduler probes candidate periphery nodes
+  // for free host ports and picks one.
+  //
+  // TODO(Task 8): preserve the user's original hint here (empty-or-set)
+  // and write only `info.assigned_server` from the chosen id. For now we
+  // stash the chosen id back into `config.server_id` so post_create /
+  // post_update can copy it to `info.assigned_server`.
+  let hint = config.server_id.clone().unwrap_or_default();
+  let fixed_ports: Vec<u16> = config
+    .ports
+    .as_ref()
+    .map(|ps| ps.iter().filter_map(|pm| pm.host).collect())
+    .unwrap_or_default();
+  let chosen = crate::placement::pick_target(&fixed_ports, &hint)
+    .await
+    .map_err(|e| anyhow::anyhow!("Placement failed: {e}"))?;
+  config.server_id = Some(chosen);
   if let Some(DeploymentImage::Build { build_id, version }) =
     &config.image
     && !build_id.is_empty()

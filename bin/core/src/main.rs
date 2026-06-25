@@ -19,6 +19,7 @@ mod monitor;
 mod network;
 mod periphery;
 mod permission;
+mod placement;
 mod resource;
 mod schedule;
 mod stack;
