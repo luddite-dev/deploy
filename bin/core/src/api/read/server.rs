@@ -72,6 +72,9 @@ impl Resolve<ReadArgs> for GetServersSummary {
             res.disabled += 1;
           }
         }
+        // Draining/Drained are intentional operator-driven states; not counted
+        // as healthy, unhealthy, or disabled.
+        ServerState::Draining | ServerState::Drained => {}
       }
     }
     Ok(res)

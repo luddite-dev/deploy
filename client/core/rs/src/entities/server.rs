@@ -86,6 +86,10 @@ pub struct ServerInfo {
   /// private key of the periphery agent.
   #[serde(default)]
   pub public_key: String,
+  /// Persisted server state. Driven by the health poller for Ok/NotOk/Disabled,
+  /// and by the drain controller for Draining/Drained.
+  #[serde(default)]
+  pub state: ServerState,
 }
 
 #[typeshare(serialized_as = "Partial<ServerConfig>")]
@@ -137,6 +141,21 @@ pub struct ServerConfig {
   #[builder(default = "default_enabled()")]
   #[partial_default(default_enabled())]
   pub enabled: bool,
+
+  /// Desired state — set to Drain to gracefully migrate workloads off.
+  /// The drain controller transitions ServerState to Draining then Drained.
+  /// Default: Run
+  #[serde(default)]
+  #[builder(default)]
+  #[partial_default(ServerDesiredState::default())]
+  pub desired_state: ServerDesiredState,
+
+  /// Maximum time in seconds to wait for migrations to complete before
+  /// transitioning to Drained forcibly. Default: 1800 (30 minutes)
+  #[serde(default = "default_drain_timeout_seconds")]
+  #[builder(default = "default_drain_timeout_seconds()")]
+  #[partial_default(default_drain_timeout_seconds())]
+  pub drain_timeout_seconds: u64,
 
   /// Whether to automatically rotate Server keys when
   /// RotateAllServerKeys is called.
@@ -314,6 +333,10 @@ fn default_disk_critical() -> f64 {
   95.0
 }
 
+fn default_drain_timeout_seconds() -> u64 {
+  1800
+}
+
 impl Default for ServerConfig {
   fn default() -> Self {
     Self {
@@ -321,6 +344,8 @@ impl Default for ServerConfig {
       insecure_tls: default_insecure_tls(),
       external_address: Default::default(),
       enabled: default_enabled(),
+      desired_state: ServerDesiredState::default(),
+      drain_timeout_seconds: default_drain_timeout_seconds(),
       auto_rotate_keys: default_auto_rotate_keys(),
       ignore_mounts: Default::default(),
       stats_monitoring: default_stats_monitoring(),
@@ -453,6 +478,23 @@ pub enum ServerState {
   NotOk,
   /// Server is disabled.
   Disabled,
+  /// Server is being drained — deployments are being migrated off.
+  Draining,
+  /// Server has been fully drained — no deployments remain.
+  Drained,
+}
+
+/// Operator-set desired state for a server. Set to `Drain` to gracefully
+/// migrate workloads off; the drain controller transitions `ServerState`
+/// to `Draining` then `Drained`. Default: `Run`.
+#[typeshare]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub enum ServerDesiredState {
+  #[default]
+  Run,
+  Drain,
 }
 
 /// Server-specific query

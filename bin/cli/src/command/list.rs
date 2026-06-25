@@ -812,6 +812,7 @@ impl PrintTable for ResourceListItem<ServerListItemInfo> {
       ServerState::Ok => Color::Green,
       ServerState::NotOk => Color::Red,
       ServerState::Disabled => Color::Blue,
+      ServerState::Draining | ServerState::Drained => Color::Yellow,
     };
     let mut res = vec![
       Cell::new(self.name).add_attribute(Attribute::Bold),

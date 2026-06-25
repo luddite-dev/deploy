@@ -23,6 +23,7 @@ mod permission;
 mod placement;
 mod resource;
 mod schedule;
+mod server;
 mod stack;
 mod startup;
 mod state;
@@ -74,6 +75,7 @@ async fn app() -> anyhow::Result<()> {
     schedule::spawn_schedule_executor();
     helpers::prune::spawn_prune_loop();
     tokio::spawn(backup::scheduler::run_scheduler());
+    tokio::spawn(server::drain::run_drain_controller());
   }
   .instrument(startup_span)
   .await;
