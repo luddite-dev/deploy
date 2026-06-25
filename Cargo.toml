@@ -110,6 +110,7 @@ hex = "0.4.3"
 
 # SYSTEM
 hickory-resolver = "0.26.1"
+netstat2 = "0.11"
 portable-pty = "0.9.0"
 shell-escape = "0.1.5"
 crossterm = "0.29.0"

@@ -1,3 +1,4 @@
+use command::{CommandOptions, run_standard_command};
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use komodo_client::entities::config::periphery::Command;
 use tracing::Instrument;
@@ -26,6 +27,8 @@ async fn app() -> anyhow::Result<()> {
   mogh_logger::init(&config.logging)?;
 
   let startup_span = info_span!("PeripheryStartup");
+
+  check_podman_volume_export_import_support().await?;
 
   let mut handles = async {
     info!("Komodo Periphery version: v{}", env!("CARGO_PKG_VERSION"));
@@ -94,6 +97,24 @@ async fn app() -> anyhow::Result<()> {
     }
   }
 
+  Ok(())
+}
+
+/// Verifies the host Podman supports `volume export` and `volume import`.
+/// If either subcommand is missing, Periphery refuses to start.
+async fn check_podman_volume_export_import_support(
+) -> anyhow::Result<()> {
+  for sub in ["volume export --help", "volume import --help"] {
+    let cmd = format!("podman {sub}");
+    let output =
+      run_standard_command(&cmd, CommandOptions::default()).await;
+    if !output.success() {
+      anyhow::bail!(
+        "unsupported Podman version: `podman {sub}` did not run successfully. \
+         Periphery requires Podman with volume export/import support."
+      );
+    }
+  }
   Ok(())
 }
 

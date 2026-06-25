@@ -13,6 +13,7 @@ pub mod container;
 pub mod docker;
 pub mod git;
 pub mod keys;
+pub mod placement;
 pub mod poll;
 pub mod stats;
 pub mod terminal;
