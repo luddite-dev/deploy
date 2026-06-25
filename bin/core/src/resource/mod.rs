@@ -63,6 +63,7 @@ mod refresh;
 mod repo;
 mod server;
 mod stack;
+pub mod stack_validation;
 mod sync;
 
 pub use action::{

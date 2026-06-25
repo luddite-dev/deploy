@@ -442,6 +442,13 @@ async fn validate_config(
     // in case it comes in as name
     config.server_id = Some(server.id);
   }
+  // Validate compose YAML: reject bind mounts and Swarm-only keys.
+  if let Some(file_contents) = &config.file_contents
+    && !file_contents.is_empty()
+  {
+    crate::resource::stack_validation::validate_compose_yaml(file_contents)
+      .context("Invalid compose file")?;
+  }
   // Placement scheduling. Stacks carry their service ports inside the
   // compose YAML rather than typed PortMappings, so fixed-port detection
   // is deferred to compose parsing (Task 5). For now we run pick_target
