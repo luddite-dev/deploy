@@ -24,7 +24,6 @@ use komodo_client::{
     resource::Resource,
     server::Server,
     stack::Stack,
-    swarm::Swarm,
     sync::ResourceSync,
     update::Update,
     user::User,
@@ -326,17 +325,6 @@ async fn validate_config(
           (RunStackService, Stack, stack),
           // Alerter
           (TestAlerter, Alerter, alerter),
-          // Swarm
-          (RemoveSwarmNodes, Swarm, swarm),
-          (UpdateSwarmNode, Swarm, swarm),
-          (RemoveSwarmStacks, Swarm, swarm),
-          (RemoveSwarmServices, Swarm, swarm),
-          (CreateSwarmConfig, Swarm, swarm),
-          (RotateSwarmConfig, Swarm, swarm),
-          (RemoveSwarmConfigs, Swarm, swarm),
-          (CreateSwarmSecret, Swarm, swarm),
-          (RotateSwarmSecret, Swarm, swarm),
-          (RemoveSwarmSecrets, Swarm, swarm),
         ],
         batch_admin: [
           BatchRunProcedure,

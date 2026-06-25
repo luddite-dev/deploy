@@ -1,8 +1,6 @@
-use anyhow::anyhow;
 use komodo_client::{
   api::execute::*,
   entities::{
-    SwarmOrServer,
     permission::PermissionLevel,
     server::Server,
     stack::{Stack, StackActionState},
@@ -40,18 +38,12 @@ pub async fn execute_compose<T: ExecuteCompose>(
   update: Update,
   extras: T::Extras,
 ) -> anyhow::Result<Update> {
-  let (stack, swarm_or_server) = setup_stack_execution(
+  let (stack, server) = setup_stack_execution(
     stack,
     user,
     PermissionLevel::Execute.into(),
   )
   .await?;
-
-  let SwarmOrServer::Server(server) = swarm_or_server else {
-    return Err(anyhow!(
-      "Compose executions (Start, Stop, Restart) should not be called for Stack in Swarm Mode"
-    ));
-  };
 
   execute_compose_with_stack_and_server::<T>(
     stack,

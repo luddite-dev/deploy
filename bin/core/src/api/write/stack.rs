@@ -14,11 +14,12 @@ use komodo_client::{
   api::{execute::DeployStack, write::*},
   entities::{
     FileContents, NoData, Operation, RepoExecutionArgs,
-    ResourceTarget, SwarmOrServer,
+    ResourceTarget,
     alert::{Alert, AlertData, SeverityLevel},
     all_logs_success, komodo_timestamp,
     permission::PermissionLevel,
     repo::Repo,
+    server::Server,
     stack::{Stack, StackInfo, StackServiceWithUpdate, StackState},
     update::Update,
     user::{auto_redeploy_user, stack_user, system_user},
@@ -36,8 +37,9 @@ use crate::{
   api::execute::{self, ExecuteRequest, ExecutionResult},
   config::core_config,
   helpers::{
-    query::get_swarm_or_server,
-    stack_git_token, swarm_or_server_request,
+    periphery_client,
+    query::get_server_for_command,
+    stack_git_token,
     update::{add_update, make_update, poll_update_until_complete},
   },
   permission::get_check_permissions,
@@ -257,22 +259,20 @@ async fn write_stack_file_contents_on_host(
   contents: String,
   mut update: Update,
 ) -> mogh_error::Result<Update> {
-  let swarm_or_server = get_swarm_or_server(
-    &stack.config.swarm_id,
+  let server = get_server_for_command(
     &stack.config.server_id,
   )
   .await?;
 
-  let res = swarm_or_server_request(
-    &swarm_or_server,
-    WriteComposeContentsToHost {
+  let res = periphery_client(&server)
+    .await?
+    .request(WriteComposeContentsToHost {
       name: stack.name,
       run_directory: stack.config.run_directory,
       file_path,
       contents,
-    },
-  )
-  .await;
+    })
+    .await;
 
   match res {
     Ok(log) => {
@@ -513,22 +513,20 @@ impl Resolve<WriteArgs> for RefreshStackCache {
       // =============
       // FILES ON HOST
       // =============
-      if let Ok(swarm_or_server) = get_swarm_or_server(
-        &stack.config.swarm_id,
+      if let Ok(server) = get_server_for_command(
         &stack.config.server_id,
       )
       .await
       {
         let GetComposeContentsOnHostResponse { contents, errors } =
-          match swarm_or_server_request(
-            &swarm_or_server,
-            GetComposeContentsOnHost {
+          match periphery_client(&server)
+            .await?
+            .request(GetComposeContentsOnHost {
               file_paths: stack.all_file_dependencies(),
               name: stack.name.clone(),
               run_directory: stack.config.run_directory.clone(),
-            },
-          )
-          .await
+            })
+            .await
           {
             Ok(res) => res,
             Err(e) => GetComposeContentsOnHostResponse {
@@ -690,18 +688,16 @@ impl Resolve<WriteArgs> for CheckStackForUpdate {
   ) -> mogh_error::Result<Self::Response> {
     // Even though this is a write request, this doesn't change any config. Anyone that can execute the
     // stack should be able to do this.
-    let (stack, swarm_or_server) = setup_stack_execution(
+    let (stack, server) = setup_stack_execution(
       &self.stack,
       user,
       PermissionLevel::Execute.into(),
     )
     .await?;
 
-    swarm_or_server.verify_has_target()?;
-
     check_stack_for_update_inner(
       stack.id,
-      &swarm_or_server,
+      &server,
       self.skip_auto_update,
       self.wait_for_auto_update,
       self.skip_cache_refresh,
@@ -736,7 +732,7 @@ fn stack_alert_sent_cache() -> &'static SetCache<(String, String)> {
 pub async fn check_stack_for_update_inner(
   // ID or name.
   stack: String,
-  swarm_or_server: &SwarmOrServer,
+  server: &Server,
   skip_auto_update: bool,
   // Otherwise spawns task to run in background
   wait_for_auto_update: bool,
@@ -787,7 +783,7 @@ pub async fn check_stack_for_update_inner(
       service.image_digest = None;
       continue;
     }
-    match cache.get(swarm_or_server, image, None, None).await {
+    match cache.get(server, image, None, None).await {
       Ok(digest) => service.image_digest = Some(digest),
       Err(e) => {
         warn!(
@@ -900,14 +896,8 @@ pub async fn check_stack_for_update_inner(
         data: AlertData::StackImageUpdateAvailable {
           id: stack.id.clone(),
           name: stack.name.clone(),
-          swarm_name: swarm_or_server
-            .swarm_name()
-            .map(str::to_string),
-          swarm_id: swarm_or_server.swarm_id().map(str::to_string),
-          server_name: swarm_or_server
-            .server_name()
-            .map(str::to_string),
-          server_id: swarm_or_server.server_id().map(str::to_string),
+          server_id: Some(server.id.clone()),
+          server_name: Some(server.name.clone()),
           service: service.service.clone(),
           image: service.image.clone(),
         },
@@ -946,10 +936,7 @@ pub async fn check_stack_for_update_inner(
     .retain(|(stack_id, _)| stack_id != &stack.id)
     .await;
 
-  let deploy_services = if stack.config.auto_update_all_services
-    // Swarm stacks don't support individual service deploy
-    || !stack.config.swarm_id.is_empty()
-  {
+  let deploy_services = if stack.config.auto_update_all_services {
     Vec::new()
   } else {
     services_with_update
@@ -958,10 +945,8 @@ pub async fn check_stack_for_update_inner(
       .collect()
   };
 
-  let swarm_id = swarm_or_server.swarm_id().map(str::to_string);
-  let swarm_name = swarm_or_server.swarm_name().map(str::to_string);
-  let server_id = swarm_or_server.server_id().map(str::to_string);
-  let server_name = swarm_or_server.server_name().map(str::to_string);
+  let server_id = Some(server.id.clone());
+  let server_name = Some(server.name.clone());
 
   let stack_id = stack.id.clone();
 
@@ -996,8 +981,6 @@ pub async fn check_stack_for_update_inner(
             data: AlertData::StackAutoUpdated {
               id: stack.id.clone(),
               name: stack.name.clone(),
-              swarm_id,
-              swarm_name,
               server_id,
               server_name,
               images: services_with_update
@@ -1060,15 +1043,13 @@ impl Resolve<WriteArgs> for BatchCheckStackForUpdate {
     let res = stacks
       .into_iter()
       .map(|stack| async move {
-        let swarm_or_server = get_swarm_or_server(
-          &stack.config.swarm_id,
+        let server = get_server_for_command(
           &stack.config.server_id,
         )
         .await?;
-        swarm_or_server.verify_has_target().map_err(|e| e.error)?;
         check_stack_for_update_inner(
           stack.id,
-          &swarm_or_server,
+          &server,
           self.skip_auto_update,
           self.wait_for_auto_update,
           self.skip_cache_refresh,

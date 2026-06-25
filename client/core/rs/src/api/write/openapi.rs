@@ -11,12 +11,6 @@ use crate::api::write;
     write::delete_onboarding_key,
     // resource
     write::update_resource_meta,
-    // swarm
-    write::create_swarm,
-    write::copy_swarm,
-    write::delete_swarm,
-    write::update_swarm,
-    write::rename_swarm,
     // server
     write::create_server,
     write::copy_server,

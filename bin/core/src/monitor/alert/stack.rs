@@ -15,7 +15,6 @@ use crate::{
 
 pub async fn alert_stacks(
   ts: i64,
-  swarm_names: &HashMap<String, String>,
   server_names: &HashMap<String, String>,
 ) {
   let action_states = action_states();
@@ -64,8 +63,6 @@ pub async fn alert_stacks(
       let data = AlertData::StackStateChange {
         id: status.curr.id.clone(),
         name: stack.name,
-        swarm_name: swarm_names.get(&stack.config.swarm_id).cloned(),
-        swarm_id: optional_string(stack.config.swarm_id),
         server_name: server_names
           .get(&stack.config.server_id)
           .cloned(),

@@ -61,8 +61,6 @@ pub mod server;
 pub mod stack;
 /// Subtypes for server stats reporting.
 pub mod stats;
-/// Subtypes of [Swarm][swarm::Swarm].
-pub mod swarm;
 /// Subtypes of [ResourceSync][sync::ResourceSync]
 pub mod sync;
 /// Subtypes of [Tag][tag::Tag].
@@ -1168,22 +1166,6 @@ pub enum Operation {
   #[default]
   None,
 
-  // Swarm
-  CreateSwarm,
-  UpdateSwarm,
-  RenameSwarm,
-  DeleteSwarm,
-  RemoveSwarmNodes,
-  UpdateSwarmNode,
-  RemoveSwarmStacks,
-  RemoveSwarmServices,
-  CreateSwarmConfig,
-  RotateSwarmConfig,
-  RemoveSwarmConfigs,
-  CreateSwarmSecret,
-  RotateSwarmSecret,
-  RemoveSwarmSecrets,
-
   // Server
   CreateServer,
   UpdateServer,
@@ -1437,7 +1419,6 @@ pub enum TerminationSignal {
 #[serde(tag = "type", content = "id")]
 pub enum ResourceTarget {
   System(String),
-  Swarm(String),
   Server(String),
   Stack(String),
   Deployment(String),
@@ -1466,7 +1447,6 @@ impl ResourceTarget {
   pub fn is_empty(&self) -> bool {
     match self {
       ResourceTarget::System(id) => id.is_empty(),
-      ResourceTarget::Swarm(id) => id.is_empty(),
       ResourceTarget::Server(id) => id.is_empty(),
       ResourceTarget::Stack(id) => id.is_empty(),
       ResourceTarget::Deployment(id) => id.is_empty(),
@@ -1489,7 +1469,6 @@ impl ResourceTarget {
   ) -> (ResourceTargetVariant, &String) {
     let id = match self {
       ResourceTarget::System(id) => id,
-      ResourceTarget::Swarm(id) => id,
       ResourceTarget::Server(id) => id,
       ResourceTarget::Stack(id) => id,
       ResourceTarget::Build(id) => id,
@@ -1570,7 +1549,6 @@ impl ResourceTargetVariant {
   pub fn toml_header(&self) -> &'static str {
     match self {
       ResourceTargetVariant::System => "system",
-      ResourceTargetVariant::Swarm => "swarm",
       ResourceTargetVariant::Server => "server",
       ResourceTargetVariant::Stack => "stack",
       ResourceTargetVariant::Deployment => "deployment",
@@ -1622,7 +1600,6 @@ pub fn resource_link(
 ) -> String {
   let path = match resource_type {
     ResourceTargetVariant::System => unreachable!(),
-    ResourceTargetVariant::Swarm => format!("/swarms/{id}"),
     ResourceTargetVariant::Server => {
       format!("/servers/{id}")
     }
@@ -1651,52 +1628,4 @@ pub fn resource_link(
     }
   };
   format!("{host}{path}")
-}
-
-#[allow(clippy::large_enum_variant)]
-pub enum SwarmOrServer {
-  Swarm(swarm::Swarm),
-  Server(server::Server),
-  None,
-}
-
-impl SwarmOrServer {
-  pub fn verify_has_target(&self) -> mogh_error::Result<()> {
-    if let Self::None = self {
-      Err(
-        anyhow!("Must attach either swarm or server")
-          .status_code(StatusCode::BAD_REQUEST),
-      )
-    } else {
-      Ok(())
-    }
-  }
-
-  pub fn swarm_id(&self) -> Option<&str> {
-    let Self::Swarm(swarm) = self else {
-      return None;
-    };
-    Some(&swarm.id)
-  }
-
-  pub fn swarm_name(&self) -> Option<&str> {
-    let Self::Swarm(swarm) = self else {
-      return None;
-    };
-    Some(&swarm.name)
-  }
-
-  pub fn server_id(&self) -> Option<&str> {
-    let Self::Server(server) = self else {
-      return None;
-    };
-    Some(&server.id)
-  }
-
-  pub fn server_name(&self) -> Option<&str> {
-    let Self::Server(server) = self else {
-      return None;
-    };
-    Some(&server.name)
-  }
 }

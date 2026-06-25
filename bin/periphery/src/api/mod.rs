@@ -8,7 +8,7 @@ use komodo_client::entities::{
 use mogh_resolver::Resolve;
 use periphery_client::api::{
   build::*, compose::*, container::*, docker::*, git::*, keys::*,
-  poll::*, stats::*, swarm::*, terminal::*, *,
+  poll::*, stats::*, terminal::*, *,
 };
 use serde::{Deserialize, Serialize};
 use strum::EnumDiscriminants;
@@ -25,7 +25,6 @@ mod docker;
 mod git;
 mod keys;
 mod poll;
-mod swarm;
 
 #[derive(Debug)]
 pub struct Args {
@@ -135,33 +134,6 @@ pub enum PeripheryRequest {
 
   // All in one (Write)
   PruneSystem(PruneSystem),
-
-  // Swarm (Read)
-  PollSwarmStatus(PollSwarmStatus),
-  InspectSwarmNode(InspectSwarmNode),
-  InspectSwarmStack(InspectSwarmStack),
-  InspectSwarmService(InspectSwarmService),
-  GetSwarmServiceLog(GetSwarmServiceLog),
-  GetSwarmServiceLogSearch(GetSwarmServiceLogSearch),
-  InspectSwarmTask(InspectSwarmTask),
-  InspectSwarmConfig(InspectSwarmConfig),
-  InspectSwarmSecret(InspectSwarmSecret),
-
-  // Swarm (Write)
-  UpdateSwarmNode(UpdateSwarmNode),
-  RemoveSwarmNodes(RemoveSwarmNodes),
-  DeploySwarmStack(DeploySwarmStack),
-  RemoveSwarmStacks(RemoveSwarmStacks),
-  CreateSwarmService(CreateSwarmService),
-  UpdateSwarmService(UpdateSwarmService),
-  RollbackSwarmService(RollbackSwarmService),
-  RemoveSwarmServices(RemoveSwarmServices),
-  CreateSwarmConfig(CreateSwarmConfig),
-  RotateSwarmConfig(RotateSwarmConfig),
-  RemoveSwarmConfigs(RemoveSwarmConfigs),
-  CreateSwarmSecret(CreateSwarmSecret),
-  RotateSwarmSecret(RotateSwarmSecret),
-  RemoveSwarmSecrets(RemoveSwarmSecrets),
 
   // Terminal
   ListTerminals(ListTerminals),

@@ -14,7 +14,7 @@ use komodo_client::{
     builder::Builder, deployment::Deployment,
     permission::PermissionLevel, procedure::Procedure, repo::Repo,
     resource::ResourceQuery, server::Server, stack::Stack,
-    swarm::Swarm, sync::ResourceSync, toml::ResourcesToml,
+    sync::ResourceSync, toml::ResourcesToml,
     user::User,
   },
 };
@@ -70,7 +70,6 @@ async fn get_all_targets(
     Alerter,
     Builder,
     Server,
-    Swarm,
     Stack,
     Deployment,
     Build,
@@ -162,9 +161,6 @@ impl Resolve<ReadArgs> for ExportResourcesToToml {
       match target {
         ResourceTarget::Server(id) => {
           convert_target!(id, Server, servers)
-        }
-        ResourceTarget::Swarm(id) => {
-          convert_target!(id, Swarm, swarms)
         }
         ResourceTarget::Stack(id) => {
           convert_target!(id, Stack, stacks)
@@ -282,7 +278,6 @@ fn serialize_resources_toml(
   }
   serialize_resources!(
     (Server, servers, "server"),
-    (Swarm, swarms, "swarm"),
     (Stack, stacks, "stack"),
     (Deployment, deployments, "deployment"),
     (Build, builds, "build"),

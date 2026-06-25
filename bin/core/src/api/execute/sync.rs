@@ -21,7 +21,6 @@ use komodo_client::{
     repo::Repo,
     server::Server,
     stack::Stack,
-    swarm::Swarm,
     sync::ResourceSync,
     update::{Log, Update},
     user::sync_user,
@@ -158,7 +157,6 @@ impl Resolve<ExecuteArgs> for RunSync {
           // New resource types need to be added here manually.
           resolve_id_to_name!(
             (Server, servers),
-            (Swarm, swarms),
             (Stack, stacks),
             (Deployment, deployments),
             (Build, builds),
@@ -238,7 +236,6 @@ impl Resolve<ExecuteArgs> for RunSync {
     // New resource types need to be added here manually.
     get_deltas!(
       (server_deltas, Server, servers),
-      (swarm_deltas, Swarm, swarms),
       (stack_deltas, Stack, stacks),
       (deployment_deltas, Deployment, deployments),
       (build_deltas, Build, builds),
@@ -287,7 +284,6 @@ impl Resolve<ExecuteArgs> for RunSync {
     if deploy_cache.is_empty()
       && resource_sync_deltas.no_changes()
       && server_deltas.no_changes()
-      && swarm_deltas.no_changes()
       && deployment_deltas.no_changes()
       && stack_deltas.no_changes()
       && build_deltas.no_changes()
@@ -354,11 +350,6 @@ impl Resolve<ExecuteArgs> for RunSync {
       Action::execute_sync_updates(action_deltas).await,
     );
 
-    // Depends on server
-    maybe_extend(
-      &mut update.logs,
-      Swarm::execute_sync_updates(swarm_deltas).await,
-    );
     // Depends on server
     maybe_extend(
       &mut update.logs,

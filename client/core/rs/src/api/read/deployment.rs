@@ -10,7 +10,6 @@ use crate::entities::{
   },
   docker::{
     container::{Container, ContainerListItem, ContainerStats},
-    service::SwarmService,
   },
   update::Log,
 };
@@ -180,37 +179,6 @@ pub struct InspectDeploymentContainer {
 
 #[typeshare]
 pub type InspectDeploymentContainerResponse = Container;
-
-//
-
-#[cfg(feature = "utoipa")]
-#[utoipa::path(
-  post,
-  path = "/InspectDeploymentSwarmService",
-  description = "Inspect the swarm service associated with the Deployment.",
-  request_body(content = InspectDeploymentSwarmService),
-  responses(
-    (status = 200, description = "The swarm service", body = InspectDeploymentSwarmServiceResponse),
-  ),
-)]
-pub fn inspect_deployment_swarm_service() {}
-
-/// Inspect the swarm service associated with the Deployment.
-/// Response: [SwarmService].
-#[typeshare]
-#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
-#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
-#[empty_traits(KomodoReadRequest)]
-#[response(InspectDeploymentSwarmServiceResponse)]
-#[error(mogh_error::Error)]
-pub struct InspectDeploymentSwarmService {
-  /// Id or name
-  #[serde(alias = "id", alias = "name")]
-  pub deployment: String,
-}
-
-#[typeshare]
-pub type InspectDeploymentSwarmServiceResponse = SwarmService;
 
 //
 

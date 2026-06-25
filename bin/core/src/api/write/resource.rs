@@ -4,7 +4,7 @@ use komodo_client::{
   entities::{
     ResourceTarget, action::Action, alerter::Alerter, build::Build,
     builder::Builder, deployment::Deployment, procedure::Procedure,
-    repo::Repo, server::Server, stack::Stack, swarm::Swarm,
+    repo::Repo, server::Server, stack::Stack,
     sync::ResourceSync,
   },
 };
@@ -44,9 +44,6 @@ impl Resolve<WriteArgs> for UpdateResourceMeta {
           anyhow!("cannot update meta of System resource target")
             .status_code(StatusCode::BAD_REQUEST),
         );
-      }
-      ResourceTarget::Swarm(id) => {
-        resource::update_meta::<Swarm>(&id, meta, args).await?;
       }
       ResourceTarget::Server(id) => {
         resource::update_meta::<Server>(&id, meta, args).await?;

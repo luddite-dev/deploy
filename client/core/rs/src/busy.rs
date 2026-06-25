@@ -2,18 +2,12 @@ use crate::entities::{
   action::ActionActionState, build::BuildActionState,
   deployment::DeploymentActionState, procedure::ProcedureActionState,
   repo::RepoActionState, server::ServerActionState,
-  stack::StackActionState, swarm::SwarmActionState,
+  stack::StackActionState,
   sync::ResourceSyncActionState,
 };
 
 pub trait Busy {
   fn busy(&self) -> bool;
-}
-
-impl Busy for SwarmActionState {
-  fn busy(&self) -> bool {
-    false
-  }
 }
 
 impl Busy for ServerActionState {

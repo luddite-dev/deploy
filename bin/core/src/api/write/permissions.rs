@@ -337,20 +337,6 @@ async fn extract_resource_target_with_validation(
       let res = resource_target.extract_variant_id();
       Ok((res.0, res.1.clone()))
     }
-    ResourceTarget::Swarm(ident) => {
-      let filter = match ObjectId::from_str(ident) {
-        Ok(id) => doc! { "_id": id },
-        Err(_) => doc! { "name": ident },
-      };
-      let id = db_client()
-        .swarms
-        .find_one(filter)
-        .await
-        .context("Failed to query db for swarms")?
-        .context("No matching server found")?
-        .id;
-      Ok((ResourceTargetVariant::Server, id))
-    }
     ResourceTarget::Server(ident) => {
       let filter = match ObjectId::from_str(ident) {
         Ok(id) => doc! { "_id": id },

@@ -4,7 +4,6 @@ use anyhow::{Context, anyhow};
 use database::mongo_indexed::Document;
 use database::mungos::mongodb::bson::{Bson, doc};
 use indexmap::IndexSet;
-use komodo_client::entities::SwarmOrServer;
 use komodo_client::entities::{
   ResourceTarget,
   build::Build,
@@ -20,7 +19,6 @@ use mogh_resolver::HasResponse;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::helpers::swarm::swarm_request;
 use crate::{
   config::core_config, connection::PeripheryConnectionArgs,
   periphery::PeripheryClient, state::db_client,
@@ -36,7 +34,6 @@ pub mod matcher;
 pub mod procedure;
 pub mod prune;
 pub mod query;
-pub mod swarm;
 pub mod terminal;
 pub mod update;
 pub mod validations;
@@ -269,25 +266,4 @@ pub fn repo_link(
     let _ = write!(&mut res, "/tree/{branch}");
   }
   res
-}
-
-pub async fn swarm_or_server_request<T>(
-  swarm_or_server: &SwarmOrServer,
-  request: T,
-) -> anyhow::Result<T::Response>
-where
-  T: std::fmt::Debug + Clone + Serialize + HasResponse,
-  T::Response: DeserializeOwned,
-{
-  match swarm_or_server {
-    SwarmOrServer::Swarm(swarm) => {
-      swarm_request(&swarm.config.server_ids, request).await
-    }
-    SwarmOrServer::Server(server) => {
-      periphery_client(server).await?.request(request).await
-    }
-    SwarmOrServer::None => {
-      Err(anyhow!("Resource has neither swarm nor server attached."))
-    }
-  }
 }

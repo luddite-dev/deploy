@@ -43,7 +43,6 @@ mod procedure;
 mod repo;
 mod server;
 mod stack;
-mod swarm;
 mod sync;
 
 use super::Variant;
@@ -145,18 +144,6 @@ pub enum ExecuteRequest {
   PruneDockerBuilders(PruneDockerBuilders),
   PruneBuildx(PruneBuildx),
   PruneSystem(PruneSystem),
-
-  // ==== SWARM ====
-  RemoveSwarmNodes(RemoveSwarmNodes),
-  UpdateSwarmNode(UpdateSwarmNode),
-  RemoveSwarmStacks(RemoveSwarmStacks),
-  RemoveSwarmServices(RemoveSwarmServices),
-  CreateSwarmConfig(CreateSwarmConfig),
-  RotateSwarmConfig(RotateSwarmConfig),
-  RemoveSwarmConfigs(RemoveSwarmConfigs),
-  CreateSwarmSecret(CreateSwarmSecret),
-  RotateSwarmSecret(RotateSwarmSecret),
-  RemoveSwarmSecrets(RemoveSwarmSecrets),
 
   // ==== MAINTENANCE ====
   ClearRepoCache(ClearRepoCache),

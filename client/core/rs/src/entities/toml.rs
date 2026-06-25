@@ -2,8 +2,6 @@ use indexmap::{IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
-use crate::entities::swarm::_PartialSwarmConfig;
-
 use super::{
   ResourceTarget, ResourceTargetVariant,
   action::_PartialActionConfig,
@@ -29,15 +27,6 @@ use super::{
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "schemars", schemars(rename = "Resources"))]
 pub struct ResourcesToml {
-  /// Declare a swarm
-  #[serde(
-    default,
-    alias = "swarm",
-    skip_serializing_if = "Vec::is_empty"
-  )]
-  #[cfg_attr(feature = "schemars", schemars(rename = "swarm"))]
-  pub swarms: Vec<ResourceToml<_PartialSwarmConfig>>,
-
   /// Declare a server
   #[serde(
     default,

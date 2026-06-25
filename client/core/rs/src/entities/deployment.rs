@@ -55,8 +55,6 @@ pub struct DeploymentListItemInfo {
   pub image: String,
   /// Whether there is a newer image available at the same tag.
   pub update_available: bool,
-  /// The swarm that deployment is deployed on, when in Swarm mode.
-  pub swarm_id: String,
   /// The server that deployment is deployed on, when in Server mode.
   pub server_id: String,
   /// An attached Komodo Build, if it exists.
@@ -87,23 +85,8 @@ pub type _PartialDeploymentConfig = PartialDeploymentConfig;
 #[diff_derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[partial(skip_serializing_none, from, diff)]
 pub struct DeploymentConfig {
-  /// The Swarm to deploy the Deployment on (as a Swarm Service), setting the Deployment into Swarm mode.
-  ///
-  /// Note. If both swarm_id and server_id are set,
-  /// swarm_id overrides server_id and the Deployment will be in Swarm mode.
-  #[serde(default, alias = "swarm")]
-  #[partial_attr(serde(alias = "swarm"))]
-  #[cfg_attr(
-    feature = "schemars",
-    partial_attr(schemars(rename = "swarm"))
-  )]
-  #[builder(default)]
-  pub swarm_id: String,
-
   /// The Server to deploy the Deployment on, setting the Deployment into Container mode.
   ///
-  /// Note. If both swarm_id and server_id are set,
-  /// swarm_id overrides server_id and the Deployment will be in Swarm mode.
   #[serde(default, alias = "server")]
   #[partial_attr(serde(alias = "server"))]
   #[cfg_attr(
@@ -297,7 +280,6 @@ fn default_network() -> String {
 impl Default for DeploymentConfig {
   fn default() -> Self {
     Self {
-      swarm_id: Default::default(),
       server_id: Default::default(),
       image: Default::default(),
       image_registry_account: Default::default(),

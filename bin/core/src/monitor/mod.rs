@@ -11,7 +11,6 @@ use komodo_client::entities::{
   server::{Server, ServerState},
   stack::Stack,
   stats::SystemStats,
-  swarm::Swarm,
 };
 use mogh_cache::CloneCache;
 use mogh_error::Serror;
@@ -39,15 +38,11 @@ mod alert;
 mod helpers;
 mod record;
 mod resources;
-mod swarm;
-
-pub use swarm::refresh_swarm_cache;
 
 const ADDITIONAL_MS: u128 = 500;
 
 pub fn spawn_monitoring_loops() {
   spawn_server_monitoring_loop();
-  swarm::spawn_swarm_monitoring_loop();
 }
 
 fn spawn_server_monitoring_loop() {
@@ -290,30 +285,6 @@ impl RefreshCacheResources {
       stacks,
       deployments,
       repos,
-    }
-  }
-
-  pub async fn load_swarm(swarm: &Swarm) -> Self {
-    let (stacks, deployments) = tokio::join!(
-      find_collect(
-        &db_client().stacks,
-        doc! { "config.swarm_id": &swarm.id },
-        None,
-      ),
-      find_collect(
-        &db_client().deployments,
-        doc! { "config.swarm_id": &swarm.id },
-        None,
-      ),
-    );
-
-    let stacks = stacks.inspect_err(|e|  error!("Failed to get stacks list from db (update swarm status cache) | swarm: {} | {e:#}", swarm.name)).unwrap_or_default();
-    let deployments =  deployments.inspect_err(|e| error!("Failed to get deployments list from db (update swarm status cache) | swarm : {} | {e:#}", swarm.name)).unwrap_or_default();
-
-    Self {
-      stacks,
-      deployments,
-      repos: Default::default(),
     }
   }
 

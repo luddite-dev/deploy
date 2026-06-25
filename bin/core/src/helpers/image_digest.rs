@@ -1,12 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
-use komodo_client::entities::{
-  ImageDigest, SwarmOrServer, komodo_timestamp,
-};
+use komodo_client::entities::{ImageDigest, komodo_timestamp, server::Server};
 use mogh_cache::CloneCache;
 use periphery_client::api::docker::GetLatestImageDigest;
 
-use crate::helpers::swarm_or_server_request;
+use crate::helpers::periphery_client;
 
 /// Maps images -> (digest, valid until milliseconds)
 pub struct ImageDigestCache(CloneCache<String, (ImageDigest, i64)>);
@@ -34,7 +32,7 @@ impl ImageDigestCache {
 
   pub async fn get(
     &self,
-    swarm_or_server: &SwarmOrServer,
+    server: &Server,
     image: &String,
     account: Option<String>,
     token: Option<String>,
@@ -46,16 +44,15 @@ impl ImageDigestCache {
       return Ok(digest);
     }
 
-    let digest = swarm_or_server_request(
-      swarm_or_server,
-      GetLatestImageDigest {
+    let digest = periphery_client(server)
+      .await?
+      .request(GetLatestImageDigest {
         name: image.clone(),
         account,
         token,
-      },
-    )
-    .await?
-    .digest;
+      })
+      .await?
+      .digest;
 
     let digest = ImageDigest::new(image, &digest);
 

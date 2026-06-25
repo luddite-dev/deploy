@@ -1,6 +1,6 @@
 use std::{collections::HashSet, str::FromStr};
 
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use database::mungos::mongodb::bson::{
   doc, oid::ObjectId, to_bson, to_document,
 };
@@ -9,7 +9,7 @@ use interpolate::Interpolator;
 use komodo_client::{
   api::{execute::*, write::RefreshStackCache},
   entities::{
-    FileContents, SwarmOrServer,
+    FileContents,
     permission::PermissionLevel,
     repo::Repo,
     server::Server,
@@ -20,12 +20,8 @@ use komodo_client::{
     user::User,
   },
 };
-use mogh_error::AddStatusCodeError as _;
 use mogh_resolver::Resolve;
-use periphery_client::api::{
-  DeployStackResponse, compose::*, swarm::DeploySwarmStack,
-};
-use reqwest::StatusCode;
+use periphery_client::api::{DeployStackResponse, compose::*};
 use uuid::Uuid;
 
 use crate::{
@@ -34,12 +30,11 @@ use crate::{
     periphery_client,
     query::{VariablesAndSecrets, get_variables_and_secrets},
     stack_git_token,
-    swarm::swarm_request,
     update::{
       add_update_without_send, init_execution_update, update_update,
     },
   },
-  monitor::{refresh_server_cache, refresh_swarm_cache},
+  monitor::refresh_server_cache,
   permission::get_check_permissions,
   resource,
   stack::{
@@ -106,14 +101,12 @@ impl Resolve<ExecuteArgs> for DeployStack {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
-    let (mut stack, swarm_or_server) = setup_stack_execution(
+    let (mut stack, server) = setup_stack_execution(
       &self.stack,
       user,
       PermissionLevel::Execute.into(),
     )
     .await?;
-
-    swarm_or_server.verify_has_target()?;
 
     let mut repo = if !stack.config.files_on_host
       && !stack.config.linked_repo.is_empty()
@@ -190,35 +183,17 @@ impl Resolve<ExecuteArgs> for DeployStack {
       merged_config,
       commit_hash,
       commit_message,
-    } = match &swarm_or_server {
-      SwarmOrServer::None => unreachable!(),
-      SwarmOrServer::Swarm(swarm) => {
-        swarm_request(
-          &swarm.config.server_ids,
-          DeploySwarmStack {
-            stack: stack.clone(),
-            repo,
-            git_token,
-            registry_token,
-            replacers: secret_replacers.into_iter().collect(),
-          },
-        )
-        .await?
-      }
-      SwarmOrServer::Server(server) => {
-        periphery_client(server)
-          .await?
-          .request(ComposeUp {
-            stack: stack.clone(),
-            services: self.services,
-            repo,
-            git_token,
-            registry_token,
-            replacers: secret_replacers.into_iter().collect(),
-          })
-          .await?
-      }
-    };
+    } = periphery_client(&server)
+      .await?
+      .request(ComposeUp {
+        stack: stack.clone(),
+        services: self.services,
+        repo,
+        git_token,
+        registry_token,
+        replacers: secret_replacers.into_iter().collect(),
+      })
+      .await?;
 
     update.logs.extend(logs);
 
@@ -314,15 +289,7 @@ impl Resolve<ExecuteArgs> for DeployStack {
     }
 
     // Ensure cached stack state up to date by updating server cache
-    match swarm_or_server {
-      SwarmOrServer::None => unreachable!(),
-      SwarmOrServer::Swarm(swarm) => {
-        refresh_swarm_cache(&swarm, true).await;
-      }
-      SwarmOrServer::Server(server) => {
-        refresh_server_cache(&server, true).await;
-      }
-    }
+    refresh_server_cache(&server, true).await;
 
     update.finalize();
     update_update(update.clone()).await?;
@@ -911,21 +878,12 @@ impl Resolve<ExecuteArgs> for PullStack {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
-    let (stack, swarm_or_server) = setup_stack_execution(
+    let (stack, server) = setup_stack_execution(
       &self.stack,
       user,
       PermissionLevel::Execute.into(),
     )
     .await?;
-
-    let SwarmOrServer::Server(server) = swarm_or_server else {
-      return Err(
-        anyhow!(
-          "PullStack should not be called for Stack in Swarm Mode"
-        )
-        .status_code(StatusCode::BAD_REQUEST),
-      );
-    };
 
     let repo = if !stack.config.files_on_host
       && !stack.config.linked_repo.is_empty()
@@ -1187,80 +1145,23 @@ impl Resolve<ExecuteArgs> for DestroyStack {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
-    let (stack, swarm_or_server) = setup_stack_execution(
+    let (stack, server) = setup_stack_execution(
       &self.stack,
       user,
       PermissionLevel::Execute.into(),
     )
     .await?;
 
-    swarm_or_server.verify_has_target()?;
-
-    match swarm_or_server {
-      SwarmOrServer::None => unreachable!(),
-      SwarmOrServer::Swarm(swarm) => {
-        if !self.services.is_empty() {
-          return Err(
-            anyhow!("Cannot destroy specific Stack services when in Swarm mode.")
-              .status_code(StatusCode::BAD_REQUEST)
-          );
-        }
-
-        // get the action state for the stack (or insert default).
-        let action_state = action_states()
-          .stack
-          .get_or_insert_default(&stack.id)
-          .await;
-
-        // Will check to ensure stack not already busy before updating, and return Err if so.
-        // The returned guard will set the action state back to default when dropped.
-        let _action_guard =
-          action_state.update(|state| state.destroying = true)?;
-
-        let mut update = update.clone();
-        // Send update here for UI to recheck action state
-        update_update(update.clone()).await?;
-
-        match swarm_request(
-          &swarm.config.server_ids,
-          periphery_client::api::swarm::RemoveSwarmStacks {
-            stacks: vec![stack.project_name(false)],
-            detach: false,
-          },
-        )
-        .await
-        {
-          Ok(log) => update.logs.push(log),
-          Err(e) => update.push_error_log(
-            "Destroy Stack",
-            format_serror(
-              &e.context("Failed to 'docker stack rm' on swarm")
-                .into(),
-            ),
-          ),
-        }
-
-        // Ensure cached stack state up to date by updating swarm cache
-        refresh_swarm_cache(&swarm, true).await;
-
-        update.finalize();
-        update_update(update.clone()).await?;
-
-        Ok(update)
-      }
-      SwarmOrServer::Server(server) => {
-        execute_compose_with_stack_and_server::<DestroyStack>(
-          stack,
-          server,
-          self.services,
-          |state| state.destroying = true,
-          update.clone(),
-          (self.stop_time, self.remove_orphans),
-        )
-        .await
-        .map_err(Into::into)
-      }
-    }
+    execute_compose_with_stack_and_server::<DestroyStack>(
+      stack,
+      server,
+      self.services,
+      |state| state.destroying = true,
+      update.clone(),
+      (self.stop_time, self.remove_orphans),
+    )
+    .await
+    .map_err(Into::into)
   }
 }
 
@@ -1285,21 +1186,12 @@ impl Resolve<ExecuteArgs> for RunStackService {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
-    let (mut stack, swarm_or_server) = setup_stack_execution(
+    let (mut stack, server) = setup_stack_execution(
       &self.stack,
       user,
       PermissionLevel::Execute.into(),
     )
     .await?;
-
-    let SwarmOrServer::Server(server) = swarm_or_server else {
-      return Err(
-        anyhow!(
-          "RunStackService should not be called for Stack in Swarm Mode"
-        )
-        .status_code(StatusCode::BAD_REQUEST),
-      );
-    };
 
     let mut repo = if !stack.config.files_on_host
       && !stack.config.linked_repo.is_empty()

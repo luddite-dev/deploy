@@ -22,7 +22,6 @@ use komodo_client::{
     resource::Resource,
     server::Server,
     stack::Stack,
-    swarm::Swarm,
     sync::ResourceSync,
     user::User,
   },
@@ -368,21 +367,6 @@ pub async fn user_resource_target_query(
   if user.admin || core_config().transparent_mode {
     Ok(incoming_query)
   } else {
-    let swarm_query = list_resource_ids_for_user::<Swarm>(
-      None,
-      user,
-      PermissionLevel::Read.into(),
-    )
-    .await?
-    .map(|ids| {
-      doc! {
-        "target.type": "Swarm", "target.id": { "$in": ids }
-      }
-    })
-    // If 'list_resource_ids_for_user' returns Ok(None), user
-    // can read all resources of this type.
-    .unwrap_or_else(|| doc! { "target.type": "Swarm" });
-
     let server_query = list_resource_ids_for_user::<Server>(
       None,
       user,
@@ -518,29 +502,27 @@ pub async fn user_resource_target_query(
 
     let query = if let Some(query) = incoming_query {
       doc! {
-        "$and": [
-          {
-            "$or": [
-              swarm_query,
-              server_query,
-              stack_query,
-              deployment_query,
-              build_query,
-              repo_query,
-              procedure_query,
-              action_query,
-              builder_query,
-              alerter_query,
-              resource_sync_query,
-            ]
-          },
-          query
-        ]
+          "$and": [
+            {
+              "$or": [
+                server_query,
+                stack_query,
+                deployment_query,
+                build_query,
+                repo_query,
+                procedure_query,
+                action_query,
+                builder_query,
+                alerter_query,
+                resource_sync_query,
+              ]
+            },
+            query
+          ]
       }
     } else {
       doc! {
         "$or": [
-          swarm_query,
           server_query,
           stack_query,
           deployment_query,
@@ -569,10 +551,6 @@ pub async fn check_user_target_access(
       return Err(anyhow!(
         "user must be admin to view system updates"
       ));
-    }
-    ResourceTarget::Swarm(id) => {
-      get_check_permissions::<Swarm>(id, user, required_permissions)
-        .await?;
     }
     ResourceTarget::Server(id) => {
       get_check_permissions::<Server>(id, user, required_permissions)

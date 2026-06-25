@@ -1,12 +1,12 @@
 use anyhow::Context;
 use komodo_client::entities::{
-  SwarmOrServer, permission::PermissionLevelAndSpecifics,
+  permission::PermissionLevelAndSpecifics, server::Server,
   stack::Stack, user::User,
 };
 use regex::Regex;
 
 use crate::{
-  helpers::query::get_swarm_or_server,
+  helpers::query::get_server_for_command,
   permission::get_check_permissions,
 };
 
@@ -18,17 +18,14 @@ pub async fn setup_stack_execution(
   stack: &str,
   user: &User,
   permissions: PermissionLevelAndSpecifics,
-) -> anyhow::Result<(Stack, SwarmOrServer)> {
+) -> anyhow::Result<(Stack, Server)> {
   let stack =
     get_check_permissions::<Stack>(stack, user, permissions).await?;
 
-  let swarm_or_server = get_swarm_or_server(
-    &stack.config.swarm_id,
-    &stack.config.server_id,
-  )
-  .await?;
+  let server =
+    get_server_for_command(&stack.config.server_id).await?;
 
-  Ok((stack, swarm_or_server))
+  Ok((stack, server))
 }
 
 pub fn compose_container_match_regex(

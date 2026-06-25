@@ -4,10 +4,7 @@ use anyhow::{Context, anyhow};
 use komodo_client::{
   api::read::*,
   entities::{
-    SwarmOrServer,
-    docker::{
-      container::Container, service::SwarmService, stack::SwarmStack,
-    },
+    docker::container::Container,
     permission::PermissionLevel,
     stack::{
       Stack, StackActionState, StackListItem, StackQuery,
@@ -15,19 +12,15 @@ use komodo_client::{
     },
   },
 };
-use mogh_error::AddStatusCodeError as _;
 use mogh_resolver::Resolve;
 use periphery_client::api::{
   compose::{GetComposeLog, GetComposeLogSearch},
   container::InspectContainer,
 };
-use reqwest::StatusCode;
 use wildcard::Wildcard;
 
 use crate::{
-  helpers::{
-    periphery_client, query::get_all_tags, swarm::swarm_request,
-  },
+  helpers::{periphery_client, query::get_all_tags},
   permission::get_check_permissions,
   resource,
   stack::setup_stack_execution,
@@ -148,50 +141,23 @@ impl Resolve<ReadArgs> for GetStackLog {
       tail,
       timestamps,
     } = self;
-    let (stack, swarm_or_server) = setup_stack_execution(
+    let (stack, server) = setup_stack_execution(
       &stack,
       user,
       PermissionLevel::Read.logs(),
     )
     .await?;
 
-    swarm_or_server.verify_has_target()?;
-
-    let log = match swarm_or_server {
-      SwarmOrServer::None => unreachable!(),
-      SwarmOrServer::Swarm(swarm) => {
-        let service = services.pop().context(
-          "Must pass single service for Swarm mode Stack logs",
-        )?;
-        swarm_request(
-          &swarm.config.server_ids,
-          periphery_client::api::swarm::GetSwarmServiceLog {
-            // The actual service name on swarm will be stackname_servicename
-            service: format!(
-              "{}_{service}",
-              stack.project_name(false)
-            ),
-            tail,
-            timestamps,
-            no_task_ids: false,
-            no_resolve: false,
-            details: false,
-          },
-        )
-        .await
-        .context("Failed to get stack service log from swarm")?
-      }
-      SwarmOrServer::Server(server) => periphery_client(&server)
-        .await?
-        .request(GetComposeLog {
-          project: stack.project_name(false),
-          services,
-          tail,
-          timestamps,
-        })
-        .await
-        .context("Failed to get stack log from periphery")?,
-    };
+    let log = periphery_client(&server)
+      .await?
+      .request(GetComposeLog {
+        project: stack.project_name(false),
+        services,
+        tail,
+        timestamps,
+      })
+      .await
+      .context("Failed to get stack log from periphery")?;
 
     Ok(log)
   }
@@ -210,50 +176,25 @@ impl Resolve<ReadArgs> for SearchStackLog {
       invert,
       timestamps,
     } = self;
-    let (stack, swarm_or_server) = setup_stack_execution(
+    let (stack, server) = setup_stack_execution(
       &stack,
       user,
       PermissionLevel::Read.logs(),
     )
     .await?;
 
-    swarm_or_server.verify_has_target()?;
-
-    let log = match swarm_or_server {
-      SwarmOrServer::None => unreachable!(),
-      SwarmOrServer::Swarm(swarm) => {
-        let service = services.pop().context(
-          "Must pass single service for Swarm mode Stack logs",
-        )?;
-        swarm_request(
-          &swarm.config.server_ids,
-          periphery_client::api::swarm::GetSwarmServiceLogSearch {
-            service,
-            terms,
-            combinator,
-            invert,
-            timestamps,
-            no_task_ids: false,
-            no_resolve: false,
-            details: false,
-          },
-        )
-        .await
-        .context("Failed to get stack service log from swarm")?
-      }
-      SwarmOrServer::Server(server) => periphery_client(&server)
-        .await?
-        .request(GetComposeLogSearch {
-          project: stack.project_name(false),
-          services,
-          terms,
-          combinator,
-          invert,
-          timestamps,
-        })
-        .await
-        .context("Failed to search stack log from periphery")?,
-    };
+    let log = periphery_client(&server)
+      .await?
+      .request(GetComposeLogSearch {
+        project: stack.project_name(false),
+        services,
+        terms,
+        combinator,
+        invert,
+        timestamps,
+      })
+      .await
+      .context("Failed to search stack log from periphery")?;
 
     Ok(log)
   }
@@ -265,21 +206,12 @@ impl Resolve<ReadArgs> for InspectStackContainer {
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<Container> {
     let InspectStackContainer { stack, service } = self;
-    let (stack, swarm_or_server) = setup_stack_execution(
+    let (stack, server) = setup_stack_execution(
       &stack,
       user,
       PermissionLevel::Read.inspect(),
     )
     .await?;
-
-    let SwarmOrServer::Server(server) = swarm_or_server else {
-      return Err(
-        anyhow!(
-          "InspectStackContainer should not be called for Stack in Swarm Mode"
-        )
-        .status_code(StatusCode::BAD_REQUEST),
-      );
-    };
 
     let services = &stack_status_cache()
       .get(&stack.id)
@@ -305,90 +237,6 @@ impl Resolve<ReadArgs> for InspectStackContainer {
       .context("Failed to inspect container on server")?;
 
     Ok(res)
-  }
-}
-
-impl Resolve<ReadArgs> for InspectStackSwarmService {
-  async fn resolve(
-    self,
-    ReadArgs { user }: &ReadArgs,
-  ) -> mogh_error::Result<SwarmService> {
-    let InspectStackSwarmService { stack, service } = self;
-    let (stack, swarm_or_server) = setup_stack_execution(
-      &stack,
-      user,
-      PermissionLevel::Read.inspect(),
-    )
-    .await?;
-
-    let SwarmOrServer::Swarm(swarm) = swarm_or_server else {
-      return Err(
-        anyhow!(
-          "InspectStackSwarmService should only be called for Stack in Swarm Mode"
-        )
-        .status_code(StatusCode::BAD_REQUEST),
-      );
-    };
-
-    let services = &stack_status_cache()
-      .get(&stack.id)
-      .await
-      .unwrap_or_default()
-      .curr
-      .services;
-
-    let Some(service) = services
-      .iter()
-      .find(|s| s.service == service)
-      .and_then(|s| {
-        s.swarm_service.as_ref().and_then(|c| c.name.clone())
-      })
-    else {
-      return Err(anyhow!(
-        "No service found matching '{service}'. Was the stack last deployed manually?"
-      ).into());
-    };
-
-    swarm_request(
-      &swarm.config.server_ids,
-      periphery_client::api::swarm::InspectSwarmService { service },
-    )
-    .await
-    .context("Failed to inspect service on swarm")
-    .map_err(Into::into)
-  }
-}
-
-impl Resolve<ReadArgs> for InspectStackSwarmInfo {
-  async fn resolve(
-    self,
-    ReadArgs { user }: &ReadArgs,
-  ) -> mogh_error::Result<SwarmStack> {
-    let (stack, swarm_or_server) = setup_stack_execution(
-      &self.stack,
-      user,
-      PermissionLevel::Read.inspect(),
-    )
-    .await?;
-
-    let SwarmOrServer::Swarm(swarm) = swarm_or_server else {
-      return Err(
-        anyhow!(
-          "InspectStackSwarmInfo should only be called for Stack in Swarm Mode"
-        )
-        .status_code(StatusCode::BAD_REQUEST),
-      );
-    };
-
-    swarm_request(
-      &swarm.config.server_ids,
-      periphery_client::api::swarm::InspectSwarmStack {
-        stack: stack.project_name(false),
-      },
-    )
-    .await
-    .context("Failed to inspect stack info on swarm")
-    .map_err(Into::into)
   }
 }
 

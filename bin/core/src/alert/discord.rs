@@ -16,26 +16,6 @@ pub async fn send_alert(
         "{level} | If you see this message, then Alerter **{name}** is **working**\n{link}"
       )
     }
-    AlertData::SwarmUnhealthy { id, name, err } => {
-      let link = resource_link(ResourceTargetVariant::Swarm, id);
-      match alert.level {
-        SeverityLevel::Ok => {
-          format!(
-            "{level} | Swarm **{name}** is now **healthy**\n{link}"
-          )
-        }
-        SeverityLevel::Critical => {
-          let err = err
-            .as_ref()
-            .map(|e| format!("\n**error**: {e:#?}"))
-            .unwrap_or_default();
-          format!(
-            "{level} | Swarm **{name}** is **unhealthy** ❌\n{link}{err}"
-          )
-        }
-        _ => unreachable!(),
-      }
-    }
     AlertData::ServerUnreachable {
       id,
       name,
@@ -128,8 +108,6 @@ pub async fn send_alert(
     AlertData::ContainerStateChange {
       id,
       name,
-      swarm_id: _swarm_id,
-      swarm_name,
       server_id: _server_id,
       server_name,
       from,
@@ -137,9 +115,7 @@ pub async fn send_alert(
     } => {
       let link = resource_link(ResourceTargetVariant::Deployment, id);
       let to = fmt_docker_container_state(to);
-      let target = if let Some(swarm) = swarm_name {
-        format!("\nswarm: **{swarm}**")
-      } else if let Some(server) = server_name {
+      let target = if let Some(server) = server_name {
         format!("\nserver: **{server}**")
       } else {
         String::new()
@@ -151,16 +127,12 @@ pub async fn send_alert(
     AlertData::DeploymentImageUpdateAvailable {
       id,
       name,
-      swarm_id: _swarm_id,
-      swarm_name,
       server_id: _server_id,
       server_name,
       image,
     } => {
       let link = resource_link(ResourceTargetVariant::Deployment, id);
-      let target = if let Some(swarm) = swarm_name {
-        format!("\nswarm: **{swarm}**")
-      } else if let Some(server) = server_name {
+      let target = if let Some(server) = server_name {
         format!("\nserver: **{server}**")
       } else {
         String::new()
@@ -172,16 +144,12 @@ pub async fn send_alert(
     AlertData::DeploymentAutoUpdated {
       id,
       name,
-      swarm_id: _swarm_id,
-      swarm_name,
       server_id: _server_id,
       server_name,
       image,
     } => {
       let link = resource_link(ResourceTargetVariant::Deployment, id);
-      let target = if let Some(swarm) = swarm_name {
-        format!("\nswarm: **{swarm}**")
-      } else if let Some(server) = server_name {
+      let target = if let Some(server) = server_name {
         format!("\nserver: **{server}**")
       } else {
         String::new()
@@ -193,8 +161,6 @@ pub async fn send_alert(
     AlertData::StackStateChange {
       id,
       name,
-      swarm_id: _swarm_id,
-      swarm_name,
       server_id: _server_id,
       server_name,
       from,
@@ -202,9 +168,7 @@ pub async fn send_alert(
     } => {
       let link = resource_link(ResourceTargetVariant::Stack, id);
       let to = fmt_stack_state(to);
-      let target = if let Some(swarm) = swarm_name {
-        format!("\nswarm: **{swarm}**")
-      } else if let Some(server) = server_name {
+      let target = if let Some(server) = server_name {
         format!("\nserver: **{server}**")
       } else {
         String::new()
@@ -216,17 +180,13 @@ pub async fn send_alert(
     AlertData::StackImageUpdateAvailable {
       id,
       name,
-      swarm_id: _swarm_id,
-      swarm_name,
       server_id: _server_id,
       server_name,
       service,
       image,
     } => {
       let link = resource_link(ResourceTargetVariant::Stack, id);
-      let target = if let Some(swarm) = swarm_name {
-        format!("\nswarm: **{swarm}**")
-      } else if let Some(server) = server_name {
+      let target = if let Some(server) = server_name {
         format!("\nserver: **{server}**")
       } else {
         String::new()
@@ -238,8 +198,6 @@ pub async fn send_alert(
     AlertData::StackAutoUpdated {
       id,
       name,
-      swarm_id: _swarm_id,
-      swarm_name,
       server_id: _server_id,
       server_name,
       images,
@@ -248,9 +206,7 @@ pub async fn send_alert(
       let images_label =
         if images.len() > 1 { "images" } else { "image" };
       let images = images.join(", ");
-      let target = if let Some(swarm) = swarm_name {
-        format!("\nswarm: **{swarm}**")
-      } else if let Some(server) = server_name {
+      let target = if let Some(server) = server_name {
         format!("\nserver: **{server}**")
       } else {
         String::new()

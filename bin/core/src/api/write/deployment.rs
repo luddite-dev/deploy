@@ -6,7 +6,7 @@ use futures_util::{StreamExt as _, stream::FuturesOrdered};
 use komodo_client::{
   api::{execute::Deploy, write::*},
   entities::{
-    Operation, ResourceTarget, SwarmOrServer,
+    Operation, ResourceTarget,
     alert::{Alert, AlertData, SeverityLevel},
     deployment::{
       Deployment, DeploymentImage, DeploymentInfo, DeploymentState,
@@ -30,7 +30,7 @@ use crate::{
   api::execute::{self, ExecuteRequest, ExecutionResult},
   helpers::{
     periphery_client,
-    query::{get_deployment_state, get_swarm_or_server},
+    query::get_deployment_state,
     registry_token,
     update::{add_update, make_update, poll_update_until_complete},
   },
@@ -373,18 +373,16 @@ impl Resolve<WriteArgs> for CheckDeploymentForUpdate {
   ) -> mogh_error::Result<Self::Response> {
     // Even though this is a write request, this doesn't change any config. Anyone that can execute the
     // deployment should be able to do this.
-    let (deployment, swarm_or_server) = setup_deployment_execution(
+    let (deployment, server) = setup_deployment_execution(
       &self.deployment,
       user,
       PermissionLevel::Execute.into(),
     )
     .await?;
 
-    swarm_or_server.verify_has_target()?;
-
     check_deployment_for_update_inner(
       deployment,
-      &swarm_or_server,
+      &server,
       self.skip_auto_update,
       self.wait_for_auto_update,
     )
@@ -420,7 +418,7 @@ fn deployment_alert_sent_cache() -> &'static SetCache<String> {
 )]
 pub async fn check_deployment_for_update_inner(
   deployment: Deployment,
-  swarm_or_server: &SwarmOrServer,
+  server: &Server,
   skip_auto_update: bool,
   // Otherwise spawns task to run in background
   wait_for_auto_update: bool,
@@ -458,7 +456,7 @@ pub async fn check_deployment_for_update_inner(
   };
 
   let latest_digest = image_digest_cache()
-    .get(swarm_or_server, image, account, token)
+    .get(server, image, account, token)
     .await?;
 
   resource::update_info::<Deployment>(
@@ -500,11 +498,8 @@ pub async fn check_deployment_for_update_inner(
     // doesn't cause alerts not to be sent on subsequent calls.
     alert_cache.remove(&deployment.id).await;
 
-    let swarm_id = swarm_or_server.swarm_id().map(str::to_string);
-    let swarm_name = swarm_or_server.swarm_name().map(str::to_string);
-    let server_id = swarm_or_server.server_id().map(str::to_string);
-    let server_name =
-      swarm_or_server.server_name().map(str::to_string);
+    let server_id = Some(server.id.clone());
+    let server_name = Some(server.name.clone());
     let id = deployment.id.clone();
     let name = deployment.name.clone();
     let image = image.clone();
@@ -541,8 +536,6 @@ pub async fn check_deployment_for_update_inner(
               data: AlertData::DeploymentAutoUpdated {
                 id,
                 name,
-                swarm_id,
-                swarm_name,
                 server_id,
                 server_name,
                 image,
@@ -588,12 +581,8 @@ pub async fn check_deployment_for_update_inner(
       data: AlertData::DeploymentImageUpdateAvailable {
         id: deployment.id.clone(),
         name: deployment.name.clone(),
-        swarm_id: swarm_or_server.swarm_id().map(str::to_string),
-        swarm_name: swarm_or_server.swarm_name().map(str::to_string),
-        server_id: swarm_or_server.server_id().map(str::to_string),
-        server_name: swarm_or_server
-          .server_name()
-          .map(str::to_string),
+        server_id: Some(server.id.clone()),
+        server_name: Some(server.name.clone()),
         image: image.clone(),
       },
     };
@@ -641,15 +630,13 @@ impl Resolve<WriteArgs> for BatchCheckDeploymentForUpdate {
     let res = deployments
       .into_iter()
       .map(|deployment| async move {
-        let swarm_or_server = get_swarm_or_server(
-          &deployment.config.swarm_id,
+        let server = crate::helpers::query::get_server_for_command(
           &deployment.config.server_id,
         )
         .await?;
-        swarm_or_server.verify_has_target().map_err(|e| e.error)?;
         check_deployment_for_update_inner(
           deployment,
-          &swarm_or_server,
+          &server,
           self.skip_auto_update,
           self.wait_for_auto_update,
         )

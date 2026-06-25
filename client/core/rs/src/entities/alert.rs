@@ -93,16 +93,6 @@ pub enum AlertData {
   },
 
   /// A server could not be reached.
-  SwarmUnhealthy {
-    /// The id of the swarm
-    id: String,
-    /// The name of the swarm
-    name: String,
-    /// The error data
-    err: Option<_Serror>,
-  },
-
-  /// A server could not be reached.
   ServerUnreachable {
     /// The id of the server
     id: String,
@@ -172,7 +162,6 @@ pub enum AlertData {
   },
 
   /// A container's state has changed unexpectedly.
-  /// For swarms, this refers to swarm service.
   ContainerStateChange {
     /// The id of the deployment
     id: String,
@@ -182,10 +171,6 @@ pub enum AlertData {
     server_id: Option<String>,
     /// The server name
     server_name: Option<String>,
-    /// The swarm id of swarm that the deployment is on
-    swarm_id: Option<String>,
-    /// The swarm name
-    swarm_name: Option<String>,
     /// The previous container state
     from: DeploymentState,
     /// The current container state
@@ -202,10 +187,6 @@ pub enum AlertData {
     server_id: Option<String>,
     /// The server name
     server_name: Option<String>,
-    /// The swarm id of swarm that the deployment is on
-    swarm_id: Option<String>,
-    /// The swarm name
-    swarm_name: Option<String>,
     /// The image with update
     image: String,
   },
@@ -220,10 +201,6 @@ pub enum AlertData {
     server_id: Option<String>,
     /// The server name
     server_name: Option<String>,
-    /// The swarm id of swarm that the deployment is on
-    swarm_id: Option<String>,
-    /// The swarm name
-    swarm_name: Option<String>,
     /// The updated image
     image: String,
   },
@@ -238,10 +215,6 @@ pub enum AlertData {
     server_id: Option<String>,
     /// The server name
     server_name: Option<String>,
-    /// The swarm id of swarm that the stack is on
-    swarm_id: Option<String>,
-    /// The swarm name
-    swarm_name: Option<String>,
     /// The previous stack state
     from: StackState,
     /// The current stack state
@@ -258,10 +231,6 @@ pub enum AlertData {
     server_id: Option<String>,
     /// The server name
     server_name: Option<String>,
-    /// The swarm id of swarm that the stack is on
-    swarm_id: Option<String>,
-    /// The swarm name
-    swarm_name: Option<String>,
     /// The service name to update
     service: String,
     /// The image with update
@@ -278,10 +247,6 @@ pub enum AlertData {
     server_id: Option<String>,
     /// The server name
     server_name: Option<String>,
-    /// The swarm id of swarm that the stack is on
-    swarm_id: Option<String>,
-    /// The swarm name
-    swarm_name: Option<String>,
     /// One or more images that were updated
     images: Vec<String>,
   },

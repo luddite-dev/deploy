@@ -53,7 +53,6 @@ mod repo;
 mod schedule;
 mod server;
 mod stack;
-mod swarm;
 mod sync;
 mod tag;
 mod terminal;
@@ -82,29 +81,6 @@ enum ReadRequest {
   ListSecrets(ListSecrets),
   ListGitProvidersFromConfig(ListGitProvidersFromConfig),
   ListDockerRegistriesFromConfig(ListDockerRegistriesFromConfig),
-
-  // ==== SWARM ====
-  GetSwarmsSummary(GetSwarmsSummary),
-  GetSwarm(GetSwarm),
-  GetSwarmActionState(GetSwarmActionState),
-  ListSwarms(ListSwarms),
-  InspectSwarm(InspectSwarm),
-  ListFullSwarms(ListFullSwarms),
-  ListSwarmNodes(ListSwarmNodes),
-  InspectSwarmNode(InspectSwarmNode),
-  ListSwarmConfigs(ListSwarmConfigs),
-  InspectSwarmConfig(InspectSwarmConfig),
-  ListSwarmSecrets(ListSwarmSecrets),
-  InspectSwarmSecret(InspectSwarmSecret),
-  ListSwarmStacks(ListSwarmStacks),
-  InspectSwarmStack(InspectSwarmStack),
-  ListSwarmTasks(ListSwarmTasks),
-  InspectSwarmTask(InspectSwarmTask),
-  ListSwarmServices(ListSwarmServices),
-  InspectSwarmService(InspectSwarmService),
-  GetSwarmServiceLog(GetSwarmServiceLog),
-  SearchSwarmServiceLog(SearchSwarmServiceLog),
-  ListSwarmNetworks(ListSwarmNetworks),
 
   // ==== SERVER ====
   GetServersSummary(GetServersSummary),
@@ -148,7 +124,6 @@ enum ReadRequest {
   GetStackLog(GetStackLog),
   SearchStackLog(SearchStackLog),
   InspectStackContainer(InspectStackContainer),
-  InspectStackSwarmService(InspectStackSwarmService),
   ListStacks(ListStacks),
   ListFullStacks(ListFullStacks),
   ListStackServices(ListStackServices),
@@ -165,7 +140,6 @@ enum ReadRequest {
   GetDeploymentLog(GetDeploymentLog),
   SearchDeploymentLog(SearchDeploymentLog),
   InspectDeploymentContainer(InspectDeploymentContainer),
-  InspectDeploymentSwarmService(InspectDeploymentSwarmService),
   ListDeployments(ListDeployments),
   ListFullDeployments(ListFullDeployments),
   ListCommonDeploymentExtraArgs(ListCommonDeploymentExtraArgs),

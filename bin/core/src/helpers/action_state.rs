@@ -21,14 +21,13 @@ use komodo_client::{
     deployment::DeploymentActionState,
     procedure::ProcedureActionState, repo::RepoActionState,
     server::ServerActionState, stack::StackActionState,
-    swarm::SwarmActionState, sync::ResourceSyncActionState,
+    sync::ResourceSyncActionState,
   },
 };
 use mogh_cache::CloneCache;
 
 #[derive(Default)]
 pub struct ActionStates {
-  pub swarm: CloneCache<String, Arc<ActionState<SwarmActionState>>>,
   pub server: CloneCache<String, Arc<ActionState<ServerActionState>>>,
   pub stack: CloneCache<String, Arc<ActionState<StackActionState>>>,
   pub deployment:

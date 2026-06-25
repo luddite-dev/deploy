@@ -13,7 +13,6 @@ use komodo_client::entities::{
   resource::Resource,
   server::Server,
   stack::Stack,
-  swarm::Swarm,
   sync::ResourceSync,
   tag::Tag,
   toml::ResourceToml,
@@ -175,61 +174,9 @@ impl ToToml for ResourceSync {
   }
 }
 
-impl ToToml for Swarm {
-  fn replace_ids(resource: &mut Resource<Self::Config, Self::Info>) {
-    let all = all_resources_cache().load();
-
-    resource.config.server_ids.iter_mut().for_each(|server_id| {
-      *server_id = all
-        .servers
-        .get(server_id)
-        .map(|s| s.name.clone())
-        .unwrap_or_default();
-    });
-    let mut res =
-      Vec::with_capacity(resource.config.server_ids.capacity());
-    for server_id in &resource.config.server_ids {
-      res.push(
-        all
-          .servers
-          .get(server_id)
-          .map(|s| s.name.clone())
-          .unwrap_or_default(),
-      );
-    }
-  }
-
-  fn edit_config_object(
-    _resource: &ResourceToml<Self::PartialConfig>,
-    config: IndexMap<String, serde_json::Value>,
-  ) -> anyhow::Result<IndexMap<String, serde_json::Value>> {
-    config
-      .into_iter()
-      .map(|(key, value)| {
-        #[allow(clippy::single_match)]
-        match key.as_str() {
-          "server_ids" => {
-            return Ok((String::from("servers"), value));
-          }
-          _ => {}
-        }
-        Ok((key, value))
-      })
-      .collect()
-  }
-}
-
 impl ToToml for Stack {
   fn replace_ids(resource: &mut Resource<Self::Config, Self::Info>) {
     let all = all_resources_cache().load();
-
-    resource.config.swarm_id.clone_from(
-      all
-        .swarms
-        .get(&resource.config.swarm_id)
-        .map(|s| &s.name)
-        .unwrap_or(&String::new()),
-    );
 
     resource.config.server_id.clone_from(
       all
@@ -257,7 +204,6 @@ impl ToToml for Stack {
       .map(|(key, value)| {
         #[allow(clippy::single_match)]
         match key.as_str() {
-          "swarm_id" => return Ok((String::from("swarm"), value)),
           "server_id" => return Ok((String::from("server"), value)),
           _ => {}
         }
@@ -270,14 +216,6 @@ impl ToToml for Stack {
 impl ToToml for Deployment {
   fn replace_ids(resource: &mut Resource<Self::Config, Self::Info>) {
     let all = all_resources_cache().load();
-
-    resource.config.swarm_id.clone_from(
-      all
-        .swarms
-        .get(&resource.config.swarm_id)
-        .map(|s| &s.name)
-        .unwrap_or(&String::new()),
-    );
 
     resource.config.server_id.clone_from(
       all
@@ -308,7 +246,6 @@ impl ToToml for Deployment {
       .into_iter()
       .map(|(key, mut value)| {
         match key.as_str() {
-          "swarm_id" => return Ok((String::from("swarm"), value)),
           "server_id" => return Ok((String::from("server"), value)),
           "image" => {
             if let Some(DeploymentImage::Build { version, .. }) =

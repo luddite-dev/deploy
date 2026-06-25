@@ -33,7 +33,6 @@ mod resource;
 mod server;
 mod service_user;
 mod stack;
-mod swarm;
 mod sync;
 mod tag;
 mod terminal;
@@ -62,13 +61,6 @@ pub struct WriteArgs {
 pub enum WriteRequest {
   // ==== RESOURCE ====
   UpdateResourceMeta(UpdateResourceMeta),
-
-  // ==== SWARM ====
-  CreateSwarm(CreateSwarm),
-  CopySwarm(CopySwarm),
-  DeleteSwarm(DeleteSwarm),
-  UpdateSwarm(UpdateSwarm),
-  RenameSwarm(RenameSwarm),
 
   // ==== SERVER ====
   CreateServer(CreateServer),

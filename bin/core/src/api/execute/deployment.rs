@@ -1,12 +1,12 @@
 use std::sync::OnceLock;
 
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use formatting::format_serror;
 use interpolate::Interpolator;
 use komodo_client::{
   api::execute::*,
   entities::{
-    SwarmOrServer, Version,
+    Version,
     build::{Build, ImageRegistryConfig},
     deployment::{
       Deployment, DeploymentImage, DeploymentInfo,
@@ -19,20 +19,17 @@ use komodo_client::{
   },
 };
 use mogh_cache::TimeoutCache;
-use mogh_error::AddStatusCodeError;
 use mogh_resolver::Resolve;
 use periphery_client::api;
-use reqwest::StatusCode;
 
 use crate::{
   helpers::{
     periphery_client,
     query::{VariablesAndSecrets, get_variables_and_secrets},
     registry_token,
-    swarm::swarm_request,
     update::update_update,
   },
-  monitor::{refresh_server_cache, refresh_swarm_cache},
+  monitor::refresh_server_cache,
   resource::{self, setup_deployment_execution},
   state::action_states,
 };
@@ -92,15 +89,12 @@ impl Resolve<ExecuteArgs> for Deploy {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
-    let (mut deployment, swarm_or_server) =
-      setup_deployment_execution(
-        &self.deployment,
-        user,
-        PermissionLevel::Execute.into(),
-      )
-      .await?;
-
-    swarm_or_server.verify_has_target()?;
+    let (mut deployment, server) = setup_deployment_execution(
+      &self.deployment,
+      user,
+      PermissionLevel::Execute.into(),
+    )
+    .await?;
 
     // get the action state for the deployment (or insert default).
     let action_state = action_states()
@@ -212,56 +206,28 @@ impl Resolve<ExecuteArgs> for Deploy {
 
     let deployment_id = deployment.id.clone();
 
-    match swarm_or_server {
-      SwarmOrServer::None => unreachable!(),
-      SwarmOrServer::Swarm(swarm) => {
-        match swarm_request(
-          &swarm.config.server_ids,
-          api::swarm::CreateSwarmService {
-            deployment,
-            registry_token,
-            replacers: secret_replacers.into_iter().collect(),
-          },
-        )
-        .await
-        {
-          Ok(logs) => {
-            refresh_swarm_cache(&swarm, true).await;
-            update.logs.extend(logs)
-          }
-          Err(e) => {
-            update.push_error_log(
-              "Create Swarm Service",
-              format_serror(&e.into()),
-            );
-          }
-        };
+    match periphery_client(&server)
+      .await?
+      .request(api::container::RunContainer {
+        deployment,
+        stop_signal: self.stop_signal,
+        stop_time: self.stop_time,
+        registry_token,
+        replacers: secret_replacers.into_iter().collect(),
+      })
+      .await
+    {
+      Ok(log) => {
+        refresh_server_cache(&server, true).await;
+        update.logs.push(log)
       }
-      SwarmOrServer::Server(server) => {
-        match periphery_client(&server)
-          .await?
-          .request(api::container::RunContainer {
-            deployment,
-            stop_signal: self.stop_signal,
-            stop_time: self.stop_time,
-            registry_token,
-            replacers: secret_replacers.into_iter().collect(),
-          })
-          .await
-        {
-          Ok(log) => {
-            refresh_server_cache(&server, true).await;
-            update.logs.push(log)
-          }
-          Err(e) => {
-            update.push_error_log(
-              "Deploy Container",
-              format_serror(&e.into()),
-            );
-          }
-        };
+      Err(e) => {
+        update.push_error_log(
+          "Deploy Container",
+          format_serror(&e.into()),
+        );
       }
-    }
+    };
 
     if let Err(e) = resource::update_info::<Deployment>(
       &deployment_id,
@@ -436,19 +402,12 @@ impl Resolve<ExecuteArgs> for PullDeployment {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
-    let (deployment, swarm_or_server) = setup_deployment_execution(
+    let (deployment, server) = setup_deployment_execution(
       &self.deployment,
       user,
       PermissionLevel::Execute.into(),
     )
     .await?;
-
-    let SwarmOrServer::Server(server) = swarm_or_server else {
-      return Err(
-        anyhow!("PullDeployment should not be called for Deployment in Swarm Mode")
-          .status_code(StatusCode::BAD_REQUEST),
-      );
-    };
 
     // get the action state for the deployment (or insert default).
     let action_state = action_states()
@@ -494,19 +453,12 @@ impl Resolve<ExecuteArgs> for StartDeployment {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
-    let (deployment, swarm_or_server) = setup_deployment_execution(
+    let (deployment, server) = setup_deployment_execution(
       &self.deployment,
       user,
       PermissionLevel::Execute.into(),
     )
     .await?;
-
-    let SwarmOrServer::Server(server) = swarm_or_server else {
-      return Err(
-        anyhow!("StartDeployment should not be called for Deployment in Swarm Mode")
-          .status_code(StatusCode::BAD_REQUEST),
-      );
-    };
 
     // get the action state for the deployment (or insert default).
     let action_state = action_states()
@@ -566,19 +518,12 @@ impl Resolve<ExecuteArgs> for RestartDeployment {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
-    let (deployment, swarm_or_server) = setup_deployment_execution(
+    let (deployment, server) = setup_deployment_execution(
       &self.deployment,
       user,
       PermissionLevel::Execute.into(),
     )
     .await?;
-
-    let SwarmOrServer::Server(server) = swarm_or_server else {
-      return Err(
-        anyhow!("RestartDeployment should not be called for Deployment in Swarm Mode")
-          .status_code(StatusCode::BAD_REQUEST),
-      );
-    };
 
     // get the action state for the deployment (or insert default).
     let action_state = action_states()
@@ -640,19 +585,12 @@ impl Resolve<ExecuteArgs> for PauseDeployment {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
-    let (deployment, swarm_or_server) = setup_deployment_execution(
+    let (deployment, server) = setup_deployment_execution(
       &self.deployment,
       user,
       PermissionLevel::Execute.into(),
     )
     .await?;
-
-    let SwarmOrServer::Server(server) = swarm_or_server else {
-      return Err(
-        anyhow!("PauseDeployment should not be called for Deployment in Swarm Mode")
-          .status_code(StatusCode::BAD_REQUEST),
-      );
-    };
 
     // get the action state for the deployment (or insert default).
     let action_state = action_states()
@@ -712,19 +650,12 @@ impl Resolve<ExecuteArgs> for UnpauseDeployment {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
-    let (deployment, swarm_or_server) = setup_deployment_execution(
+    let (deployment, server) = setup_deployment_execution(
       &self.deployment,
       user,
       PermissionLevel::Execute.into(),
     )
     .await?;
-
-    let SwarmOrServer::Server(server) = swarm_or_server else {
-      return Err(
-        anyhow!("UnpauseDeployment should not be called for Deployment in Swarm Mode")
-          .status_code(StatusCode::BAD_REQUEST),
-      );
-    };
 
     // get the action state for the deployment (or insert default).
     let action_state = action_states()
@@ -788,19 +719,12 @@ impl Resolve<ExecuteArgs> for StopDeployment {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
-    let (deployment, swarm_or_server) = setup_deployment_execution(
+    let (deployment, server) = setup_deployment_execution(
       &self.deployment,
       user,
       PermissionLevel::Execute.into(),
     )
     .await?;
-
-    let SwarmOrServer::Server(server) = swarm_or_server else {
-      return Err(
-        anyhow!("StopDeployment should not be called for Deployment in Swarm Mode")
-          .status_code(StatusCode::BAD_REQUEST),
-      );
-    };
 
     // get the action state for the deployment (or insert default).
     let action_state = action_states()
@@ -905,14 +829,12 @@ impl Resolve<ExecuteArgs> for DestroyDeployment {
       task_id,
     }: &ExecuteArgs,
   ) -> mogh_error::Result<Update> {
-    let (deployment, swarm_or_server) = setup_deployment_execution(
+    let (deployment, server) = setup_deployment_execution(
       &self.deployment,
       user,
       PermissionLevel::Execute.into(),
     )
     .await?;
-
-    swarm_or_server.verify_has_target()?;
 
     // get the action state for the deployment (or insert default).
     let action_state = action_states()
@@ -930,57 +852,31 @@ impl Resolve<ExecuteArgs> for DestroyDeployment {
     // Send update after setting action state, this way UI gets correct state.
     update_update(update.clone()).await?;
 
-    let log = match swarm_or_server {
-      SwarmOrServer::None => unreachable!(),
-      SwarmOrServer::Swarm(swarm) => {
-        match swarm_request(
-          &swarm.config.server_ids,
-          api::swarm::RemoveSwarmServices {
-            services: vec![deployment.name],
-          },
-        )
-        .await
-        {
-          Ok(log) => {
-            refresh_swarm_cache(&swarm, true).await;
-            log
-          }
-          Err(e) => Log::error(
-            "Remove Swarm Service",
-            format_serror(
-              &e.context("Failed to remove swarm service").into(),
-            ),
-          ),
-        }
+    let log = match periphery_client(&server)
+      .await?
+      .request(api::container::RemoveContainer {
+        name: deployment.name,
+        signal: self
+          .signal
+          .unwrap_or(deployment.config.termination_signal)
+          .into(),
+        time: self
+          .time
+          .unwrap_or(deployment.config.termination_timeout)
+          .into(),
+      })
+      .await
+    {
+      Ok(log) => {
+        refresh_server_cache(&server, true).await;
+        log
       }
-      SwarmOrServer::Server(server) => {
-        match periphery_client(&server)
-          .await?
-          .request(api::container::RemoveContainer {
-            name: deployment.name,
-            signal: self
-              .signal
-              .unwrap_or(deployment.config.termination_signal)
-              .into(),
-            time: self
-              .time
-              .unwrap_or(deployment.config.termination_timeout)
-              .into(),
-          })
-          .await
-        {
-          Ok(log) => {
-            refresh_server_cache(&server, true).await;
-            log
-          }
-          Err(e) => Log::error(
-            "Destroy Container",
-            format_serror(
-              &e.context("Failed to destroy container").into(),
-            ),
-          ),
-        }
-      }
+      Err(e) => Log::error(
+        "Destroy Container",
+        format_serror(
+          &e.context("Failed to destroy container").into(),
+        ),
+      ),
     };
 
     update.logs.push(log);

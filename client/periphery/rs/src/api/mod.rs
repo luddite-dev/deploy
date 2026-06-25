@@ -15,7 +15,6 @@ pub mod git;
 pub mod keys;
 pub mod poll;
 pub mod stats;
-pub mod swarm;
 pub mod terminal;
 
 //

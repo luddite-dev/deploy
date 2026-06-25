@@ -24,10 +24,8 @@ use crate::{
     EnvironmentVar, ImageDigest,
     docker::{
       container::ContainerStateStatusEnum,
-      service::SwarmServiceListItem,
     },
     environment_vars_from_str,
-    swarm::SwarmState,
   },
 };
 
@@ -149,8 +147,6 @@ pub type StackListItem = ResourceListItem<StackListItemInfo>;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct StackListItemInfo {
-  /// The swarm that stack is deployed on, when in Swarm mode.
-  pub swarm_id: String,
   /// The server that stack is deployed on, when in Server mode.
   pub server_id: String,
   /// Whether stack is using files on host mode
@@ -305,23 +301,8 @@ pub type _PartialStackConfig = PartialStackConfig;
 #[diff_derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[partial(skip_serializing_none, from, diff)]
 pub struct StackConfig {
-  /// The Swarm to deploy the Stack on, setting the Stack into Swarm mode.
-  ///
-  /// Note. If both swarm_id and server_id are set,
-  /// swarm_id overrides server_id and the Stack will be in Swarm mode.
-  #[serde(default, alias = "swarm")]
-  #[partial_attr(serde(alias = "swarm"))]
-  #[cfg_attr(
-    feature = "schemars",
-    partial_attr(schemars(rename = "swarm"))
-  )]
-  #[builder(default)]
-  pub swarm_id: String,
-
   /// The Server to deploy the Stack on, setting the Stack into Compose mode.
   ///
-  /// Note. If both swarm_id and server_id are set,
-  /// swarm_id overrides server_id and the Stack will be in Swarm mode.
   #[serde(default, alias = "server")]
   #[partial_attr(serde(alias = "server"))]
   #[cfg_attr(
@@ -703,7 +684,6 @@ fn default_wrapper_include() -> Vec<String> {
 impl Default for StackConfig {
   fn default() -> Self {
     Self {
-      swarm_id: Default::default(),
       server_id: Default::default(),
       project_name: Default::default(),
       run_directory: Default::default(),
@@ -808,7 +788,7 @@ pub struct StackServiceNames {
   pub image_digest: Option<ImageDigest>,
 }
 
-/// A stack service, whether server or swarm based.
+/// A stack service.
 #[typeshare]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
@@ -821,8 +801,6 @@ pub struct StackService {
   pub image: String,
   /// The container (Server mode)
   pub container: Option<ContainerListItem>,
-  /// The service (Swarm mode)
-  pub swarm_service: Option<SwarmServiceListItem>,
   /// The service state
   pub state: StackServiceState,
   /// The service image digests
@@ -872,17 +850,6 @@ pub enum StackServiceState {
   /// Unknown case
   #[default]
   Unknown,
-}
-
-impl From<SwarmState> for StackServiceState {
-  fn from(value: SwarmState) -> Self {
-    match value {
-      SwarmState::Healthy => StackServiceState::Healthy,
-      SwarmState::Unhealthy => StackServiceState::Unhealthy,
-      SwarmState::Down => StackServiceState::Down,
-      SwarmState::Unknown => StackServiceState::Unknown,
-    }
-  }
 }
 
 impl From<ContainerStateStatusEnum> for StackServiceState {

@@ -5,7 +5,7 @@ use typeshare::typeshare;
 use crate::entities::{
   SearchCombinator, U64,
   docker::{
-    container::Container, service::SwarmService, stack::SwarmStack,
+    container::Container,
   },
   stack::{
     Stack, StackActionState, StackListItem, StackQuery, StackService,
@@ -169,70 +169,6 @@ pub struct InspectStackContainer {
 
 #[typeshare]
 pub type InspectStackContainerResponse = Container;
-
-//
-
-#[cfg(feature = "utoipa")]
-#[utoipa::path(
-  post,
-  path = "/InspectStackSwarmService",
-  description = "Inspect a swarm service associated with a Stack.",
-  request_body(content = InspectStackSwarmService),
-  responses(
-    (status = 200, description = "The swarm service", body = InspectStackSwarmServiceResponse),
-  ),
-)]
-pub fn inspect_stack_swarm_service() {}
-
-/// Inspect a swarm service associated with a Stack.
-/// Response: [SwarmService].
-#[typeshare]
-#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
-#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
-#[empty_traits(KomodoReadRequest)]
-#[response(InspectStackSwarmServiceResponse)]
-#[error(mogh_error::Error)]
-pub struct InspectStackSwarmService {
-  /// Id or name
-  #[serde(alias = "id", alias = "name")]
-  pub stack: String,
-  /// The service name to inspect
-  pub service: String,
-}
-
-#[typeshare]
-pub type InspectStackSwarmServiceResponse = SwarmService;
-
-//
-
-#[cfg(feature = "utoipa")]
-#[utoipa::path(
-  post,
-  path = "/InspectStackSwarmInfo",
-  description = "Inspect swarm info associated with a Stack.",
-  request_body(content = InspectStackSwarmInfo),
-  responses(
-    (status = 200, description = "The swarm info", body = InspectStackSwarmInfoResponse),
-  ),
-)]
-pub fn inspect_stack_swarm_info() {}
-
-/// Inspect swarm info associated with a Stack.
-/// Response: [SwarmStack].
-#[typeshare]
-#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
-#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
-#[empty_traits(KomodoReadRequest)]
-#[response(InspectStackSwarmInfoResponse)]
-#[error(mogh_error::Error)]
-pub struct InspectStackSwarmInfo {
-  /// Id or name
-  #[serde(alias = "id", alias = "name")]
-  pub stack: String,
-}
-
-#[typeshare]
-pub type InspectStackSwarmInfoResponse = SwarmStack;
 
 //
 

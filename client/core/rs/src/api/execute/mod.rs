@@ -13,7 +13,6 @@ mod procedure;
 mod repo;
 mod server;
 mod stack;
-mod swarm;
 mod sync;
 
 pub use action::*;
@@ -25,7 +24,6 @@ pub use procedure::*;
 pub use repo::*;
 pub use server::*;
 pub use stack::*;
-pub use swarm::*;
 pub use sync::*;
 
 use crate::{
@@ -181,18 +179,6 @@ pub enum Execution {
   PruneDockerBuilders(PruneDockerBuilders),
   PruneBuildx(PruneBuildx),
   PruneSystem(PruneSystem),
-
-  // SWARM
-  RemoveSwarmNodes(RemoveSwarmNodes),
-  UpdateSwarmNode(UpdateSwarmNode),
-  RemoveSwarmStacks(RemoveSwarmStacks),
-  RemoveSwarmServices(RemoveSwarmServices),
-  CreateSwarmConfig(CreateSwarmConfig),
-  RotateSwarmConfig(RotateSwarmConfig),
-  RemoveSwarmConfigs(RemoveSwarmConfigs),
-  CreateSwarmSecret(CreateSwarmSecret),
-  RotateSwarmSecret(RotateSwarmSecret),
-  RemoveSwarmSecrets(RemoveSwarmSecrets),
 
   // MAINTENANCE
   ClearRepoCache(ClearRepoCache),

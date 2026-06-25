@@ -5,40 +5,20 @@ use typeshare::typeshare;
 
 use crate::entities::{
   docker::{
-    config::SwarmConfigListItem, container::ContainerListItem,
+    container::ContainerListItem,
     image::ImageListItem, network::NetworkListItem,
-    node::SwarmNodeListItem, secret::SwarmSecretListItem,
-    service::SwarmServiceListItem, stack::SwarmStackListItem,
-    task::SwarmTaskListItem, volume::VolumeListItem,
+    volume::VolumeListItem,
   },
   stack::ComposeProject,
 };
 
 use super::{I64, U64};
 
-pub mod config;
 pub mod container;
 pub mod image;
 pub mod network;
-pub mod node;
-pub mod secret;
-pub mod service;
-pub mod stack;
 pub mod stats;
-pub mod swarm;
-pub mod task;
 pub mod volume;
-
-/// Swarm lists available from a manager node.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SwarmLists {
-  pub nodes: Vec<SwarmNodeListItem>,
-  pub stacks: Vec<SwarmStackListItem>,
-  pub services: Vec<SwarmServiceListItem>,
-  pub tasks: Vec<SwarmTaskListItem>,
-  pub configs: Vec<SwarmConfigListItem>,
-  pub secrets: Vec<SwarmSecretListItem>,
-}
 
 /// Standard docker lists available from a Server.
 #[typeshare]

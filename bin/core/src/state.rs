@@ -8,15 +8,13 @@ use komodo_client::entities::{
   build::BuildState,
   deployment::DeploymentState,
   docker::{
-    DockerLists, SwarmLists, container::ContainerListItem,
-    service::SwarmServiceListItem, swarm::SwarmInspectInfo,
+    DockerLists, container::ContainerListItem,
   },
   procedure::ProcedureState,
   repo::RepoState,
   server::{PeripheryInformation, ServerHealth, ServerState},
   stack::{StackService, StackState},
   stats::{SystemInformation, SystemStats},
-  swarm::SwarmState,
 };
 use mogh_cache::CloneCache;
 
@@ -81,25 +79,6 @@ pub struct History<Curr: Default, Prev> {
 }
 
 #[derive(Default, Clone, Debug)]
-pub struct CachedSwarmStatus {
-  pub id: String,
-  pub state: SwarmState,
-  pub inspect: Option<SwarmInspectInfo>,
-  pub lists: Option<SwarmLists>,
-  /// Store the error in communicating with Swarm
-  pub err: Option<mogh_error::Serror>,
-}
-
-pub type SwarmStatusCache =
-  CloneCache<String, Arc<CachedSwarmStatus>>;
-
-pub fn swarm_status_cache() -> &'static SwarmStatusCache {
-  static SWARM_STATUS_CACHE: OnceLock<SwarmStatusCache> =
-    OnceLock::new();
-  SWARM_STATUS_CACHE.get_or_init(Default::default)
-}
-
-#[derive(Default, Clone, Debug)]
 pub struct CachedServerStatus {
   pub id: String,
   pub state: ServerState,
@@ -146,7 +125,6 @@ pub struct CachedDeploymentStatus {
   pub id: String,
   pub state: DeploymentState,
   pub container: Option<ContainerListItem>,
-  pub service: Option<SwarmServiceListItem>,
   pub image_digests: Option<Vec<ImageDigest>>,
 }
 

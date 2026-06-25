@@ -26,7 +26,6 @@ use komodo_client::{
     repo::Repo,
     server::Server,
     stack::Stack,
-    swarm::Swarm,
     sync::{ResourceSync, ResourceSyncInfo},
     to_path_compatible_name,
     update::{Log, Update},
@@ -804,7 +803,6 @@ impl Resolve<WriteArgs> for RefreshResourceSyncPending {
           // New resource types need to be added here manually.
           push_updates!(
             (Server, servers),
-            (Swarm, swarms),
             (Stack, stacks),
             (Deployment, deployments),
             (Build, builds),

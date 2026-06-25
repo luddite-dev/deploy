@@ -11,7 +11,7 @@ use database::mungos::{
 use komodo_client::{
   busy::Busy,
   entities::{
-    Operation, ResourceTarget, ResourceTargetVariant, SwarmOrServer,
+    Operation, ResourceTarget, ResourceTargetVariant,
     action::{Action, ActionState},
     alerter::Alerter,
     build::Build,
@@ -25,7 +25,6 @@ use komodo_client::{
     repo::Repo,
     server::{Server, ServerState},
     stack::{Stack, StackServiceNames, StackState},
-    swarm::Swarm,
     sync::ResourceSync,
     tag::Tag,
     update::Update,
@@ -38,7 +37,6 @@ use mogh_auth_server::provider::oidc::SubjectIdentifier;
 
 use crate::{
   config::core_config,
-  helpers::swarm::swarm_request,
   permission::get_user_permission_on_resource,
   resource::{self, KomodoResource},
   stack::compose_container_match_regex,
@@ -60,17 +58,6 @@ pub async fn get_user(user: &str) -> anyhow::Result<User> {
     .await
     .context("Failed to query mongo for user")?
     .with_context(|| format!("No user found matching '{user}'"))
-}
-
-pub async fn get_swarm_reachability(
-  swarm: &Swarm,
-) -> anyhow::Result<()> {
-  swarm_request(
-    &swarm.config.server_ids,
-    periphery_client::api::GetVersion {},
-  )
-  .await
-  .map(|_| ())
 }
 
 pub async fn get_server_with_state(
@@ -195,8 +182,7 @@ pub fn get_stack_state_from_containers(
 pub async fn get_stack_state(
   stack: &Stack,
 ) -> anyhow::Result<StackState> {
-  if stack.config.swarm_id.is_empty()
-    && stack.config.server_id.is_empty()
+  if stack.config.server_id.is_empty()
   {
     return Ok(StackState::Down);
   }
@@ -303,9 +289,6 @@ pub async fn get_user_permission_on_target(
 ) -> anyhow::Result<PermissionLevelAndSpecifics> {
   match target {
     ResourceTarget::System(_) => Ok(PermissionLevel::None.into()),
-    ResourceTarget::Swarm(id) => {
-      get_user_permission_on_resource::<Swarm>(user, id).await
-    }
     ResourceTarget::Server(id) => {
       get_user_permission_on_resource::<Server>(user, id).await
     }
@@ -467,23 +450,13 @@ pub async fn get_procedure_state(id: &String) -> ProcedureState {
   procedure_state_cache().get(id).await.unwrap_or_default()
 }
 
-/// Get's a resource's assigned swarm or server, with swarm taking precedence.
+/// Get's a resource's assigned server.
 /// Makes sure the target is reachable before passing along for commands.
-pub async fn get_swarm_or_server(
-  swarm_id: &str,
+pub async fn get_server_for_command(
   server_id: &str,
-) -> anyhow::Result<SwarmOrServer> {
-  if !swarm_id.is_empty() {
-    let swarm = resource::get::<Swarm>(swarm_id).await?;
-
-    // Errors if not reachable, and returns the error
-    get_swarm_reachability(&swarm).await?;
-
-    return Ok(SwarmOrServer::Swarm(swarm));
-  }
-
+) -> anyhow::Result<Server> {
   if server_id.is_empty() {
-    return Ok(SwarmOrServer::None);
+    return Err(anyhow!("No server attached to resource"));
   }
 
   let (server, state) = get_server_with_state(server_id).await?;
@@ -494,38 +467,7 @@ pub async fn get_swarm_or_server(
     ));
   }
 
-  Ok(SwarmOrServer::Server(server))
-}
-
-pub fn find_swarm_or_server(
-  swarm_id: &str,
-  swarms: &[Swarm],
-  server_id: &str,
-  servers: &[Server],
-) -> anyhow::Result<SwarmOrServer> {
-  if !swarm_id.is_empty() {
-    let swarm = swarms
-      .iter()
-      .find(|swarm| swarm.id == swarm_id)
-      .cloned()
-      .with_context(|| {
-        format!("Could not find swarm matching id {swarm_id}")
-      })?;
-    return Ok(SwarmOrServer::Swarm(swarm));
-  }
-
-  if server_id.is_empty() {
-    return Ok(SwarmOrServer::None);
-  }
-
-  let server = servers
-    .iter()
-    .find(|server| server.id == server_id)
-    .cloned()
-    .with_context(|| {
-      format!("Could not find server matching id {server_id}")
-    })?;
-  Ok(SwarmOrServer::Server(server))
+  Ok(server)
 }
 
 pub async fn find_github_user(

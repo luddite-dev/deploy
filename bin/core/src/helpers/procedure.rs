@@ -434,36 +434,6 @@ async fn execute_execution(
     }
     Execution::TestAlerter(req) => resolve_execute!(TestAlerter, req),
     Execution::SendAlert(req) => resolve_execute!(SendAlert, req),
-    Execution::RemoveSwarmNodes(req) => {
-      resolve_execute!(RemoveSwarmNodes, req)
-    }
-    Execution::UpdateSwarmNode(req) => {
-      resolve_execute!(UpdateSwarmNode, req)
-    }
-    Execution::RemoveSwarmStacks(req) => {
-      resolve_execute!(RemoveSwarmStacks, req)
-    }
-    Execution::RemoveSwarmServices(req) => {
-      resolve_execute!(RemoveSwarmServices, req)
-    }
-    Execution::CreateSwarmConfig(req) => {
-      resolve_execute!(CreateSwarmConfig, req)
-    }
-    Execution::RotateSwarmConfig(req) => {
-      resolve_execute!(RotateSwarmConfig, req)
-    }
-    Execution::RemoveSwarmConfigs(req) => {
-      resolve_execute!(RemoveSwarmConfigs, req)
-    }
-    Execution::CreateSwarmSecret(req) => {
-      resolve_execute!(CreateSwarmSecret, req)
-    }
-    Execution::RotateSwarmSecret(req) => {
-      resolve_execute!(RotateSwarmSecret, req)
-    }
-    Execution::RemoveSwarmSecrets(req) => {
-      resolve_execute!(RemoveSwarmSecrets, req)
-    }
     Execution::ClearRepoCache(req) => {
       resolve_execute!(ClearRepoCache, req)
     }
@@ -770,16 +740,6 @@ pub fn replace_procedure_stage_ids_with_names(
         DestroyStack => stack, stacks;
         RunStackService => stack, stacks;
         TestAlerter => alerter, alerters;
-        RemoveSwarmNodes => swarm, swarms;
-        UpdateSwarmNode => swarm, swarms;
-        RemoveSwarmStacks => swarm, swarms;
-        RemoveSwarmServices => swarm, swarms;
-        CreateSwarmConfig => swarm, swarms;
-        RotateSwarmConfig => swarm, swarms;
-        RemoveSwarmConfigs => swarm, swarms;
-        CreateSwarmSecret => swarm, swarms;
-        RotateSwarmSecret => swarm, swarms;
-        RemoveSwarmSecrets => swarm, swarms;
       );
     }
   }

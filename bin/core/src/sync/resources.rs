@@ -12,7 +12,6 @@ use komodo_client::entities::{
   repo::Repo,
   server::Server,
   stack::Stack,
-  swarm::Swarm,
   sync::ResourceSync,
   tag::Tag,
   update::Log,
@@ -44,39 +43,12 @@ impl ResourceSyncTrait for Server {
 
 impl ExecuteResourceSync for Server {}
 
-impl ResourceSyncTrait for Swarm {
-  fn get_diff(
-    mut original: Self::Config,
-    update: Self::PartialConfig,
-  ) -> anyhow::Result<Self::ConfigDiff> {
-    let all = all_resources_cache().load();
-
-    original.server_ids.iter_mut().for_each(|server_id| {
-      *server_id = all
-        .servers
-        .get(server_id)
-        .map(|s| s.name.clone())
-        .unwrap_or_default();
-    });
-
-    Ok(original.partial_diff(update))
-  }
-}
-
-impl ExecuteResourceSync for Swarm {}
-
 impl ResourceSyncTrait for Deployment {
   fn get_diff(
     mut original: Self::Config,
     update: Self::PartialConfig,
   ) -> anyhow::Result<Self::ConfigDiff> {
     let all = all_resources_cache().load();
-
-    original.swarm_id = all
-      .swarms
-      .get(&original.swarm_id)
-      .map(|s| s.name.clone())
-      .unwrap_or_default();
 
     original.server_id = all
       .servers
@@ -109,12 +81,6 @@ impl ResourceSyncTrait for Stack {
     update: Self::PartialConfig,
   ) -> anyhow::Result<Self::ConfigDiff> {
     let all = all_resources_cache().load();
-
-    original.swarm_id = all
-      .swarms
-      .get(&original.swarm_id)
-      .map(|s| s.name.clone())
-      .unwrap_or_default();
 
     original.server_id = all
       .servers

@@ -5,17 +5,6 @@ use crate::api::execute;
 #[derive(OpenApi)]
 #[openapi(
   paths(
-    // swarm
-    execute::remove_swarm_nodes,
-    execute::update_swarm_node,
-    execute::remove_swarm_stacks,
-    execute::remove_swarm_services,
-    execute::create_swarm_config,
-    execute::rotate_swarm_config,
-    execute::remove_swarm_configs,
-    execute::create_swarm_secret,
-    execute::rotate_swarm_secret,
-    execute::remove_swarm_secrets,
     // server
     execute::start_container,
     execute::restart_container,

@@ -323,13 +323,6 @@ pub async fn get_updates_for_execution(
       // replace the ids with names
       match &mut p.resource_target {
         ResourceTarget::System(_) => {}
-        ResourceTarget::Swarm(id) => {
-          *id = all_resources
-            .swarms
-            .get(id)
-            .map(|b| b.name.clone())
-            .unwrap_or_default()
-        }
         ResourceTarget::Server(id) => {
           *id = all_resources
             .servers
@@ -803,18 +796,6 @@ async fn expand_user_group_permissions(
     }
     let matcher = Matcher::new(id)?;
     match variant {
-      ResourceTargetVariant::Swarm => {
-        let permissions = all_resources
-          .swarms
-          .values()
-          .filter(|resource| matcher.is_match(&resource.name))
-          .map(|resource| PermissionToml {
-            target: ResourceTarget::Swarm(resource.name.clone()),
-            level: permission.level,
-            specific: permission.specific.clone(),
-          });
-        expanded.extend(permissions);
-      }
       ResourceTargetVariant::Server => {
         let permissions = all_resources
           .servers
@@ -1059,13 +1040,6 @@ pub async fn convert_user_groups(
     .filter(|permission| permission.level > PermissionLevel::None)
     .map(|mut permission| {
       match &mut permission.resource_target {
-        ResourceTarget::Swarm(id) => {
-          *id = all
-            .swarms
-            .get(id)
-            .map(|r| r.name.clone())
-            .unwrap_or_default()
-        }
         ResourceTarget::Server(id) => {
           *id = all
             .servers
