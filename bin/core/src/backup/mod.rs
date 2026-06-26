@@ -1,12 +1,13 @@
 pub mod scheduler;
 
+use std::str::FromStr;
 use std::sync::OnceLock;
 
 use anyhow::Context;
 use database::mungos::{
   by_id::update_one_by_id,
   find::find_collect,
-  mongodb::bson::{self, doc, Bson, Document},
+  mongodb::bson::{self, doc, oid::ObjectId, Bson, Document},
   update::Update,
 };
 use komodo_client::entities::deployment::{
@@ -32,8 +33,12 @@ pub fn backup_destination() -> Option<&'static BackupDestination> {
       let endpoint = std::env::var("KOMODO_BACKUP_S3_ENDPOINT").ok()?;
       let region = std::env::var("KOMODO_BACKUP_S3_REGION").ok()?;
       let bucket = std::env::var("KOMODO_BACKUP_S3_BUCKET").ok()?;
-      let access_key = std::env::var("KOMODO_BACKUP_S3_ACCESS_KEY").ok()?;
-      let secret_key = std::env::var("KOMODO_BACKUP_S3_SECRET_KEY").ok()?;
+      let access_key = std::env::var("KOMODO_BACKUP_S3_ACCESS_KEY_ID")
+        .or_else(|_| std::env::var("KOMODO_BACKUP_S3_ACCESS_KEY"))
+        .ok()?;
+      let secret_key = std::env::var("KOMODO_BACKUP_S3_SECRET_ACCESS_KEY")
+        .or_else(|_| std::env::var("KOMODO_BACKUP_S3_SECRET_KEY"))
+        .ok()?;
       Some(BackupDestination {
         endpoint,
         region,
@@ -55,7 +60,8 @@ pub async fn backup_deployment_volumes(
 
   let deployment: Deployment = find_collect(
     &db_client().deployments,
-    doc! { "_id": deployment_id.to_string() },
+    doc! { "_id": ObjectId::from_str(deployment_id)
+      .context("Invalid deployment id ObjectId")? },
     None,
   )
   .await
@@ -66,7 +72,8 @@ pub async fn backup_deployment_volumes(
 
   let server: Server = find_collect(
     &db_client().servers,
-    doc! { "_id": deployment.info.assigned_server.clone() },
+    doc! { "_id": ObjectId::from_str(&deployment.info.assigned_server)
+      .context("Invalid assigned_server ObjectId")? },
     None,
   )
   .await
@@ -135,7 +142,8 @@ pub async fn backup_stack_volumes(stack_id: &str) -> anyhow::Result<()> {
 
   let stack: Stack = find_collect(
     &db_client().stacks,
-    doc! { "_id": stack_id.to_string() },
+    doc! { "_id": ObjectId::from_str(stack_id)
+      .context("Invalid stack id ObjectId")? },
     None,
   )
   .await
@@ -146,7 +154,8 @@ pub async fn backup_stack_volumes(stack_id: &str) -> anyhow::Result<()> {
 
   let server: Server = find_collect(
     &db_client().servers,
-    doc! { "_id": stack.info.assigned_server.clone() },
+    doc! { "_id": ObjectId::from_str(&stack.info.assigned_server)
+      .context("Invalid assigned_server ObjectId")? },
     None,
   )
   .await
@@ -246,7 +255,7 @@ async fn delete_s3_object(
     region: dest.region.clone(),
     endpoint: dest.endpoint.clone(),
   };
-  let bucket = *Bucket::new(&dest.bucket, region, creds)?;
+  let bucket = Bucket::new(&dest.bucket, region, creds)?.with_path_style();
   let _ = bucket.delete_object(key).await?;
   Ok(())
 }

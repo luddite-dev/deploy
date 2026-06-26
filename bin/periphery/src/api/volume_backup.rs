@@ -12,7 +12,7 @@ use periphery_client::api::volume_backup::{
 
 use crate::api::Args;
 
-fn build_bucket(dest: &BackupDestination) -> anyhow::Result<Bucket> {
+fn build_bucket(dest: &BackupDestination) -> anyhow::Result<Box<Bucket>> {
   let creds = Credentials::new(
     Some(&dest.access_key),
     Some(&dest.secret_key),
@@ -24,8 +24,8 @@ fn build_bucket(dest: &BackupDestination) -> anyhow::Result<Bucket> {
     region: dest.region.clone(),
     endpoint: dest.endpoint.clone(),
   };
-  let bucket = Bucket::new(&dest.bucket, region, creds)?;
-  Ok(*bucket)
+  let bucket = Bucket::new(&dest.bucket, region, creds)?.with_path_style();
+  Ok(bucket)
 }
 
 fn s3_key_prefix(deployment_id: &str, volume_name: &str) -> String {
@@ -89,10 +89,7 @@ impl Resolve<Args> for RestoreVolume {
     std::fs::write(&local_file, &data)?;
 
     let _ = run_standard_command(
-      &format!(
-        "podman volume create {} 2>/dev/null || true",
-        self.volume_name
-      ),
+      &format!("podman volume create {}", self.volume_name),
       CommandOptions::default(),
     )
     .await;

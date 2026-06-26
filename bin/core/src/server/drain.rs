@@ -1,8 +1,10 @@
+use std::str::FromStr;
+
 use anyhow::Context;
 use database::mungos::{
   by_id::update_one_by_id,
   find::find_collect,
-  mongodb::bson::{self, doc, Bson},
+  mongodb::bson::{self, doc, oid::ObjectId, Bson},
   update::Update,
 };
 use komodo_client::entities::{
@@ -50,7 +52,7 @@ async fn tick() -> anyhow::Result<()> {
       update_one_by_id(
         &db_client().servers,
         &server.id,
-        Update::Set(doc! { "info.state": "draining" }),
+        Update::Set(doc! { "info.state": "Draining" }),
         None,
       )
       .await?;
@@ -82,7 +84,7 @@ async fn tick() -> anyhow::Result<()> {
         update_one_by_id(
           &db_client().servers,
           &server.id,
-          Update::Set(doc! { "info.state": "drained" }),
+          Update::Set(doc! { "info.state": "Drained" }),
           None,
         )
         .await?;
@@ -101,7 +103,7 @@ async fn tick() -> anyhow::Result<()> {
 
     if let Err(e) = migrate_deployment(&deployments[0].id, None).await {
       tracing::warn!(
-        "Deployment migration failed for {}: {e}",
+        "Deployment migration failed for {}: {e:#}",
         deployments[0].id
       );
       mark_deployment_failed(&deployments[0].id, &e.to_string()).await;
@@ -117,7 +119,8 @@ pub async fn migrate_deployment(
 ) -> anyhow::Result<()> {
   let deployment: Deployment = find_collect(
     &db_client().deployments,
-    doc! { "_id": deployment_id.to_string() },
+    doc! { "_id": ObjectId::from_str(deployment_id)
+      .context("Invalid deployment id ObjectId")? },
     None,
   )
   .await?
@@ -166,7 +169,8 @@ pub async fn migrate_deployment(
 
   let target_server: Server = find_collect(
     &db_client().servers,
-    doc! { "_id": target_id.clone() },
+    doc! { "_id": ObjectId::from_str(&target_id)
+      .context("Invalid target server id ObjectId")? },
     None,
   )
   .await?
@@ -184,7 +188,7 @@ pub async fn migrate_deployment(
       .last_backup
       .get(&vm.volume)
       .with_context(|| format!("No backup found for volume {}", vm.volume))?;
-    target_periphery
+    match target_periphery
       .request(RestoreVolume {
         deployment_id: deployment_id.to_string(),
         volume_name: vm.volume.clone(),
@@ -192,7 +196,15 @@ pub async fn migrate_deployment(
         destination: dest.clone(),
       })
       .await
-      .context("RestoreVolume RPC failed")?;
+    {
+      Ok(_) => {}
+      Err(e) => {
+        return Err(e).context(format!(
+          "RestoreVolume RPC failed for vol {}",
+          vm.volume
+        ));
+      }
+    }
   }
 
   // Step 5: Reassign to target by writing config.server_id. The actual deploy

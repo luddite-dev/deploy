@@ -205,6 +205,7 @@ impl Resolve<ExecuteArgs> for Deploy {
     update_update(update.clone()).await?;
 
     let deployment_id = deployment.id.clone();
+    let preserved_last_backup = deployment.info.last_backup.clone();
 
     match periphery_client(&server)
       .await?
@@ -233,9 +234,9 @@ impl Resolve<ExecuteArgs> for Deploy {
       &deployment_id,
       &DeploymentInfo {
         latest_image_digest: Default::default(),
-        assigned_server: Default::default(),
+        assigned_server: server.id.clone(),
         host_ports: Default::default(),
-        last_backup: Default::default(),
+        last_backup: preserved_last_backup,
         migration_state: Default::default(),
       },
     )
