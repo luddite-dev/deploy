@@ -102,8 +102,8 @@ async fn app() -> anyhow::Result<()> {
 
 /// Verifies the host Podman supports `volume export` and `volume import`.
 /// If either subcommand is missing, Periphery refuses to start.
-async fn check_podman_volume_export_import_support(
-) -> anyhow::Result<()> {
+async fn check_podman_volume_export_import_support()
+-> anyhow::Result<()> {
   for sub in ["volume export --help", "volume import --help"] {
     let cmd = format!("podman {sub}");
     let output =

@@ -7,7 +7,7 @@ use anyhow::Context;
 use database::mungos::{
   by_id::update_one_by_id,
   find::find_collect,
-  mongodb::bson::{self, doc, oid::ObjectId, Bson, Document},
+  mongodb::bson::{self, Bson, Document, doc, oid::ObjectId},
   update::Update,
 };
 use komodo_client::entities::deployment::{
@@ -19,7 +19,10 @@ use periphery_client::api::volume_backup::{
   BackupVolume, ListVolumeBackups,
 };
 
-use crate::{helpers::periphery_client, periphery::PeripheryClient, state::db_client};
+use crate::{
+  helpers::periphery_client, periphery::PeripheryClient,
+  state::db_client,
+};
 
 static BACKUP_DESTINATION: OnceLock<Option<BackupDestination>> =
   OnceLock::new();
@@ -30,15 +33,18 @@ static BACKUP_DESTINATION: OnceLock<Option<BackupDestination>> =
 pub fn backup_destination() -> Option<&'static BackupDestination> {
   BACKUP_DESTINATION
     .get_or_init(|| {
-      let endpoint = std::env::var("KOMODO_BACKUP_S3_ENDPOINT").ok()?;
+      let endpoint =
+        std::env::var("KOMODO_BACKUP_S3_ENDPOINT").ok()?;
       let region = std::env::var("KOMODO_BACKUP_S3_REGION").ok()?;
       let bucket = std::env::var("KOMODO_BACKUP_S3_BUCKET").ok()?;
-      let access_key = std::env::var("KOMODO_BACKUP_S3_ACCESS_KEY_ID")
-        .or_else(|_| std::env::var("KOMODO_BACKUP_S3_ACCESS_KEY"))
-        .ok()?;
-      let secret_key = std::env::var("KOMODO_BACKUP_S3_SECRET_ACCESS_KEY")
-        .or_else(|_| std::env::var("KOMODO_BACKUP_S3_SECRET_KEY"))
-        .ok()?;
+      let access_key =
+        std::env::var("KOMODO_BACKUP_S3_ACCESS_KEY_ID")
+          .or_else(|_| std::env::var("KOMODO_BACKUP_S3_ACCESS_KEY"))
+          .ok()?;
+      let secret_key =
+        std::env::var("KOMODO_BACKUP_S3_SECRET_ACCESS_KEY")
+          .or_else(|_| std::env::var("KOMODO_BACKUP_S3_SECRET_KEY"))
+          .ok()?;
       Some(BackupDestination {
         endpoint,
         region,
@@ -61,7 +67,7 @@ pub async fn backup_deployment_volumes(
   let deployment: Deployment = find_collect(
     &db_client().deployments,
     doc! { "_id": ObjectId::from_str(deployment_id)
-      .context("Invalid deployment id ObjectId")? },
+    .context("Invalid deployment id ObjectId")? },
     None,
   )
   .await
@@ -73,7 +79,7 @@ pub async fn backup_deployment_volumes(
   let server: Server = find_collect(
     &db_client().servers,
     doc! { "_id": ObjectId::from_str(&deployment.info.assigned_server)
-      .context("Invalid assigned_server ObjectId")? },
+    .context("Invalid assigned_server ObjectId")? },
     None,
   )
   .await
@@ -135,7 +141,9 @@ pub async fn backup_deployment_volumes(
 }
 
 /// Back up all named volumes for a stack (parsed from compose YAML).
-pub async fn backup_stack_volumes(stack_id: &str) -> anyhow::Result<()> {
+pub async fn backup_stack_volumes(
+  stack_id: &str,
+) -> anyhow::Result<()> {
   let dest = backup_destination()
     .context("Backup destination not configured")?
     .clone();
@@ -143,7 +151,7 @@ pub async fn backup_stack_volumes(stack_id: &str) -> anyhow::Result<()> {
   let stack: Stack = find_collect(
     &db_client().stacks,
     doc! { "_id": ObjectId::from_str(stack_id)
-      .context("Invalid stack id ObjectId")? },
+    .context("Invalid stack id ObjectId")? },
     None,
   )
   .await
@@ -155,7 +163,7 @@ pub async fn backup_stack_volumes(stack_id: &str) -> anyhow::Result<()> {
   let server: Server = find_collect(
     &db_client().servers,
     doc! { "_id": ObjectId::from_str(&stack.info.assigned_server)
-      .context("Invalid assigned_server ObjectId")? },
+    .context("Invalid assigned_server ObjectId")? },
     None,
   )
   .await
@@ -204,8 +212,14 @@ pub async fn backup_stack_volumes(stack_id: &str) -> anyhow::Result<()> {
     .await
     .context("Failed to update info.last_backup")?;
 
-    enforce_retention(&periphery, stack_id, &vol_name, &dest, max_backups)
-      .await?;
+    enforce_retention(
+      &periphery,
+      stack_id,
+      &vol_name,
+      &dest,
+      max_backups,
+    )
+    .await?;
   }
 
   Ok(())
@@ -232,7 +246,8 @@ async fn enforce_retention(
     return Ok(());
   }
 
-  let to_delete = &backups[..backups.len().saturating_sub(max_backups as usize)];
+  let to_delete =
+    &backups[..backups.len().saturating_sub(max_backups as usize)];
   for backup in to_delete {
     delete_s3_object(dest, &backup.s3_key).await?;
   }
@@ -255,7 +270,8 @@ async fn delete_s3_object(
     region: dest.region.clone(),
     endpoint: dest.endpoint.clone(),
   };
-  let bucket = Bucket::new(&dest.bucket, region, creds)?.with_path_style();
+  let bucket =
+    Bucket::new(&dest.bucket, region, creds)?.with_path_style();
   let _ = bucket.delete_object(key).await?;
   Ok(())
 }
@@ -263,14 +279,13 @@ async fn delete_s3_object(
 /// Parse the top-level `volumes:` keys from a docker compose YAML.
 /// Returns an empty vec if there is no top-level volumes mapping.
 fn parse_stack_volumes(yaml: &str) -> anyhow::Result<Vec<String>> {
-  let parsed: serde_yaml_ng::Value =
-    serde_yaml_ng::from_str(yaml).context("Failed to parse compose YAML")?;
+  let parsed: serde_yaml_ng::Value = serde_yaml_ng::from_str(yaml)
+    .context("Failed to parse compose YAML")?;
   let volumes = parsed
     .get("volumes")
     .and_then(|v| v.as_mapping())
     .map(|m| {
-      m
-        .keys()
+      m.keys()
         .filter_map(|k| k.as_str().map(String::from))
         .collect()
     })
@@ -323,9 +338,13 @@ mod tests {
     let present = backup_destination();
     // Contract: environment-not-set => None. If env is set in the test
     // runner, verify it parses all five fields.
-    let endpoint_set = std::env::var("KOMODO_BACKUP_S3_ENDPOINT").is_ok();
+    let endpoint_set =
+      std::env::var("KOMODO_BACKUP_S3_ENDPOINT").is_ok();
     if !endpoint_set {
-      assert!(present.is_none(), "expected None when KOMODO_BACKUP_S3_* unset");
+      assert!(
+        present.is_none(),
+        "expected None when KOMODO_BACKUP_S3_* unset"
+      );
     } else {
       assert!(present.is_some(), "expected Some when env set");
     }

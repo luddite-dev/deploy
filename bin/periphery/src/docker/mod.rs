@@ -4,9 +4,7 @@ use command::{
   CommandOptions, run_komodo_standard_command, run_shell_command,
 };
 use komodo_client::entities::{
-  TerminationSignal,
-  docker::*,
-  update::Log,
+  TerminationSignal, docker::*, update::Log,
 };
 
 pub mod compose;

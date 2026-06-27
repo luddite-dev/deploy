@@ -1,6 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
-use komodo_client::entities::{ImageDigest, komodo_timestamp, server::Server};
+use komodo_client::entities::{
+  ImageDigest, komodo_timestamp, server::Server,
+};
 use mogh_cache::CloneCache;
 use periphery_client::api::docker::GetLatestImageDigest;
 

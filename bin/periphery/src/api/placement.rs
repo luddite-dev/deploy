@@ -29,8 +29,7 @@ impl Resolve<Args> for CheckHostPorts {
       .into_iter()
       .filter_map(|s| match s.protocol_socket_info {
         ProtocolSocketInfo::Tcp(tcp)
-          if tcp.local_port > 0
-            && tcp.state == TcpState::Listen =>
+          if tcp.local_port > 0 && tcp.state == TcpState::Listen =>
         {
           Some(tcp.local_port)
         }
@@ -52,17 +51,12 @@ impl Resolve<Args> for ReadContainerPorts {
     self,
     _args: &Args,
   ) -> anyhow::Result<ReadContainerPortsResponse> {
-    let cmd = format!(
-      "docker inspect --format json {}",
-      self.container_name
-    );
+    let cmd =
+      format!("docker inspect --format json {}", self.container_name);
     let output =
       run_standard_command(&cmd, CommandOptions::default()).await;
     if !output.success() {
-      anyhow::bail!(
-        "docker inspect failed: {}",
-        output.stderr
-      );
+      anyhow::bail!("docker inspect failed: {}", output.stderr);
     }
     let parsed: Vec<serde_json::Value> =
       serde_json::from_str(&output.stdout)?;
@@ -80,9 +74,8 @@ impl Resolve<Args> for ReadContainerPorts {
                 .unwrap_or(0);
               if let Some(arr) = bindings.as_array() {
                 for binding in arr {
-                  if let Some(host_port) = binding
-                    .get("HostPort")
-                    .and_then(|v| v.as_str())
+                  if let Some(host_port) =
+                    binding.get("HostPort").and_then(|v| v.as_str())
                   {
                     ports.push(AssignedPort {
                       container: container_port,

@@ -4,9 +4,7 @@ use typeshare::typeshare;
 
 use crate::entities::{
   SearchCombinator, U64,
-  docker::{
-    container::Container,
-  },
+  docker::container::Container,
   stack::{
     Stack, StackActionState, StackListItem, StackQuery, StackService,
     StackServiceState,

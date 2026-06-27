@@ -1,19 +1,23 @@
 use std::collections::HashMap;
 
-use database::mungos::{
-  find::find_collect,
-  mongodb::bson::doc,
-};
+use database::mungos::{find::find_collect, mongodb::bson::doc};
 use komodo_client::entities::server::{Server, ServerState};
 use periphery_client::api::placement::CheckHostPorts;
 
-use crate::{helpers::periphery_client, state::db_client, state::server_status_cache};
+use crate::{
+  helpers::periphery_client, state::db_client,
+  state::server_status_cache,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum PlacementError {
-  #[error("hinted server {0} is not available (not healthy or does not exist)")]
+  #[error(
+    "hinted server {0} is not available (not healthy or does not exist)"
+  )]
   HintedServerUnavailable(String),
-  #[error("hinted server {server_id} is healthy but one or more required host ports are busy")]
+  #[error(
+    "hinted server {server_id} is healthy but one or more required host ports are busy"
+  )]
   HintedServerPortConflict { server_id: String },
   #[error("no eligible server has all required ports free")]
   NoEligibleServer,
@@ -38,16 +42,18 @@ pub async fn pick_target(
 ) -> Result<String, PlacementError> {
   // Load every server; candidate eligibility is decided from the live
   // status cache (state == Ok), not from persisted info.
-  let servers: Vec<Server> = find_collect(&db_client().servers, doc! {}, None)
-    .await
-    .map_err(|e| PlacementError::PortCheckFailed {
-      server_id: "DB".into(),
-      error: e.to_string(),
-    })?;
+  let servers: Vec<Server> =
+    find_collect(&db_client().servers, doc! {}, None)
+      .await
+      .map_err(|e| PlacementError::PortCheckFailed {
+        server_id: "DB".into(),
+        error: e.to_string(),
+      })?;
 
   let mut candidates: Vec<Server> = Vec::new();
   for server in &servers {
-    if let Some(cached) = server_status_cache().get(&server.id).await {
+    if let Some(cached) = server_status_cache().get(&server.id).await
+    {
       if matches!(cached.state, ServerState::Ok) {
         candidates.push(server.clone());
       }
@@ -69,7 +75,8 @@ pub async fn pick_target(
   // Hint path: the user pinned a server. Probe only that one; do not
   // silently fall back — preserves user intent.
   if !hint_server_id.is_empty() {
-    let Some(server) = candidates.iter().find(|s| s.id == hint_server_id)
+    let Some(server) =
+      candidates.iter().find(|s| s.id == hint_server_id)
     else {
       return Err(PlacementError::HintedServerUnavailable(
         hint_server_id.to_string(),
@@ -102,14 +109,16 @@ async fn check_ports_on_server(
   if ports.is_empty() {
     return Ok(Vec::new());
   }
-  let periphery = periphery_client(server)
-    .await
-    .map_err(|e| PlacementError::PortCheckFailed {
+  let periphery = periphery_client(server).await.map_err(|e| {
+    PlacementError::PortCheckFailed {
       server_id: server.id.clone(),
       error: e.to_string(),
-    })?;
+    }
+  })?;
   let response = periphery
-    .request(CheckHostPorts { ports: ports.to_vec() })
+    .request(CheckHostPorts {
+      ports: ports.to_vec(),
+    })
     .await
     .map_err(|e| PlacementError::PortCheckFailed {
       server_id: server.id.clone(),
@@ -124,10 +133,11 @@ async fn check_ports_on_server(
 /// still works, just without the spread signal.
 async fn count_deployments_per_server() -> HashMap<String, u32> {
   let mut counts = HashMap::new();
-  let deployments: Vec<komodo_client::entities::deployment::Deployment> =
-    find_collect(&db_client().deployments, doc! {}, None)
-      .await
-      .unwrap_or_default();
+  let deployments: Vec<
+    komodo_client::entities::deployment::Deployment,
+  > = find_collect(&db_client().deployments, doc! {}, None)
+    .await
+    .unwrap_or_default();
   for d in deployments {
     if !d.info.assigned_server.is_empty() {
       *counts.entry(d.info.assigned_server).or_insert(0) += 1;

@@ -259,10 +259,8 @@ async fn write_stack_file_contents_on_host(
   contents: String,
   mut update: Update,
 ) -> mogh_error::Result<Update> {
-  let server = get_server_for_command(
-    &stack.config.server_id,
-  )
-  .await?;
+  let server =
+    get_server_for_command(&stack.config.server_id).await?;
 
   let res = periphery_client(&server)
     .await?
@@ -513,10 +511,8 @@ impl Resolve<WriteArgs> for RefreshStackCache {
       // =============
       // FILES ON HOST
       // =============
-      if let Ok(server) = get_server_for_command(
-        &stack.config.server_id,
-      )
-      .await
+      if let Ok(server) =
+        get_server_for_command(&stack.config.server_id).await
       {
         let GetComposeContentsOnHostResponse { contents, errors } =
           match periphery_client(&server)
@@ -1047,10 +1043,8 @@ impl Resolve<WriteArgs> for BatchCheckStackForUpdate {
     let res = stacks
       .into_iter()
       .map(|stack| async move {
-        let server = get_server_for_command(
-          &stack.config.server_id,
-        )
-        .await?;
+        let server =
+          get_server_for_command(&stack.config.server_id).await?;
         check_stack_for_update_inner(
           stack.id,
           &server,

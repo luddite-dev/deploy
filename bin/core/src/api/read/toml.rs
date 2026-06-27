@@ -14,8 +14,7 @@ use komodo_client::{
     builder::Builder, deployment::Deployment,
     permission::PermissionLevel, procedure::Procedure, repo::Repo,
     resource::ResourceQuery, server::Server, stack::Stack,
-    sync::ResourceSync, toml::ResourcesToml,
-    user::User,
+    sync::ResourceSync, toml::ResourcesToml, user::User,
   },
 };
 use mogh_resolver::Resolve;

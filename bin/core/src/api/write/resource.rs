@@ -4,8 +4,7 @@ use komodo_client::{
   entities::{
     ResourceTarget, action::Action, alerter::Alerter, build::Build,
     builder::Builder, deployment::Deployment, procedure::Procedure,
-    repo::Repo, server::Server, stack::Stack,
-    sync::ResourceSync,
+    repo::Repo, server::Server, stack::Stack, sync::ResourceSync,
   },
 };
 use mogh_error::AddStatusCodeError;

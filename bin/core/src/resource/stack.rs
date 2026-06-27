@@ -28,7 +28,7 @@ use crate::{
   config::core_config,
   helpers::{
     periphery_client,
-    query::{get_stack_state, get_server_for_command},
+    query::{get_server_for_command, get_stack_state},
     repo_link,
   },
   monitor::refresh_server_cache,
@@ -293,12 +293,15 @@ impl super::KomodoResource for Stack {
       return Ok(());
     }
     let Ok(server) =
-      get_server_for_command(&created.config.server_id).await.inspect_err(|e| {
-        warn!(
-          "Failed to get Server for Stack {} | {e:#}",
-          created.name
-        )
-      }) else {
+      get_server_for_command(&created.config.server_id)
+        .await
+        .inspect_err(|e| {
+          warn!(
+            "Failed to get Server for Stack {} | {e:#}",
+            created.name
+          )
+        })
+    else {
       return Ok(());
     };
     refresh_server_cache(&server, true).await;
@@ -350,25 +353,20 @@ impl super::KomodoResource for Stack {
       return Ok(());
     }
     // stack needs to be destroyed
-    let server = match get_server_for_command(
-      &stack.config.server_id,
-    )
-    .await
-    {
-      Ok(res) => res,
-      Err(e) => {
-        update.push_error_log(
-          "Destroy Stack",
-          format_serror(
-            &e.context(
-              "Failed to retrieve Server from database.",
-            )
-            .into(),
-          ),
-        );
-        return Ok(());
-      }
-    };
+    let server =
+      match get_server_for_command(&stack.config.server_id).await {
+        Ok(res) => res,
+        Err(e) => {
+          update.push_error_log(
+            "Destroy Stack",
+            format_serror(
+              &e.context("Failed to retrieve Server from database.")
+                .into(),
+            ),
+          );
+          return Ok(());
+        }
+      };
 
     if !server.config.enabled {
       update.push_simple_log(
@@ -446,8 +444,10 @@ async fn validate_config(
   if let Some(file_contents) = &config.file_contents
     && !file_contents.is_empty()
   {
-    crate::resource::stack_validation::validate_compose_yaml(file_contents)
-      .context("Invalid compose file")?;
+    crate::resource::stack_validation::validate_compose_yaml(
+      file_contents,
+    )
+    .context("Invalid compose file")?;
   }
   // Placement scheduling. Stacks carry their service ports inside the
   // compose YAML rather than typed PortMappings, so fixed-port detection

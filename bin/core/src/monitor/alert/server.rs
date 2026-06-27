@@ -133,17 +133,30 @@ pub async fn alert_servers(
       }
 
       // Close an open alert
-      (ServerState::Ok | ServerState::Disabled | ServerState::Draining | ServerState::Drained, Some(alert), _) => {
+      (
+        ServerState::Ok
+        | ServerState::Disabled
+        | ServerState::Draining
+        | ServerState::Drained,
+        Some(alert),
+        _,
+      ) => {
         alerts_to_close.push((
           alert.clone(),
           server.config.send_unreachable_alerts,
         ));
       }
-      (ServerState::Ok | ServerState::Disabled | ServerState::Draining | ServerState::Drained, None, _) => buffer
-        .reset(
-          server_status.id.clone(),
-          AlertDataVariant::ServerUnreachable,
-        ),
+      (
+        ServerState::Ok
+        | ServerState::Disabled
+        | ServerState::Draining
+        | ServerState::Drained,
+        None,
+        _,
+      ) => buffer.reset(
+        server_status.id.clone(),
+        AlertDataVariant::ServerUnreachable,
+      ),
     }
 
     // ========================

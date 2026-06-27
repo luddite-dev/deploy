@@ -12,7 +12,9 @@ use periphery_client::api::volume_backup::{
 
 use crate::api::Args;
 
-fn build_bucket(dest: &BackupDestination) -> anyhow::Result<Box<Bucket>> {
+fn build_bucket(
+  dest: &BackupDestination,
+) -> anyhow::Result<Box<Bucket>> {
   let creds = Credentials::new(
     Some(&dest.access_key),
     Some(&dest.secret_key),
@@ -24,19 +26,21 @@ fn build_bucket(dest: &BackupDestination) -> anyhow::Result<Box<Bucket>> {
     region: dest.region.clone(),
     endpoint: dest.endpoint.clone(),
   };
-  let bucket = Bucket::new(&dest.bucket, region, creds)?.with_path_style();
+  let bucket =
+    Bucket::new(&dest.bucket, region, creds)?.with_path_style();
   Ok(bucket)
 }
 
 fn s3_key_prefix(deployment_id: &str, volume_name: &str) -> String {
-  format!(
-    "backups/deployments/{deployment_id}/volumes/{volume_name}"
-  )
+  format!("backups/deployments/{deployment_id}/volumes/{volume_name}")
 }
 
 impl Resolve<Args> for BackupVolume {
   #[instrument("backup_volume")]
-  async fn resolve(self, _args: &Args) -> anyhow::Result<BackupResult> {
+  async fn resolve(
+    self,
+    _args: &Args,
+  ) -> anyhow::Result<BackupResult> {
     let timestamp = chrono::Utc::now().timestamp();
     let local_file =
       format!("/tmp/{}-{timestamp}.tar", self.volume_name);
@@ -54,10 +58,7 @@ impl Resolve<Args> for BackupVolume {
     )
     .await;
     if !output.success() {
-      anyhow::bail!(
-        "podman volume export failed: {}",
-        output.stderr
-      );
+      anyhow::bail!("podman volume export failed: {}", output.stderr);
     }
 
     let bucket = build_bucket(&self.destination)?;
@@ -78,9 +79,11 @@ impl Resolve<Args> for BackupVolume {
 
 impl Resolve<Args> for RestoreVolume {
   #[instrument("restore_volume")]
-  async fn resolve(self, _args: &Args) -> anyhow::Result<RestoreResult> {
-    let local_file =
-      format!("/tmp/{}-restore.tar", self.volume_name);
+  async fn resolve(
+    self,
+    _args: &Args,
+  ) -> anyhow::Result<RestoreResult> {
+    let local_file = format!("/tmp/{}-restore.tar", self.volume_name);
 
     let bucket = build_bucket(&self.destination)?;
     let response = bucket.get_object(&self.source_key).await?;
@@ -103,10 +106,7 @@ impl Resolve<Args> for RestoreVolume {
     )
     .await;
     if !output.success() {
-      anyhow::bail!(
-        "podman volume import failed: {}",
-        output.stderr
-      );
+      anyhow::bail!("podman volume import failed: {}", output.stderr);
     }
 
     std::fs::remove_file(&local_file)?;

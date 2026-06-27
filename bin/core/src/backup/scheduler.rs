@@ -2,8 +2,8 @@ use std::str::FromStr;
 use std::sync::OnceLock;
 
 use anyhow::Context;
-use croner::parser::{CronParser, Seconds};
 use croner::Cron;
+use croner::parser::{CronParser, Seconds};
 use database::mungos::{find::find_collect, mongodb::bson::doc};
 use komodo_client::entities::deployment::Deployment;
 use komodo_client::entities::stack::Stack;
@@ -45,10 +45,7 @@ async fn tick() -> anyhow::Result<()> {
       Ok(Some(s)) => s,
       Ok(None) => continue,
       Err(e) => {
-        warn!(
-          "Invalid cron for deployment {}: {e}",
-          deployment.id
-        );
+        warn!("Invalid cron for deployment {}: {e}", deployment.id);
         continue;
       }
     };
@@ -134,9 +131,7 @@ fn should_fire(
   now: &chrono::DateTime<chrono::Utc>,
 ) -> bool {
   match schedule.find_previous_occurrence(now, false) {
-    Ok(last) => {
-      now.signed_duration_since(last).num_seconds() < 60
-    }
+    Ok(last) => now.signed_duration_since(last).num_seconds() < 60,
     Err(_) => false,
   }
 }
@@ -150,7 +145,9 @@ mod tests {
   fn test_shoulfire_within_window() {
     // "every second" — previous occurrence is one second ago.
     let cron = cron_parser().parse("* * * * * *").unwrap();
-    let now = chrono::Utc.with_ymd_and_hms(2026, 6, 25, 12, 0, 30).unwrap();
+    let now = chrono::Utc
+      .with_ymd_and_hms(2026, 6, 25, 12, 0, 30)
+      .unwrap();
     assert!(should_fire(&cron, &now));
   }
 
@@ -159,7 +156,8 @@ mod tests {
     // "top of every hour" — at :00:05 the previous fire was 5s ago (<60, fire).
     // At :01:05 the previous fire was 65s ago (>=60, no fire).
     let cron = cron_parser().parse("0 0 * * * *").unwrap();
-    let fire = chrono::Utc.with_ymd_and_hms(2026, 6, 25, 12, 0, 5).unwrap();
+    let fire =
+      chrono::Utc.with_ymd_and_hms(2026, 6, 25, 12, 0, 5).unwrap();
     assert!(should_fire(&cron, &fire), "5s after :00:00 should fire");
     let no_fire =
       chrono::Utc.with_ymd_and_hms(2026, 6, 25, 12, 1, 5).unwrap();

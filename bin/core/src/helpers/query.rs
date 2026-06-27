@@ -182,8 +182,7 @@ pub fn get_stack_state_from_containers(
 pub async fn get_stack_state(
   stack: &Stack,
 ) -> anyhow::Result<StackState> {
-  if stack.config.server_id.is_empty()
-  {
+  if stack.config.server_id.is_empty() {
     return Ok(StackState::Down);
   }
   let state = stack_status_cache()

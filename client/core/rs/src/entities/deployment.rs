@@ -9,8 +9,7 @@ use typeshare::typeshare;
 
 use crate::{
   deserializers::{
-    env_vars_deserializer,
-    labels_deserializer,
+    env_vars_deserializer, labels_deserializer,
     option_env_vars_deserializer, option_labels_deserializer,
     option_string_list_deserializer, option_term_labels_deserializer,
     string_list_deserializer, term_labels_deserializer,
@@ -77,7 +76,8 @@ pub struct DeploymentInfo {
   pub host_ports: Vec<AssignedPort>,
   /// The last backup record for each volume.
   #[serde(default)]
-  pub last_backup: std::collections::HashMap<String, VolumeBackupRecord>,
+  pub last_backup:
+    std::collections::HashMap<String, VolumeBackupRecord>,
   /// The current migration state, if any.
   #[serde(default)]
   pub migration_state: Option<MigrationState>,
@@ -612,7 +612,9 @@ pub fn extract_registry_domain(
 }
 
 #[typeshare]
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(
+  Debug, Clone, Default, PartialEq, Serialize, Deserialize,
+)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct PortMapping {
@@ -623,7 +625,9 @@ pub struct PortMapping {
 }
 
 #[typeshare]
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(
+  Debug, Clone, Default, PartialEq, Serialize, Deserialize,
+)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct VolumeMount {
@@ -634,7 +638,9 @@ pub struct VolumeMount {
 }
 
 #[typeshare]
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(
+  Debug, Clone, Default, PartialEq, Serialize, Deserialize,
+)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct BackupConfig {
@@ -650,7 +656,9 @@ fn default_max_backups() -> u32 {
 }
 
 #[typeshare]
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(
+  Debug, Clone, Default, PartialEq, Serialize, Deserialize,
+)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct AssignedPort {
@@ -659,7 +667,9 @@ pub struct AssignedPort {
 }
 
 #[typeshare]
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(
+  Debug, Clone, Default, PartialEq, Serialize, Deserialize,
+)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct VolumeBackupInfo {
@@ -669,7 +679,9 @@ pub struct VolumeBackupInfo {
 }
 
 #[typeshare]
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(
+  Debug, Clone, Default, PartialEq, Serialize, Deserialize,
+)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct VolumeBackupRecord {
@@ -680,7 +692,9 @@ pub struct VolumeBackupRecord {
 }
 
 #[typeshare]
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(
+  Debug, Clone, Default, PartialEq, Serialize, Deserialize,
+)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct BackupDestination {
@@ -692,7 +706,9 @@ pub struct BackupDestination {
 }
 
 #[typeshare]
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(
+  Debug, Clone, Default, PartialEq, Serialize, Deserialize,
+)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct BackupResult {
@@ -702,7 +718,9 @@ pub struct BackupResult {
 }
 
 #[typeshare]
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(
+  Debug, Clone, Default, PartialEq, Serialize, Deserialize,
+)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct RestoreResult {

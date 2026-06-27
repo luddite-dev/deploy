@@ -7,9 +7,7 @@ use komodo_client::entities::{
   action::ActionState,
   build::BuildState,
   deployment::DeploymentState,
-  docker::{
-    DockerLists, container::ContainerListItem,
-  },
+  docker::{DockerLists, container::ContainerListItem},
   procedure::ProcedureState,
   repo::RepoState,
   server::{PeripheryInformation, ServerHealth, ServerState},

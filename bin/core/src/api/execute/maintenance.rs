@@ -33,8 +33,7 @@ use crate::{
   },
   config::{core_config, core_keys},
   helpers::{
-    periphery_client,
-    query::get_server_for_command,
+    periphery_client, query::get_server_for_command,
     update::update_update,
   },
   resource::rotate_server_keys,
@@ -317,10 +316,8 @@ impl Resolve<ExecuteArgs> for GlobalAutoUpdate {
         continue;
       }
 
-      let Ok(server) = get_server_for_command(
-        &deployment.config.server_id,
-      )
-      .await
+      let Ok(server) =
+        get_server_for_command(&deployment.config.server_id).await
       else {
         continue;
       };

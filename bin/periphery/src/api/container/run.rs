@@ -24,9 +24,7 @@ use tracing::Instrument;
 use crate::{
   config::periphery_config,
   docker::{docker_login, pull_image},
-  helpers::{
-    push_environment, push_extra_args, push_labels,
-  },
+  helpers::{push_environment, push_extra_args, push_labels},
 };
 
 impl Resolve<crate::api::Args> for RunContainer {
@@ -149,9 +147,7 @@ fn docker_run_command(
 
   for pm in ports {
     match pm.host {
-      Some(host) => {
-        write!(&mut res, " -p {host}:{}", pm.container)?
-      }
+      Some(host) => write!(&mut res, " -p {host}:{}", pm.container)?,
       None => write!(&mut res, " -p {}", pm.container)?,
     }
   }

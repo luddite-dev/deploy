@@ -5,9 +5,8 @@ use typeshare::typeshare;
 
 use crate::entities::{
   docker::{
-    container::ContainerListItem,
-    image::ImageListItem, network::NetworkListItem,
-    volume::VolumeListItem,
+    container::ContainerListItem, image::ImageListItem,
+    network::NetworkListItem, volume::VolumeListItem,
   },
   stack::ComposeProject,
 };

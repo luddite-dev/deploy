@@ -22,20 +22,18 @@ use crate::{
   },
   entities::{
     EnvironmentVar, ImageDigest,
-    docker::{
-      container::ContainerStateStatusEnum,
-    },
+    docker::container::ContainerStateStatusEnum,
     environment_vars_from_str,
   },
 };
 
 use super::{
   FileContents, SystemCommand,
-  docker::container::ContainerListItem,
-  resource::{Resource, ResourceListItem, ResourceQuery},
   deployment::{
     AssignedPort, BackupConfig, MigrationState, VolumeBackupRecord,
   },
+  docker::container::ContainerListItem,
+  resource::{Resource, ResourceListItem, ResourceQuery},
 };
 
 #[cfg(feature = "utoipa")]
@@ -293,10 +291,12 @@ pub struct StackInfo {
   pub assigned_server: String,
   /// Host ports assigned by the container runtime, keyed by compose service name.
   #[serde(default)]
-  pub host_ports: std::collections::HashMap<String, Vec<AssignedPort>>,
+  pub host_ports:
+    std::collections::HashMap<String, Vec<AssignedPort>>,
   /// The last backup record for each volume.
   #[serde(default)]
-  pub last_backup: std::collections::HashMap<String, VolumeBackupRecord>,
+  pub last_backup:
+    std::collections::HashMap<String, VolumeBackupRecord>,
   /// The current migration state, if any. A stack migrates as a single unit.
   #[serde(default)]
   pub migration_state: Option<MigrationState>,

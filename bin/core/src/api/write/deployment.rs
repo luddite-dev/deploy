@@ -192,11 +192,8 @@ impl Resolve<WriteArgs> for CreateDeploymentFromContainer {
           .port_bindings
           .into_iter()
           .filter_map(|(container, mut host)| {
-            let container_port: u16 = container
-              .split('/')
-              .next()?
-              .parse()
-              .ok()?;
+            let container_port: u16 =
+              container.split('/').next()?.parse().ok()?;
             let host_port = host.pop()?.host_port?.parse().ok()?;
             Some(PortMapping {
               container: container_port,

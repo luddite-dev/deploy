@@ -488,7 +488,9 @@ pub enum ServerState {
 /// migrate workloads off; the drain controller transitions `ServerState`
 /// to `Draining` then `Drained`. Default: `Run`.
 #[typeshare]
-#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[derive(
+  Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize,
+)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum ServerDesiredState {

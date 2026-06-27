@@ -2,8 +2,7 @@ use crate::entities::{
   action::ActionActionState, build::BuildActionState,
   deployment::DeploymentActionState, procedure::ProcedureActionState,
   repo::RepoActionState, server::ServerActionState,
-  stack::StackActionState,
-  sync::ResourceSyncActionState,
+  stack::StackActionState, sync::ResourceSyncActionState,
 };
 
 pub trait Busy {

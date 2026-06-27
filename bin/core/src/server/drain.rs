@@ -4,7 +4,7 @@ use anyhow::Context;
 use database::mungos::{
   by_id::update_one_by_id,
   find::find_collect,
-  mongodb::bson::{self, doc, oid::ObjectId, Bson},
+  mongodb::bson::{self, Bson, doc, oid::ObjectId},
   update::Update,
 };
 use komodo_client::entities::{
@@ -13,8 +13,7 @@ use komodo_client::entities::{
   stack::Stack,
 };
 use periphery_client::api::{
-  container::RemoveContainer,
-  placement::ReadContainerPorts,
+  container::RemoveContainer, placement::ReadContainerPorts,
   volume_backup::RestoreVolume,
 };
 
@@ -101,12 +100,14 @@ async fn tick() -> anyhow::Result<()> {
       continue;
     }
 
-    if let Err(e) = migrate_deployment(&deployments[0].id, None).await {
+    if let Err(e) = migrate_deployment(&deployments[0].id, None).await
+    {
       tracing::warn!(
         "Deployment migration failed for {}: {e:#}",
         deployments[0].id
       );
-      mark_deployment_failed(&deployments[0].id, &e.to_string()).await;
+      mark_deployment_failed(&deployments[0].id, &e.to_string())
+        .await;
     }
   }
 
@@ -120,7 +121,7 @@ pub async fn migrate_deployment(
   let deployment: Deployment = find_collect(
     &db_client().deployments,
     doc! { "_id": ObjectId::from_str(deployment_id)
-      .context("Invalid deployment id ObjectId")? },
+    .context("Invalid deployment id ObjectId")? },
     None,
   )
   .await?
@@ -170,7 +171,7 @@ pub async fn migrate_deployment(
   let target_server: Server = find_collect(
     &db_client().servers,
     doc! { "_id": ObjectId::from_str(&target_id)
-      .context("Invalid target server id ObjectId")? },
+    .context("Invalid target server id ObjectId")? },
     None,
   )
   .await?
@@ -183,11 +184,10 @@ pub async fn migrate_deployment(
   let dest = backup_destination()
     .context("Backup destination not configured")?;
   for vm in &deployment.config.volumes {
-    let last_backup = deployment
-      .info
-      .last_backup
-      .get(&vm.volume)
-      .with_context(|| format!("No backup found for volume {}", vm.volume))?;
+    let last_backup =
+      deployment.info.last_backup.get(&vm.volume).with_context(
+        || format!("No backup found for volume {}", vm.volume),
+      )?;
     match target_periphery
       .request(RestoreVolume {
         deployment_id: deployment_id.to_string(),
@@ -253,7 +253,9 @@ pub async fn migrate_deployment(
     .into_iter()
     .next();
     if let Some(source_server) = source_server {
-      if let Ok(source_periphery) = periphery_client(&source_server).await {
+      if let Ok(source_periphery) =
+        periphery_client(&source_server).await
+      {
         let _ = source_periphery
           .request(RemoveContainer {
             name: deployment.name.clone(),
@@ -285,7 +287,9 @@ pub async fn migrate_stack(
   _stack_id: &str,
   _target_server_id: Option<&str>,
 ) -> anyhow::Result<()> {
-  todo!("Stack migration — same pattern as migrate_deployment but using ComposeUp")
+  todo!(
+    "Stack migration — same pattern as migrate_deployment but using ComposeUp"
+  )
 }
 
 async fn mark_deployment_failed(deployment_id: &str, reason: &str) {

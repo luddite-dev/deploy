@@ -2,9 +2,7 @@ use anyhow::Context;
 use komodo_client::entities::{
   ImageDigest,
   deployment::{Deployment, DeploymentState},
-  docker::{
-    container::ContainerListItem, image::ImageListItem,
-  },
+  docker::{container::ContainerListItem, image::ImageListItem},
   stack::{
     Stack, StackService, StackServiceNames, StackServiceState,
   },

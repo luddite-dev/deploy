@@ -123,9 +123,7 @@ impl super::KomodoResource for Deployment {
       .map(|s| {
         (
           s.curr.container.as_ref().map(|c| {
-            c.image
-              .clone()
-              .unwrap_or_else(|| String::from("Unknown"))
+            c.image.clone().unwrap_or_else(|| String::from("Unknown"))
           }),
           s.curr.image_digests.as_ref(),
         )
@@ -210,12 +208,15 @@ impl super::KomodoResource for Deployment {
       return Ok(());
     }
     let Ok(server) =
-      get_server_for_command(&created.config.server_id).await.inspect_err(|e| {
-        warn!(
-          "Failed to get Server for Deployment {} | {e:#}",
-          created.name
-        )
-      }) else {
+      get_server_for_command(&created.config.server_id)
+        .await
+        .inspect_err(|e| {
+          warn!(
+            "Failed to get Server for Deployment {} | {e:#}",
+            created.name
+          )
+        })
+    else {
       return Ok(());
     };
     refresh_server_cache(&server, true).await;
@@ -282,10 +283,8 @@ impl super::KomodoResource for Deployment {
         update.push_error_log(
           "Remove Container / Service",
           format_serror(
-            &e.context(
-              "Failed to retrieve Server from database",
-            )
-            .into(),
+            &e.context("Failed to retrieve Server from database")
+              .into(),
           ),
         );
         return Ok(());

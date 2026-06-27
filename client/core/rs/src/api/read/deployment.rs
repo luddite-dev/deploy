@@ -8,9 +8,7 @@ use crate::entities::{
     Deployment, DeploymentActionState, DeploymentListItem,
     DeploymentQuery, DeploymentState,
   },
-  docker::{
-    container::{Container, ContainerListItem, ContainerStats},
-  },
+  docker::container::{Container, ContainerListItem, ContainerStats},
   update::Log,
 };
 
