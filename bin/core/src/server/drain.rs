@@ -7,20 +7,31 @@ use database::mungos::{
   mongodb::bson::{self, Bson, doc, oid::ObjectId},
   update::Update,
 };
+use interpolate::Interpolator;
 use komodo_client::entities::{
-  deployment::{Deployment, MigrationState},
+  build::{Build, ImageRegistryConfig},
+  deployment::{
+    Deployment, DeploymentImage, MigrationState,
+    extract_registry_domain,
+  },
   server::{Server, ServerDesiredState, ServerState},
   stack::Stack,
 };
 use periphery_client::api::{
-  container::RemoveContainer, placement::ReadContainerPorts,
+  container::{RemoveContainer, RunContainer},
+  placement::ReadContainerPorts,
   volume_backup::RestoreVolume,
 };
 
 use crate::{
   backup::{backup_deployment_volumes, backup_destination},
-  helpers::periphery_client,
+  helpers::{
+    periphery_client,
+    query::{get_variables_and_secrets, VariablesAndSecrets},
+    registry_token,
+  },
   placement,
+  resource,
   state::db_client,
 };
 
@@ -118,7 +129,7 @@ pub async fn migrate_deployment(
   deployment_id: &str,
   target_server_id: Option<&str>,
 ) -> anyhow::Result<()> {
-  let deployment: Deployment = find_collect(
+  let mut deployment: Deployment = find_collect(
     &db_client().deployments,
     doc! { "_id": ObjectId::from_str(deployment_id)
     .context("Invalid deployment id ObjectId")? },
@@ -207,9 +218,7 @@ pub async fn migrate_deployment(
     }
   }
 
-  // Step 5: Reassign to target by writing config.server_id. The actual deploy
-  // execution happens via the existing DeployContainer flow when a redeploy
-  // is triggered. TODO(future): call deploy execution directly.
+  // Step 5: Reassign to target by writing config.server_id.
   update_one_by_id(
     &db_client().deployments,
     deployment_id,
@@ -218,28 +227,104 @@ pub async fn migrate_deployment(
   )
   .await?;
 
-  // Step 6: Read back container ports on target (best-effort).
-  let host_ports_bson = match target_periphery
-    .request(ReadContainerPorts {
-      container_name: deployment.name.clone(),
+  // Step 5.5: Deploy container on target. The migration must actually start
+  // the container on the target node — otherwise ReadContainerPorts and all
+  // post-migration operations would fail on a non-existent container.
+  deployment.config.server_id = target_id.clone();
+
+  // Resolve Build images to concrete image strings (same as Deploy handler).
+  let registry_token = match &deployment.config.image {
+    DeploymentImage::Build { build_id, version } => {
+      let build = resource::get::<Build>(build_id).await?;
+      let image_name = build
+        .get_image_names()
+        .first()
+        .context("No image name could be created from build")?
+        .clone();
+      let version = if version.is_none() {
+        build.config.version
+      } else {
+        *version
+      };
+      let version_str = if build.config.image_tag.is_empty() {
+        version.to_string()
+      } else {
+        format!("{version}-{}", build.config.image_tag)
+      };
+      deployment.config.image = DeploymentImage::Image {
+        image: format!("{image_name}:{version_str}"),
+      };
+      let first_registry = build
+        .config
+        .image_registry
+        .first()
+        .unwrap_or(ImageRegistryConfig::static_default());
+      if first_registry.domain.is_empty() {
+        None
+      } else {
+        if deployment.config.image_registry_account.is_empty() {
+          deployment.config.image_registry_account =
+            first_registry.account.to_string();
+        }
+        if !deployment.config.image_registry_account.is_empty() {
+          registry_token(
+            &first_registry.domain,
+            &deployment.config.image_registry_account,
+          )
+          .await?
+        } else {
+          None
+        }
+      }
+    }
+    DeploymentImage::Image { image } => {
+      let domain = extract_registry_domain(image)?;
+      if !deployment.config.image_registry_account.is_empty() {
+        registry_token(&domain, &deployment.config.image_registry_account)
+          .await?
+      } else {
+        None
+      }
+    }
+  };
+
+  // Interpolate secrets (same as Deploy handler).
+  let replacers = if !deployment.config.skip_secret_interp {
+    let VariablesAndSecrets { variables, secrets } =
+      get_variables_and_secrets().await?;
+    let mut interpolator = Interpolator::new(Some(&variables), &secrets);
+    interpolator.interpolate_deployment(&mut deployment)?;
+    interpolator.secret_replacers.into_iter().collect()
+  } else {
+    Vec::new()
+  };
+
+  // Send RunContainer to target periphery.
+  target_periphery
+    .request(RunContainer {
+      deployment: deployment.clone(),
+      stop_signal: Some(deployment.config.termination_signal),
+      stop_time: Some(deployment.config.termination_timeout),
+      registry_token,
+      replacers,
     })
     .await
-  {
-    Ok(r) => {
-      let arr: Vec<_> = r
-        .ports
-        .into_iter()
-        .map(|p| doc! { "container": p.container as i32, "host": p.host as i32 })
-        .collect();
-      bson::to_bson(&arr).unwrap_or(Bson::Null)
-    }
-    Err(e) => {
-      tracing::warn!(
-        "ReadContainerPorts failed during migration for {}: {e}",
-        deployment_id
-      );
-      Bson::Null
-    }
+    .context("Failed to deploy container on target during migration")?;
+
+  // Step 6: Read back container ports on target.
+  let host_ports_bson = {
+    let r = target_periphery
+      .request(ReadContainerPorts {
+        container_name: deployment.name.clone(),
+      })
+      .await
+      .context("ReadContainerPorts failed on target after migration")?;
+    let arr: Vec<_> = r
+      .ports
+      .into_iter()
+      .map(|p| doc! { "container": p.container as i32, "host": p.host as i32 })
+      .collect();
+    bson::to_bson(&arr).unwrap_or(Bson::Null)
   };
 
   // Step 7: Stop container on source (best-effort; source may be unreachable).

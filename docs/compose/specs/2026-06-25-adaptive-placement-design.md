@@ -3,9 +3,9 @@
 Builds on the Komodo fork (`moghtech/komodo`, GPL-V3). Adds three interlocking
 capabilities — placement scheduler, S3-backed volume lifecycle, and node
 draining — to abstract away the need for operators to manually choose which
-server runs each deployment. Iroh transport swaps and MongoDB replacement are
+server runs each deployment. Iroh transport swap is
 explicitly out of scope; this milestone preserves Komodo's existing WebSocket
-transport and MongoDB metadata DB.
+transport.
 
 Two prior findings motivate this design:
 
@@ -14,7 +14,7 @@ Two prior findings motivate this design:
    ~200-300 LOC bolt-on, independent of this milestone.
 2. Komodo has no port allocation logic anywhere today (only user-specified port
    strings or Docker's own random ports), no volume backup/export, and only
-   MongoDB-metadata backups (`lib/database/src/utils/backup.rs:20`) — not volume
+   database-metadata backups (`lib/database/src/utils/backup.rs:20`) — not volume
    data. This milestone adds both capabilities.
 
 ## [S1] Problem
@@ -94,7 +94,6 @@ In scope:
 Out of scope:
 
 - Iroh transport swap (current WebSocket transport stays).
-- MongoDB replacement.
 - Caddy reverse-proxy integration (only the data contract: scheduler records
   `info.host_ports` so a future Caddy controller can read it).
 - Backup retention beyond a simple max-backups-per-volume count.
