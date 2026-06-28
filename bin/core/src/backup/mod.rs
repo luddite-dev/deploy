@@ -278,7 +278,9 @@ async fn delete_s3_object(
 
 /// Parse the top-level `volumes:` keys from a docker compose YAML.
 /// Returns an empty vec if there is no top-level volumes mapping.
-fn parse_stack_volumes(yaml: &str) -> anyhow::Result<Vec<String>> {
+pub(crate) fn parse_stack_volumes(
+  yaml: &str,
+) -> anyhow::Result<Vec<String>> {
   let parsed: serde_yaml_ng::Value = serde_yaml_ng::from_str(yaml)
     .context("Failed to parse compose YAML")?;
   let volumes = parsed
