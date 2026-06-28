@@ -1,0 +1,7 @@
+#!/bin/sh
+# Run cargo fmt before commits — fails the commit if formatting changes are needed.
+CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo fmt -- --check
+if [ $? -ne 0 ]; then
+  echo "cargo fmt found unformatted code. Run 'cargo fmt' and re-stage."
+  exit 1
+fi

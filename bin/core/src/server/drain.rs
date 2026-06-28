@@ -27,11 +27,10 @@ use crate::{
   backup::{backup_deployment_volumes, backup_destination},
   helpers::{
     periphery_client,
-    query::{get_variables_and_secrets, VariablesAndSecrets},
+    query::{VariablesAndSecrets, get_variables_and_secrets},
     registry_token,
   },
-  placement,
-  resource,
+  placement, resource,
   state::db_client,
 };
 
@@ -280,8 +279,11 @@ pub async fn migrate_deployment(
     DeploymentImage::Image { image } => {
       let domain = extract_registry_domain(image)?;
       if !deployment.config.image_registry_account.is_empty() {
-        registry_token(&domain, &deployment.config.image_registry_account)
-          .await?
+        registry_token(
+          &domain,
+          &deployment.config.image_registry_account,
+        )
+        .await?
       } else {
         None
       }
@@ -292,7 +294,8 @@ pub async fn migrate_deployment(
   let replacers = if !deployment.config.skip_secret_interp {
     let VariablesAndSecrets { variables, secrets } =
       get_variables_and_secrets().await?;
-    let mut interpolator = Interpolator::new(Some(&variables), &secrets);
+    let mut interpolator =
+      Interpolator::new(Some(&variables), &secrets);
     interpolator.interpolate_deployment(&mut deployment)?;
     interpolator.secret_replacers.into_iter().collect()
   } else {
@@ -309,7 +312,9 @@ pub async fn migrate_deployment(
       replacers,
     })
     .await
-    .context("Failed to deploy container on target during migration")?;
+    .context(
+      "Failed to deploy container on target during migration",
+    )?;
 
   // Step 6: Read back container ports on target.
   let host_ports_bson = {
@@ -318,7 +323,9 @@ pub async fn migrate_deployment(
         container_name: deployment.name.clone(),
       })
       .await
-      .context("ReadContainerPorts failed on target after migration")?;
+      .context(
+        "ReadContainerPorts failed on target after migration",
+      )?;
     let arr: Vec<_> = r
       .ports
       .into_iter()
