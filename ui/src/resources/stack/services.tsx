@@ -38,6 +38,7 @@ export default function StackServices({
   );
 }
 
+
 function StackServicesServer({
   stackId,
   serverId,
@@ -47,6 +48,7 @@ function StackServicesServer({
   serverId: string;
   services: Types.ListStackServicesResponse;
 }) {
+  const isUnknown = useStack(stackId)?.info.state === Types.StackState.Unknown;
   return (
     <DataTable
       tableKey="StackServices"
@@ -72,8 +74,14 @@ function StackServicesServer({
             const state = row.original.container?.state;
             return (
               <StatusBadge
-                text={state}
-                intent={containerStateIntention(state)}
+                text={state ?? (isUnknown ? "Unknown" : "Down")}
+                intent={
+                  state
+                    ? containerStateIntention(state)
+                    : isUnknown
+                      ? "Unknown"
+                      : "Neutral"
+                }
               />
             );
           },
