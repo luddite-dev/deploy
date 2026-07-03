@@ -87,6 +87,7 @@ export function useOmniSearch(opened: boolean) {
 
   const services = useRead("ListAllStackServices", servicesQuery, {
     refetchInterval: 15_000,
+    // Only fetch when open and there is query typed
     enabled: opened && !!debouncedTerms.length,
     placeholderData: keepPreviousData,
   }).data;
