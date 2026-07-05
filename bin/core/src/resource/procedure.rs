@@ -271,6 +271,9 @@ async fn validate_config(
         execute: [
           // Action
           (RunAction, Action, action),
+          (CancelAction, Action, action),
+          // Procedure
+          (CancelProcedure, Procedure, procedure),
           // Build
           (RunBuild, Build, build),
           (CancelBuild, Build, build),
