@@ -79,6 +79,8 @@ impl Resolve<ReadArgs> for ListAllStackServices {
         .names(self.stacks.clone())
         .tags(self.tags)
         .build(),
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &[],
@@ -252,6 +254,8 @@ impl Resolve<ReadArgs> for ListCommonStackExtraArgs {
     };
     let stacks = resource::list_full_for_user::<Stack>(
       self.query,
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
@@ -286,6 +290,8 @@ impl Resolve<ReadArgs> for ListCommonStackBuildExtraArgs {
     };
     let stacks = resource::list_full_for_user::<Stack>(
       self.query,
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
@@ -321,6 +327,8 @@ impl Resolve<ReadArgs> for ListStacks {
     let only_update_available = self.query.specific.update_available;
     let stacks = resource::list_for_user::<Stack>(
       self.query,
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
@@ -357,6 +365,8 @@ impl Resolve<ReadArgs> for ListFullStacks {
     Ok(
       resource::list_full_for_user::<Stack>(
         self.query,
+        None,
+        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -394,6 +404,8 @@ impl Resolve<ReadArgs> for GetStacksSummary {
   ) -> mogh_error::Result<GetStacksSummaryResponse> {
     let stacks = resource::list_full_for_user::<Stack>(
       Default::default(),
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &[],
