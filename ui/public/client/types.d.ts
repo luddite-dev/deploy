@@ -8206,7 +8206,7 @@ export interface ListActions {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /** List alerters matching optional query. Response: [ListAlertersResponse]. */
 export interface ListAlerters {
@@ -8226,7 +8226,7 @@ export interface ListAlerters {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /**
  * Get a paginated list of alerts sorted by timestamp descending.
@@ -8300,10 +8300,12 @@ export interface ListAllDockerContainers {
      * Set the limit for number of containers per-page.
      * `limit: 300` is default.
      *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /**
  * List all stack services part of the target stacks.
@@ -8330,10 +8332,12 @@ export interface ListAllStackServices {
      * Set the limit for number of services per-page.
      * `limit: 300` is default.
      *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /**
  * Gets list of api keys for the calling user.
@@ -8385,7 +8389,7 @@ export interface ListBuilders {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /** List builds matching optional query. Response: [ListBuildsResponse]. */
 export interface ListBuilds {
@@ -8405,7 +8409,7 @@ export interface ListBuilds {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /**
  * Gets a list of existing values used as extra args across other builds.
@@ -8468,7 +8472,7 @@ export interface ListDeployments {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /**
  * List all docker containers on the target server.
@@ -8550,7 +8554,7 @@ export interface ListFullActions {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /** List full alerters matching optional query. Response: [ListFullAlertersResponse]. */
 export interface ListFullAlerters {
@@ -8570,7 +8574,7 @@ export interface ListFullAlerters {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /** List builders matching structured query. Response: [ListFullBuildersResponse]. */
 export interface ListFullBuilders {
@@ -8589,7 +8593,7 @@ export interface ListFullBuilders {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /** List builds matching optional query. Response: [ListFullBuildsResponse]. */
 export interface ListFullBuilds {
@@ -8609,7 +8613,7 @@ export interface ListFullBuilds {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /**
  * List deployments matching optional query.
@@ -8632,7 +8636,7 @@ export interface ListFullDeployments {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /** List procedures matching optional query. Response: [ListFullProceduresResponse]. */
 export interface ListFullProcedures {
@@ -8652,7 +8656,7 @@ export interface ListFullProcedures {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /** List repos matching optional query. Response: [ListFullReposResponse]. */
 export interface ListFullRepos {
@@ -8672,7 +8676,7 @@ export interface ListFullRepos {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /** List syncs matching optional query. Response: [ListFullResourceSyncsResponse]. */
 export interface ListFullResourceSyncs {
@@ -8692,7 +8696,7 @@ export interface ListFullResourceSyncs {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /** List servers matching optional query. Response: [ListFullServersResponse]. */
 export interface ListFullServers {
@@ -8712,7 +8716,7 @@ export interface ListFullServers {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /** List stacks matching optional query. Response: [ListFullStacksResponse]. */
 export interface ListFullStacks {
@@ -8732,12 +8736,27 @@ export interface ListFullStacks {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /** List Swarms matching optional query. Response: [ListFullSwarmsResponse]. */
 export interface ListFullSwarms {
     /** optional structured query to filter swarms. */
     query?: SwarmQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /**
  * List git provider accounts matching optional query.
@@ -8796,7 +8815,7 @@ export interface ListProcedures {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /** List repos matching optional query. Response: [ListReposResponse]. */
 export interface ListRepos {
@@ -8816,7 +8835,7 @@ export interface ListRepos {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /** List syncs matching optional query. Response: [ListResourceSyncsResponse]. */
 export interface ListResourceSyncs {
@@ -8836,7 +8855,7 @@ export interface ListResourceSyncs {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /**
  * List configured schedules.
@@ -8877,7 +8896,7 @@ export interface ListServers {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /** Lists a specific stacks services (the containers). Response: [ListStackServicesResponse]. */
 export interface ListStackServices {
@@ -8902,7 +8921,7 @@ export interface ListStacks {
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /**
  * List configs on the target Swarm.
@@ -8966,6 +8985,21 @@ export interface ListSwarmTasks {
 export interface ListSwarms {
     /** Optional structured query to filter Swarms. */
     query?: SwarmQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /**
  * List the processes running on the target server.
