@@ -3550,6 +3550,7 @@ dependencies = [
  "mongo_indexed",
  "partial_derive2",
  "rand 0.10.1",
+ "regex",
  "reqwest 0.13.4",
  "schemars 1.2.1",
  "serde",
