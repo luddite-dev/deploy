@@ -18,7 +18,7 @@ export const DeployStack = ({
   const deploying = useRead(
     "GetStackActionState",
     { stack: id },
-    { refetchInterval: 5000 },
+    { refetchInterval: 5_000 },
   ).data?.deploying;
   const services = useRead("ListStackServices", { stack: id }).data;
   const container_state =
@@ -82,7 +82,7 @@ export const DestroyStack = ({
   const destroying = useRead(
     "GetStackActionState",
     { stack: id },
-    { refetchInterval: 5000 },
+    { refetchInterval: 5_000 },
   ).data?.destroying;
   const services = useRead("ListStackServices", { stack: id }).data;
   const container_state =
@@ -126,7 +126,7 @@ export const PullStack = ({
   const actionState = useRead(
     "GetStackActionState",
     { stack: id },
-    { refetchInterval: 5000 },
+    { refetchInterval: 5_000 },
   ).data;
 
   if (
@@ -162,7 +162,7 @@ export const RestartStack = ({
   const actionState = useRead(
     "GetStackActionState",
     { stack: id },
-    { refetchInterval: 5000 },
+    { refetchInterval: 5_000 },
   ).data;
   const services = useRead("ListStackServices", { stack: id }).data;
   const container_state =
@@ -209,7 +209,7 @@ export const StartStopStack = ({
   const actionState = useRead(
     "GetStackActionState",
     { stack: id },
-    { refetchInterval: 5000 },
+    { refetchInterval: 5_000 },
   ).data;
   const services = useRead("ListStackServices", { stack: id }).data;
   const container_state =
@@ -282,7 +282,7 @@ export const PauseUnpauseStack = ({
   const actionState = useRead(
     "GetStackActionState",
     { stack: id },
-    { refetchInterval: 5000 },
+    { refetchInterval: 5_000 },
   ).data;
   const services = useRead("ListStackServices", { stack: id }).data;
   const container_state =
