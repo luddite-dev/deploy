@@ -219,6 +219,11 @@ export interface ResourceQuery<T> {
 }
 
 export interface ActionQuerySpecifics {
+	/**
+	 * Query only for Actions matching these states.
+	 * If empty, does not filter by state.
+	 */
+	states?: ActionState[];
 }
 
 export type ActionQuery = ResourceQuery<ActionQuerySpecifics>;
@@ -814,6 +819,11 @@ export interface BuildQuerySpecifics {
 	 * defaults to 0 which is a no op
 	 */
 	built_since?: I64;
+	/**
+	 * Query only for Builds matching these states.
+	 * If empty, does not filter by state.
+	 */
+	states?: BuildState[];
 }
 
 export type BuildQuery = ResourceQuery<BuildQuerySpecifics>;
@@ -1516,6 +1526,11 @@ export interface DeploymentQuerySpecifics {
 	build_ids?: string[];
 	/** Query only for Deployments with available image updates. */
 	update_available?: boolean;
+	/**
+	 * Query only for Deployments matching these states.
+	 * If empty, does not filter by state.
+	 */
+	states?: DeploymentState[];
 }
 
 export type DeploymentQuery = ResourceQuery<DeploymentQuerySpecifics>;
@@ -4621,6 +4636,11 @@ export type ListVariablesResponse = Variable[];
 export type MongoDocument = any;
 
 export interface ProcedureQuerySpecifics {
+	/**
+	 * Query only for Procedures matching these states.
+	 * If empty, does not filter by state.
+	 */
+	states?: ProcedureState[];
 }
 
 export type ProcedureQuery = ResourceQuery<ProcedureQuerySpecifics>;
@@ -4629,7 +4649,12 @@ export type PushRecentlyViewedResponse = NoData;
 
 export interface RepoQuerySpecifics {
 	/** Filter repos by their repo. */
-	repos: string[];
+	repos?: string[];
+	/**
+	 * Query only for Repos matching these states.
+	 * If empty, does not filter by state.
+	 */
+	states?: RepoState[];
 }
 
 export type RepoQuery = ResourceQuery<RepoQuerySpecifics>;
@@ -4671,6 +4696,11 @@ export interface StackQuerySpecifics {
 	repos?: string[];
 	/** Query only for Stack with available image updates. */
 	update_available?: boolean;
+	/**
+	 * Query only for Stacks matching these states.
+	 * If empty, does not filter by state.
+	 */
+	states?: StackState[];
 }
 
 export type StackQuery = ResourceQuery<StackQuerySpecifics>;
