@@ -74,9 +74,6 @@ impl Resolve<ReadArgs> for GetServersSummary {
             res.disabled += 1;
           }
         }
-        // Draining/Drained are intentional operator-driven states; not counted
-        // as healthy, unhealthy, or disabled.
-        ServerState::Draining | ServerState::Drained => {}
       }
     }
     Ok(res)
@@ -109,17 +106,34 @@ impl Resolve<ReadArgs> for ListServers {
     } else {
       get_all_tags(None).await?
     };
+    let states = self.query.specific.states.clone();
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    let servers = resource::list_items_for_user::<Server>(
+    // When filtering by state, the db level pagination must be
+    // disabled, and applied in memory after the state filter.
+    let (db_limit, db_skip) = if states.is_empty() {
+      (limit, self.page * limit)
+    } else {
+      (0, 0)
+    };
+    let servers = resource::list_for_user::<Server>(
       self.query,
-      limit,
-      self.page,
+      db_limit as i64,
+      db_skip,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-      |_| true,
     )
     .await?;
+    let servers = if states.is_empty() {
+      servers
+    } else {
+      resource::filter_list_items_paginated(
+        servers,
+        |server| states.contains(&server.info.state),
+        limit,
+        self.page,
+      )
+    };
     Ok(servers)
   }
 }
@@ -343,7 +357,7 @@ impl Resolve<ReadArgs> for GetHistoricalServerStats {
       },
       FindOptions::builder()
         .sort(doc! { "ts": -1 })
-        .skip((page as u64).saturating_mul(STATS_PER_PAGE as u64))
+        .skip(page as u64 * STATS_PER_PAGE as u64)
         .limit(STATS_PER_PAGE)
         .build(),
     )

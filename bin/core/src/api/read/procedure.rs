@@ -43,17 +43,34 @@ impl Resolve<ReadArgs> for ListProcedures {
     } else {
       get_all_tags(None).await?
     };
+    let states = self.query.specific.states.clone();
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    let procedures = resource::list_items_for_user::<Procedure>(
+    // When filtering by state, the db level pagination must be
+    // disabled, and applied in memory after the state filter.
+    let (db_limit, db_skip) = if states.is_empty() {
+      (limit, self.page * limit)
+    } else {
+      (0, 0)
+    };
+    let procedures = resource::list_for_user::<Procedure>(
       self.query,
-      limit,
-      self.page,
+      db_limit as i64,
+      db_skip,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-      |_| true,
     )
     .await?;
+    let procedures = if states.is_empty() {
+      procedures
+    } else {
+      resource::filter_list_items_paginated(
+        procedures,
+        |procedure| states.contains(&procedure.info.state),
+        limit,
+        self.page,
+      )
+    };
     Ok(procedures)
   }
 }

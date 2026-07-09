@@ -4,21 +4,29 @@ use anyhow::{Context, anyhow};
 use komodo_client::{
   api::read::*,
   entities::{
+    SwarmOrServer,
     deployment::{
       Deployment, DeploymentActionState, DeploymentConfig,
       DeploymentListItem, DeploymentState,
     },
-    docker::container::{Container, ContainerStats},
+    docker::{
+      container::{Container, ContainerStats},
+      service::SwarmService,
+    },
     permission::PermissionLevel,
     server::{Server, ServerState},
     update::Log,
   },
 };
+use mogh_error::AddStatusCodeError as _;
 use mogh_resolver::Resolve;
 use periphery_client::api::{self, container::InspectContainer};
+use reqwest::StatusCode;
 
 use crate::{
-  helpers::{periphery_client, query::get_all_tags},
+  helpers::{
+    periphery_client, query::get_all_tags, swarm::swarm_request,
+  },
   permission::get_check_permissions,
   resource::{self, setup_deployment_execution},
   state::{
@@ -55,19 +63,42 @@ impl Resolve<ReadArgs> for ListDeployments {
       get_all_tags(None).await?
     };
     let only_update_available = self.query.specific.update_available;
+    let states = self.query.specific.states.clone();
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    let deployments = resource::list_items_for_user::<Deployment>(
+    // Update available / state are computed in memory rather than
+    // stored on the db. When filtering on them, the db level
+    // pagination must be disabled, and applied in memory
+    // after the filters.
+    let use_db_pagination =
+      !only_update_available && states.is_empty();
+    let (db_limit, db_skip) = if use_db_pagination {
+      (limit, self.page * limit)
+    } else {
+      (0, 0)
+    };
+    let deployments = resource::list_for_user::<Deployment>(
       self.query,
-      limit,
-      self.page,
+      db_limit as i64,
+      db_skip,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-      |deployment| {
-        !only_update_available || deployment.info.update_available
-      },
     )
     .await?;
+    let deployments = if use_db_pagination {
+      deployments
+    } else {
+      resource::filter_list_items_paginated(
+        deployments,
+        |deployment| {
+          (!only_update_available || deployment.info.update_available)
+            && (states.is_empty()
+              || states.contains(&deployment.info.state))
+        },
+        limit,
+        self.page,
+      )
+    };
     Ok(deployments)
   }
 }
@@ -133,22 +164,40 @@ impl Resolve<ReadArgs> for GetDeploymentLog {
       timestamps,
     } = self;
 
-    let (deployment, server) = setup_deployment_execution(
+    let (deployment, swarm_or_server) = setup_deployment_execution(
       &deployment,
       user,
       PermissionLevel::Read.logs(),
     )
     .await?;
 
-    let log = periphery_client(&server)
-      .await?
-      .request(api::container::GetContainerLog {
-        name: deployment.name,
-        tail: cmp::min(tail, MAX_LOG_LENGTH),
-        timestamps,
-      })
+    swarm_or_server.verify_has_target()?;
+
+    let log = match swarm_or_server {
+      SwarmOrServer::None => unreachable!(),
+      SwarmOrServer::Swarm(swarm) => swarm_request(
+        &swarm.config.server_ids,
+        periphery_client::api::swarm::GetSwarmServiceLog {
+          service: deployment.name,
+          tail,
+          timestamps,
+          no_task_ids: false,
+          no_resolve: false,
+          details: false,
+        },
+      )
       .await
-      .context("failed at call to periphery")?;
+      .context("Failed to get service log from swarm")?,
+      SwarmOrServer::Server(server) => periphery_client(&server)
+        .await?
+        .request(api::container::GetContainerLog {
+          name: deployment.name,
+          tail: cmp::min(tail, MAX_LOG_LENGTH),
+          timestamps,
+        })
+        .await
+        .context("failed at call to periphery")?,
+    };
 
     Ok(log)
   }
@@ -167,24 +216,44 @@ impl Resolve<ReadArgs> for SearchDeploymentLog {
       timestamps,
     } = self;
 
-    let (deployment, server) = setup_deployment_execution(
+    let (deployment, swarm_or_server) = setup_deployment_execution(
       &deployment,
       user,
       PermissionLevel::Read.logs(),
     )
     .await?;
 
-    let log = periphery_client(&server)
-      .await?
-      .request(api::container::GetContainerLogSearch {
-        name: deployment.name,
-        terms,
-        combinator,
-        invert,
-        timestamps,
-      })
+    swarm_or_server.verify_has_target()?;
+
+    let log = match swarm_or_server {
+      SwarmOrServer::None => unreachable!(),
+      SwarmOrServer::Swarm(swarm) => swarm_request(
+        &swarm.config.server_ids,
+        periphery_client::api::swarm::GetSwarmServiceLogSearch {
+          service: deployment.name,
+          terms,
+          combinator,
+          invert,
+          timestamps,
+          no_task_ids: false,
+          no_resolve: false,
+          details: false,
+        },
+      )
       .await
-      .context("Failed to search container log from server")?;
+      .context("Failed to search service log from swarm")?,
+      SwarmOrServer::Server(server) => periphery_client(&server)
+        .await?
+        .request(api::container::GetContainerLogSearch {
+          name: deployment.name,
+          terms,
+          combinator,
+          invert,
+          timestamps,
+        })
+        .await
+        .context("Failed to search container log from server")?,
+    };
 
     Ok(log)
   }
@@ -196,12 +265,21 @@ impl Resolve<ReadArgs> for InspectDeploymentContainer {
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<Container> {
     let InspectDeploymentContainer { deployment } = self;
-    let (deployment, server) = setup_deployment_execution(
+    let (deployment, swarm_or_server) = setup_deployment_execution(
       &deployment,
       user,
       PermissionLevel::Read.inspect(),
     )
     .await?;
+
+    let SwarmOrServer::Server(server) = swarm_or_server else {
+      return Err(
+        anyhow!(
+          "InspectDeploymentContainer should not be called for Deployment in Swarm Mode"
+        )
+        .status_code(StatusCode::BAD_REQUEST),
+      );
+    };
 
     let cache = server_status_cache()
       .get_or_insert_default(&server.id)
@@ -225,6 +303,40 @@ impl Resolve<ReadArgs> for InspectDeploymentContainer {
       .await
       .context("Failed to inspect container on server")
       .map_err(Into::into)
+  }
+}
+
+impl Resolve<ReadArgs> for InspectDeploymentSwarmService {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<SwarmService> {
+    let InspectDeploymentSwarmService { deployment } = self;
+    let (deployment, swarm_or_server) = setup_deployment_execution(
+      &deployment,
+      user,
+      PermissionLevel::Read.logs(),
+    )
+    .await?;
+
+    let SwarmOrServer::Swarm(swarm) = swarm_or_server else {
+      return Err(
+        anyhow!(
+          "InspectDeploymentSwarmService should only be called for Deployment in Swarm Mode"
+        )
+        .status_code(StatusCode::BAD_REQUEST),
+      );
+    };
+
+    swarm_request(
+      &swarm.config.server_ids,
+      periphery_client::api::swarm::InspectSwarmService {
+        service: deployment.name,
+      },
+    )
+    .await
+    .context("Failed to inspect service on swarm")
+    .map_err(Into::into)
   }
 }
 

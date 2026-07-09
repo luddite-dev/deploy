@@ -4,7 +4,10 @@ use anyhow::{Context, anyhow};
 use komodo_client::{
   api::read::*,
   entities::{
-    docker::container::Container,
+    SwarmOrServer,
+    docker::{
+      container::Container, service::SwarmService, stack::SwarmStack,
+    },
     permission::PermissionLevel,
     stack::{
       Stack, StackActionState, StackListItem, StackQuery,
@@ -12,14 +15,18 @@ use komodo_client::{
     },
   },
 };
+use mogh_error::AddStatusCodeError as _;
 use mogh_resolver::Resolve;
 use periphery_client::api::{
   compose::{GetComposeLog, GetComposeLogSearch},
   container::InspectContainer,
 };
+use reqwest::StatusCode;
 
 use crate::{
-  helpers::{periphery_client, query::get_all_tags},
+  helpers::{
+    periphery_client, query::get_all_tags, swarm::swarm_request,
+  },
   permission::get_check_permissions,
   resource,
   stack::setup_stack_execution,
@@ -73,11 +80,6 @@ impl Resolve<ReadArgs> for ListAllStackServices {
     self,
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<ListStackServicesResponse> {
-    let all_tags = if self.tags.is_empty() {
-      vec![]
-    } else {
-      get_all_tags(None).await?
-    };
     let stacks = resource::list_for_user::<Stack>(
       StackQuery::builder()
         .names(self.stacks.clone())
@@ -87,7 +89,7 @@ impl Resolve<ReadArgs> for ListAllStackServices {
       None,
       user,
       PermissionLevel::Read.into(),
-      &all_tags,
+      &[],
     )
     .await?;
 
@@ -95,14 +97,6 @@ impl Resolve<ReadArgs> for ListAllStackServices {
     let mut skipped = 0;
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     let limit_usize = limit as usize;
-    // Eg. page 1 skips until after 100 services, page 2 after 200.
-    let skip = limit.saturating_mul(self.page);
-    // Match terms case insensitively.
-    let terms = self
-      .services
-      .iter()
-      .map(|term| term.to_lowercase())
-      .collect::<Vec<_>>();
 
     for stack in stacks {
       let cache =
@@ -113,15 +107,13 @@ impl Resolve<ReadArgs> for ListAllStackServices {
           // Apply state filter if defined.
           (self.state.is_empty() || self.state.contains(&service.state)) &&
           // Apply terms filter if defined
-          (terms.is_empty()
+          (self.terms.is_empty()
             // Match when all terms contained within a name.
-            || {
-              let name = service.service.to_lowercase();
-              terms.iter().all(|term| name.contains(term))
-            })
+            || self.terms.iter().all(|term| service.service.contains(term)))
         });
       for service in more {
-        if skipped < skip {
+        if skipped < limit * self.page {
+          // Eg. page 1 skips until after 100 services, page 2 after 200.
           skipped += 1;
         } else {
           // push and maybe early return
@@ -144,27 +136,54 @@ impl Resolve<ReadArgs> for GetStackLog {
   ) -> mogh_error::Result<GetStackLogResponse> {
     let GetStackLog {
       stack,
-      services,
+      mut services,
       tail,
       timestamps,
     } = self;
-    let (stack, server) = setup_stack_execution(
+    let (stack, swarm_or_server) = setup_stack_execution(
       &stack,
       user,
       PermissionLevel::Read.logs(),
     )
     .await?;
 
-    let log = periphery_client(&server)
-      .await?
-      .request(GetComposeLog {
-        project: stack.project_name(false),
-        services,
-        tail,
-        timestamps,
-      })
-      .await
-      .context("Failed to get stack log from periphery")?;
+    swarm_or_server.verify_has_target()?;
+
+    let log = match swarm_or_server {
+      SwarmOrServer::None => unreachable!(),
+      SwarmOrServer::Swarm(swarm) => {
+        let service = services.pop().context(
+          "Must pass single service for Swarm mode Stack logs",
+        )?;
+        swarm_request(
+          &swarm.config.server_ids,
+          periphery_client::api::swarm::GetSwarmServiceLog {
+            // The actual service name on swarm will be stackname_servicename
+            service: format!(
+              "{}_{service}",
+              stack.project_name(false)
+            ),
+            tail,
+            timestamps,
+            no_task_ids: false,
+            no_resolve: false,
+            details: false,
+          },
+        )
+        .await
+        .context("Failed to get stack service log from swarm")?
+      }
+      SwarmOrServer::Server(server) => periphery_client(&server)
+        .await?
+        .request(GetComposeLog {
+          project: stack.project_name(false),
+          services,
+          tail,
+          timestamps,
+        })
+        .await
+        .context("Failed to get stack log from periphery")?,
+    };
 
     Ok(log)
   }
@@ -177,31 +196,56 @@ impl Resolve<ReadArgs> for SearchStackLog {
   ) -> mogh_error::Result<SearchStackLogResponse> {
     let SearchStackLog {
       stack,
-      services,
+      mut services,
       terms,
       combinator,
       invert,
       timestamps,
     } = self;
-    let (stack, server) = setup_stack_execution(
+    let (stack, swarm_or_server) = setup_stack_execution(
       &stack,
       user,
       PermissionLevel::Read.logs(),
     )
     .await?;
 
-    let log = periphery_client(&server)
-      .await?
-      .request(GetComposeLogSearch {
-        project: stack.project_name(false),
-        services,
-        terms,
-        combinator,
-        invert,
-        timestamps,
-      })
-      .await
-      .context("Failed to search stack log from periphery")?;
+    swarm_or_server.verify_has_target()?;
+
+    let log = match swarm_or_server {
+      SwarmOrServer::None => unreachable!(),
+      SwarmOrServer::Swarm(swarm) => {
+        let service = services.pop().context(
+          "Must pass single service for Swarm mode Stack logs",
+        )?;
+        swarm_request(
+          &swarm.config.server_ids,
+          periphery_client::api::swarm::GetSwarmServiceLogSearch {
+            service,
+            terms,
+            combinator,
+            invert,
+            timestamps,
+            no_task_ids: false,
+            no_resolve: false,
+            details: false,
+          },
+        )
+        .await
+        .context("Failed to get stack service log from swarm")?
+      }
+      SwarmOrServer::Server(server) => periphery_client(&server)
+        .await?
+        .request(GetComposeLogSearch {
+          project: stack.project_name(false),
+          services,
+          terms,
+          combinator,
+          invert,
+          timestamps,
+        })
+        .await
+        .context("Failed to search stack log from periphery")?,
+    };
 
     Ok(log)
   }
@@ -213,12 +257,21 @@ impl Resolve<ReadArgs> for InspectStackContainer {
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<Container> {
     let InspectStackContainer { stack, service } = self;
-    let (stack, server) = setup_stack_execution(
+    let (stack, swarm_or_server) = setup_stack_execution(
       &stack,
       user,
       PermissionLevel::Read.inspect(),
     )
     .await?;
+
+    let SwarmOrServer::Server(server) = swarm_or_server else {
+      return Err(
+        anyhow!(
+          "InspectStackContainer should not be called for Stack in Swarm Mode"
+        )
+        .status_code(StatusCode::BAD_REQUEST),
+      );
+    };
 
     let services = &stack_status_cache()
       .get(&stack.id)
@@ -244,6 +297,90 @@ impl Resolve<ReadArgs> for InspectStackContainer {
       .context("Failed to inspect container on server")?;
 
     Ok(res)
+  }
+}
+
+impl Resolve<ReadArgs> for InspectStackSwarmService {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<SwarmService> {
+    let InspectStackSwarmService { stack, service } = self;
+    let (stack, swarm_or_server) = setup_stack_execution(
+      &stack,
+      user,
+      PermissionLevel::Read.inspect(),
+    )
+    .await?;
+
+    let SwarmOrServer::Swarm(swarm) = swarm_or_server else {
+      return Err(
+        anyhow!(
+          "InspectStackSwarmService should only be called for Stack in Swarm Mode"
+        )
+        .status_code(StatusCode::BAD_REQUEST),
+      );
+    };
+
+    let services = &stack_status_cache()
+      .get(&stack.id)
+      .await
+      .unwrap_or_default()
+      .curr
+      .services;
+
+    let Some(service) = services
+      .iter()
+      .find(|s| s.service == service)
+      .and_then(|s| {
+        s.swarm_service.as_ref().and_then(|c| c.name.clone())
+      })
+    else {
+      return Err(anyhow!(
+        "No service found matching '{service}'. Was the stack last deployed manually?"
+      ).into());
+    };
+
+    swarm_request(
+      &swarm.config.server_ids,
+      periphery_client::api::swarm::InspectSwarmService { service },
+    )
+    .await
+    .context("Failed to inspect service on swarm")
+    .map_err(Into::into)
+  }
+}
+
+impl Resolve<ReadArgs> for InspectStackSwarmInfo {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<SwarmStack> {
+    let (stack, swarm_or_server) = setup_stack_execution(
+      &self.stack,
+      user,
+      PermissionLevel::Read.inspect(),
+    )
+    .await?;
+
+    let SwarmOrServer::Swarm(swarm) = swarm_or_server else {
+      return Err(
+        anyhow!(
+          "InspectStackSwarmInfo should only be called for Stack in Swarm Mode"
+        )
+        .status_code(StatusCode::BAD_REQUEST),
+      );
+    };
+
+    swarm_request(
+      &swarm.config.server_ids,
+      periphery_client::api::swarm::InspectSwarmStack {
+        stack: stack.project_name(false),
+      },
+    )
+    .await
+    .context("Failed to inspect stack info on swarm")
+    .map_err(Into::into)
   }
 }
 
@@ -330,24 +467,47 @@ impl Resolve<ReadArgs> for ListStacks {
       get_all_tags(None).await?
     };
     let only_update_available = self.query.specific.update_available;
+    let states = self.query.specific.states.clone();
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    let stacks = resource::list_items_for_user::<Stack>(
+    // Update available / state are computed in memory rather than
+    // stored on the db. When filtering on them, the db level
+    // pagination must be disabled, and applied in memory
+    // after the filters.
+    let use_db_pagination =
+      !only_update_available && states.is_empty();
+    let (db_limit, db_skip) = if use_db_pagination {
+      (limit, self.page * limit)
+    } else {
+      (0, 0)
+    };
+    let stacks = resource::list_for_user::<Stack>(
       self.query,
-      limit,
-      self.page,
+      db_limit as i64,
+      db_skip,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-      |stack| {
-        !only_update_available
-          || stack
-            .info
-            .services
-            .iter()
-            .any(|service| service.update_available)
-      },
     )
     .await?;
+    let stacks = if use_db_pagination {
+      stacks
+    } else {
+      resource::filter_list_items_paginated(
+        stacks,
+        |stack| {
+          (!only_update_available
+            || stack
+              .info
+              .services
+              .iter()
+              .any(|service| service.update_available))
+            && (states.is_empty()
+              || states.contains(&stack.info.state))
+        },
+        limit,
+        self.page,
+      )
+    };
     Ok(stacks)
   }
 }

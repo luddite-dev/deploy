@@ -53,17 +53,34 @@ impl Resolve<ReadArgs> for ListBuilds {
     } else {
       get_all_tags(None).await?
     };
+    let states = self.query.specific.states.clone();
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    let builds = resource::list_items_for_user::<Build>(
+    // When filtering by state, the db level pagination must be
+    // disabled, and applied in memory after the state filter.
+    let (db_limit, db_skip) = if states.is_empty() {
+      (limit, self.page * limit)
+    } else {
+      (0, 0)
+    };
+    let builds = resource::list_for_user::<Build>(
       self.query,
-      limit,
-      self.page,
+      db_limit as i64,
+      db_skip,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-      |_| true,
     )
     .await?;
+    let builds = if states.is_empty() {
+      builds
+    } else {
+      resource::filter_list_items_paginated(
+        builds,
+        |build| states.contains(&build.info.state),
+        limit,
+        self.page,
+      )
+    };
     Ok(builds)
   }
 }
@@ -172,8 +189,7 @@ impl Resolve<ReadArgs> for GetBuildMonthlyStats {
     let curr_ts = unix_timestamp_ms() as i64;
     let next_day = curr_ts - curr_ts % ONE_DAY_MS + ONE_DAY_MS;
 
-    let close_ts =
-      next_day - (self.page as i64).saturating_mul(30 * ONE_DAY_MS);
+    let close_ts = next_day - self.page as i64 * 30 * ONE_DAY_MS;
     let open_ts = close_ts - 30 * ONE_DAY_MS;
 
     let mut build_updates = db_client()
