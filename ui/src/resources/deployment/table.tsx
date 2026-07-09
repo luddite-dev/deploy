@@ -1,4 +1,4 @@
-import { useResourceName, useSelectedResources } from "@/lib/hooks";
+import { useSelectedResources } from "@/lib/hooks";
 import { Types } from "komodo_client";
 import { ICONS } from "@/lib/icons";
 import { Group, BoxProps } from "@mantine/core";
@@ -14,8 +14,6 @@ export default function DeploymentTable({
 }: {
   resources: Types.DeploymentListItem[];
 } & BoxProps) {
-  const serverName = useResourceName("Server");
-
   const [_, setSelectedResources] = useSelectedResources("Deployment");
 
   return (
@@ -61,8 +59,8 @@ export default function DeploymentTable({
           ),
           accessorKey: "info.server_id",
           sortingFn: (a, b) => {
-            const name_a = serverName(a.original.info.server_id);
-            const name_b = serverName(b.original.info.server_id);
+            const name_a = a.original.info.server_name;
+            const name_b = b.original.info.server_name;
 
             if (!name_a && !name_b) return 0;
             if (!name_a) return 1;
