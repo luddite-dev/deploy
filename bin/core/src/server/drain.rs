@@ -11,24 +11,28 @@ use interpolate::Interpolator;
 use komodo_client::entities::{
   build::{Build, ImageRegistryConfig},
   deployment::{
-    Deployment, DeploymentImage, MigrationState,
-    extract_registry_domain,
+    Deployment, DeploymentImage, extract_registry_domain,
   },
+  repo::Repo,
   server::{Server, ServerDesiredState, ServerState},
   stack::Stack,
 };
 use periphery_client::api::{
+  compose::{ComposeExecution, ComposeUp},
   container::{RemoveContainer, RunContainer},
   placement::ReadContainerPorts,
   volume_backup::RestoreVolume,
 };
 
 use crate::{
-  backup::{backup_deployment_volumes, backup_destination},
+  backup::{
+    backup_deployment_volumes, backup_destination,
+    backup_stack_volumes, parse_stack_volumes,
+  },
   helpers::{
     periphery_client,
     query::{VariablesAndSecrets, get_variables_and_secrets},
-    registry_token,
+    registry_token, stack_git_token,
   },
   placement, resource,
   state::db_client,
@@ -78,47 +82,48 @@ async fn tick() -> anyhow::Result<()> {
     )
     .await?;
 
-    if deployments.is_empty() {
-      let stacks: Vec<Stack> = find_collect(
-        &db_client().stacks,
-        doc! {
-          "info.assigned_server": &server.id,
-          "info.migration_state": Bson::Null,
-        },
+    // Find idle (non-migrating) stacks on this server, in parallel.
+    let stacks: Vec<Stack> = find_collect(
+      &db_client().stacks,
+      doc! {
+        "info.assigned_server": &server.id,
+        "info.migration_state": Bson::Null,
+      },
+      None,
+    )
+    .await?;
+
+    if deployments.is_empty() && stacks.is_empty() {
+      update_one_by_id(
+        &db_client().servers,
+        &server.id,
+        Update::Set(doc! { "info.state": "Drained" }),
         None,
       )
       .await?;
-
-      if stacks.is_empty() {
-        update_one_by_id(
-          &db_client().servers,
-          &server.id,
-          Update::Set(doc! { "info.state": "Drained" }),
-          None,
-        )
-        .await?;
-        continue;
-      }
-
-      if let Err(e) = migrate_stack(&stacks[0].id, None).await {
-        tracing::warn!(
-          "Stack migration failed for {}: {e}",
-          stacks[0].id
-        );
-        mark_stack_failed(&stacks[0].id, &e.to_string()).await;
-      }
       continue;
     }
 
-    if let Err(e) = migrate_deployment(&deployments[0].id, None).await
-    {
-      tracing::warn!(
-        "Deployment migration failed for {}: {e:#}",
-        deployments[0].id
-      );
-      mark_deployment_failed(&deployments[0].id, &e.to_string())
-        .await;
+    if let Some(deployment) = deployments.first() {
+      if let Err(e) = migrate_deployment(&deployment.id, None).await {
+        tracing::warn!(
+          "Deployment migration failed for {}: {e}",
+          deployment.id
+        );
+        mark_deployment_failed(&deployment.id, &e.to_string()).await;
+      }
     }
+
+    if let Some(stack) = stacks.first() {
+      if let Err(e) = migrate_stack(&stack.id, None).await {
+        tracing::warn!(
+          "Stack migration failed for {}: {e}",
+          stack.id
+        );
+        mark_stack_failed(&stack.id, &e.to_string()).await;
+      }
+    }
+    continue;
   }
 
   Ok(())
@@ -376,12 +381,186 @@ pub async fn migrate_deployment(
 }
 
 pub async fn migrate_stack(
-  _stack_id: &str,
+  stack_id: &str,
   _target_server_id: Option<&str>,
 ) -> anyhow::Result<()> {
-  todo!(
-    "Stack migration — same pattern as migrate_deployment but using ComposeUp"
+  let mut stack: Stack = find_collect(
+    &db_client().stacks,
+    doc! { "_id": ObjectId::from_str(stack_id)
+    .context("Invalid stack id ObjectId")? },
+    None,
   )
+  .await?
+  .into_iter()
+  .next()
+  .context("Stack not found")?;
+
+  let source_server_id = stack.info.assigned_server.clone();
+
+  // Step 1: Mark as migrating.
+  let migration_doc = doc! {
+    "type": "Migrating",
+    "params": {
+      "target_server_id": _target_server_id.unwrap_or(""),
+      "started_at": chrono::Utc::now().timestamp(),
+    }
+  };
+  update_one_by_id(
+    &db_client().stacks,
+    stack_id,
+    Update::Set(doc! { "info.migration_state": migration_doc }),
+    None,
+  )
+  .await?;
+
+  // Step 2: Backup volumes on source.
+  if !stack.config.file_contents.is_empty() {
+    backup_stack_volumes(stack_id)
+      .await
+      .context("Backup failed during stack migration")?;
+    // Re-fetch the stack so we see the fresh last_backup map.
+    stack = find_collect(
+      &db_client().stacks,
+      doc! { "_id": ObjectId::from_str(stack_id)
+      .context("Invalid stack id ObjectId")? },
+      None,
+    )
+    .await?
+    .into_iter()
+    .next()
+    .context("Stack not found after backup")?;
+  }
+
+  // Step 3: Pick target. Stacks use compose files (no typed port list),
+  // so we pick any healthy server.
+  let target_id =
+    placement::pick_target(&[], _target_server_id.unwrap_or(""))
+      .await
+      .context("Failed to pick target for stack migration")?;
+
+  let target_server: Server = find_collect(
+    &db_client().servers,
+    doc! { "_id": ObjectId::from_str(&target_id)
+    .context("Invalid target server id ObjectId")? },
+    None,
+  )
+  .await?
+  .into_iter()
+  .next()
+  .context("Target server not found")?;
+  let target_periphery = periphery_client(&target_server).await?;
+
+  // Step 4: Restore volumes on target.
+  let dest = backup_destination()
+    .context("Backup destination not configured")?;
+  let volumes = parse_stack_volumes(&stack.config.file_contents)?;
+  for vol_name in &volumes {
+    let last_backup =
+      stack.info.last_backup.get(vol_name).with_context(|| {
+        format!("No backup found for volume {}", vol_name)
+      })?;
+    target_periphery
+      .request(RestoreVolume {
+        deployment_id: stack_id.to_string(),
+        volume_name: vol_name.clone(),
+        source_key: last_backup.s3_key.clone(),
+        destination: dest.clone(),
+      })
+      .await
+      .context(format!(
+        "RestoreVolume RPC failed for vol {}",
+        vol_name
+      ))?;
+  }
+
+  // Step 5: Reassign to target.
+  update_one_by_id(
+    &db_client().stacks,
+    stack_id,
+    Update::Set(doc! { "config.server_id": &target_id }),
+    None,
+  )
+  .await?;
+  stack.config.server_id = target_id.clone();
+
+  // Step 6: Deploy on target via ComposeUp.
+  let mut repo = if !stack.config.files_on_host
+    && !stack.config.linked_repo.is_empty()
+  {
+    resource::get::<Repo>(&stack.config.linked_repo)
+      .await?
+      .into()
+  } else {
+    None
+  };
+
+  let git_token = stack_git_token(&mut stack, repo.as_mut()).await?;
+  let registry_token = registry_token(
+    &stack.config.registry_provider,
+    &stack.config.registry_account,
+  )
+  .await?;
+
+  let replacers = if !stack.config.skip_secret_interp {
+    let VariablesAndSecrets { variables, secrets } =
+      get_variables_and_secrets().await?;
+    let mut interpolator =
+      Interpolator::new(Some(&variables), &secrets);
+    interpolator.interpolate_stack(&mut stack)?;
+    interpolator.secret_replacers.into_iter().collect()
+  } else {
+    Vec::new()
+  };
+
+  target_periphery
+    .request(ComposeUp {
+      stack: stack.clone(),
+      services: Vec::new(),
+      repo,
+      git_token,
+      registry_token,
+      replacers,
+    })
+    .await
+    .context("Failed to deploy stack on target during migration")?;
+
+  // Step 7: Destroy on source (best-effort; source may be unreachable).
+  if !source_server_id.is_empty() {
+    let source_server: Option<Server> = find_collect(
+      &db_client().servers,
+      doc! { "_id": ObjectId::from_str(&source_server_id).ok() },
+      None,
+    )
+    .await?
+    .into_iter()
+    .next();
+    if let Some(source_server) = source_server {
+      if let Ok(source_periphery) =
+        periphery_client(&source_server).await
+      {
+        let _ = source_periphery
+          .request(ComposeExecution {
+            project: stack.project_name(false),
+            command: "down".to_string(),
+          })
+          .await;
+      }
+    }
+  }
+
+  // Step 8: Commit — set assigned_server, clear migration_state.
+  update_one_by_id(
+    &db_client().stacks,
+    stack_id,
+    Update::Set(doc! {
+      "info.assigned_server": &target_id,
+      "info.migration_state": Bson::Null,
+    }),
+    None,
+  )
+  .await?;
+
+  Ok(())
 }
 
 async fn mark_deployment_failed(deployment_id: &str, reason: &str) {
@@ -416,11 +595,4 @@ async fn mark_stack_failed(stack_id: &str, reason: &str) {
     None,
   )
   .await;
-}
-
-#[allow(dead_code)]
-fn _assert_migration_state_shape() {
-  // Compile-time check that we keep MigrationState referenced so the import
-  // isn't dropped when the todo!() in migrate_stack is the only other use.
-  let _ = std::marker::PhantomData::<MigrationState>;
 }
