@@ -9,3 +9,9 @@ deno.lock
 .dev
 .compose
 .worktrees
+tests/integration/config.toml
+tests/integration/.venv/
+tests/integration/.pytest_cache/
+__pycache__/
+*.egg-info/
+*.pyc

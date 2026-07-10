@@ -1,0 +1,28 @@
+# Integration test configuration.
+# Copy to config.toml and fill in your infrastructure details.
+# The test suite cleans up all test-* resources before and after each run.
+
+[core]
+url      = "http://luddite.dev:9120"
+username = "admin"
+password = "testpass123"
+
+[mongo]
+host     = "127.0.0.1"
+port     = 27018           # SSH tunnel to FerretDB
+username = "admin"
+password = "admin"
+db_name  = "komodo"
+
+[ssh]
+key_path = "~/.ssh/id_loluet"
+
+[servers.ac]
+host      = "luddite.dev"
+user      = "ac"
+server_id = "6a3d5c18cf454b0935db7820"  # MongoDB ObjectId of the Server entity
+
+[servers.runner]
+host      = "45.86.125.236"
+user      = "root"
+server_id = "6a3d5d5bcf454b0935db7865"

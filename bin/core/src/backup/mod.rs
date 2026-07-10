@@ -173,6 +173,7 @@ pub async fn backup_stack_volumes(
   .context("Server not found for assigned_server")?;
   let periphery = periphery_client(&server).await?;
 
+  let project = stack.project_name(false);
   let volumes = parse_stack_volumes(&stack.config.file_contents)?;
   let max_backups = stack
     .config
@@ -181,11 +182,13 @@ pub async fn backup_stack_volumes(
     .map(|b: &BackupConfig| b.max_backups)
     .unwrap_or(7);
 
-  for vol_name in volumes {
+  for vol_name in &volumes {
+    // podman-compose creates named volumes as <project>_<volume_name>.
+    let podman_vol_name = format!("{project}_{vol_name}");
     let result = periphery
       .request(BackupVolume {
         deployment_id: stack_id.to_string(),
-        volume_name: vol_name.clone(),
+        volume_name: podman_vol_name,
         destination: dest.clone(),
       })
       .await
@@ -215,7 +218,7 @@ pub async fn backup_stack_volumes(
     enforce_retention(
       &periphery,
       stack_id,
-      &vol_name,
+      &format!("{project}_{vol_name}"),
       &dest,
       max_backups,
     )

@@ -359,14 +359,16 @@ async fn validate_config(
     .context("Cannot attach Deployment to this Server")?;
     config.server_id = Some(server.id);
   }
+  // Only run the placement scheduler when server_id was explicitly part
+  // of this partial config (Some). If it's None the caller didn't touch
+  // server_id, so re-running the scheduler would overwrite the existing
+  // assignment.
+  if config.server_id.is_none() {
+    return Ok(());
+  }
   // Placement scheduling. The user's `config.server_id` (possibly empty)
   // is treated as a hint; the scheduler probes candidate periphery nodes
   // for free host ports and picks one.
-  //
-  // TODO(Task 8): preserve the user's original hint here (empty-or-set)
-  // and write only `info.assigned_server` from the chosen id. For now we
-  // stash the chosen id back into `config.server_id` so post_create /
-  // post_update can copy it to `info.assigned_server`.
   let hint = config.server_id.clone().unwrap_or_default();
   let fixed_ports: Vec<u16> = config
     .ports

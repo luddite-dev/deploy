@@ -649,10 +649,10 @@ impl Resolve<WriteArgs> for RefreshStackCache {
       remote_errors,
       latest_hash,
       latest_message,
-      assigned_server: Default::default(),
-      host_ports: Default::default(),
-      last_backup: Default::default(),
-      migration_state: Default::default(),
+      assigned_server: stack.info.assigned_server.clone(),
+      host_ports: stack.info.host_ports.clone(),
+      last_backup: stack.info.last_backup.clone(),
+      migration_state: stack.info.migration_state.clone(),
     };
 
     let info = to_document(&info)

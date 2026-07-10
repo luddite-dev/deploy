@@ -343,7 +343,7 @@ pub async fn migrate_deployment(
   if !source_server_id.is_empty() {
     let source_server: Option<Server> = find_collect(
       &db_client().servers,
-      doc! { "_id": source_server_id.clone() },
+      doc! { "_id": ObjectId::from_str(&source_server_id).ok() },
       None,
     )
     .await?
@@ -453,16 +453,18 @@ pub async fn migrate_stack(
   // Step 4: Restore volumes on target.
   let dest = backup_destination()
     .context("Backup destination not configured")?;
+  let project = stack.project_name(false);
   let volumes = parse_stack_volumes(&stack.config.file_contents)?;
   for vol_name in &volumes {
     let last_backup =
       stack.info.last_backup.get(vol_name).with_context(|| {
         format!("No backup found for volume {}", vol_name)
       })?;
+    let podman_vol_name = format!("{project}_{vol_name}");
     target_periphery
       .request(RestoreVolume {
         deployment_id: stack_id.to_string(),
-        volume_name: vol_name.clone(),
+        volume_name: podman_vol_name,
         source_key: last_backup.s3_key.clone(),
         destination: dest.clone(),
       })

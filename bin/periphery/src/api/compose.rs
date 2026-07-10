@@ -810,10 +810,17 @@ impl Resolve<crate::api::Args> for ComposeExecution {
   ) -> anyhow::Result<Log> {
     let ComposeExecution { project, command } = self;
     let docker_compose = docker_compose();
+    // Set the working directory to the stack's directory so podman-compose
+    // can find the compose file written during ComposeUp.
+    let stack_dir = periphery_config().stack_dir().join(&project);
+    let mut opts = CommandOptions::default();
+    if stack_dir.is_dir() {
+      opts = opts.path(stack_dir.as_path());
+    }
     let log = run_komodo_standard_command(
       "Compose Command",
       format!("{docker_compose} -p {project} {command}"),
-      CommandOptions::default(),
+      opts,
     )
     .await;
     Ok(log)
