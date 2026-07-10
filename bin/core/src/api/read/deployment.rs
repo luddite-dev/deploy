@@ -56,23 +56,20 @@ impl Resolve<ReadArgs> for ListDeployments {
     };
     let only_update_available = self.query.specific.update_available;
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    let deployments = resource::list_for_user::<Deployment>(
+    let deployments = resource::list_items_for_user::<Deployment>(
       self.query,
-      limit as i64,
-      self.page * limit,
+      limit,
+      self.page,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
+      |deployment| {
+        (!only_update_available || deployment.info.update_available)
+          && (states.is_empty()
+            || states.contains(&deployment.info.state))
+      },
     )
     .await?;
-    let deployments = if only_update_available {
-      deployments
-        .into_iter()
-        .filter(|deployment| deployment.info.update_available)
-        .collect()
-    } else {
-      deployments
-    };
     Ok(deployments)
   }
 }

@@ -17,7 +17,7 @@ use database::{
   },
 };
 use formatting::format_serror;
-use futures_util::future::join_all;
+use futures_util::{TryStreamExt, future::join_all};
 use indexmap::IndexSet;
 use komodo_client::{
   api::{read::ExportResourcesToToml, write::CreateTag},
@@ -274,6 +274,69 @@ pub async fn list_all_resources<T: KomodoResource>(
     .with_context(|| {
       format!("Failed to pull {}s from mongo", T::resource_type())
     })
+}
+
+/// List item pagination for the `List<Resource>` apis, driving the
+/// mongo cursor directly instead of collecting the full resource
+/// list in memory. Each resource pulled from the cursor is checked
+/// against the user permissions and converted to its list item, and
+/// `filter` is applied before the item counts toward `limit` / `page`.
+/// This is required because some list item fields (eg. state,
+/// update available) are computed from in-memory caches rather than
+/// stored on the database, so they cannot be part of the db query.
+/// Stops pulling from the cursor as soon as the page is full.
+pub async fn list_items_for_user<T: KomodoResource>(
+  mut query: ResourceQuery<T::QuerySpecifics>,
+  limit: u64,
+  page: u64,
+  user: &User,
+  permission: PermissionLevelAndSpecifics,
+  all_tags: &[Tag],
+  filter: impl Fn(&T::ListItem) -> bool,
+) -> anyhow::Result<Vec<T::ListItem>> {
+  validate_resource_query_tags(&mut query, all_tags)?;
+  let mut filters = Document::new();
+  query.add_filters(&mut filters);
+
+  let mut permits =
+    crate::permission::load_list_permits::<T>(user, permission)
+      .await?;
+
+  let mut cursor = T::coll()
+    .find(filters)
+    .sort(doc! { "name": 1 })
+    .await
+    .with_context(|| {
+      format!("Failed to query db for {}s", T::resource_type())
+    })?;
+
+  let skip = page * limit;
+  let mut skipped = 0;
+  let mut items = Vec::new();
+
+  while let Some(resource) = cursor
+    .try_next()
+    .await
+    .context("Failed to pull next resource from db cursor")?
+  {
+    if !permits.permitted::<T>(&resource).await? {
+      continue;
+    }
+    let item = T::to_list_item(resource).await;
+    if !filter(&item) {
+      continue;
+    }
+    if skipped < skip {
+      skipped += 1;
+      continue;
+    }
+    items.push(item);
+    if limit != 0 && items.len() as u64 >= limit {
+      break;
+    }
+  }
+
+  Ok(items)
 }
 
 pub async fn list_for_user<T: KomodoResource>(
