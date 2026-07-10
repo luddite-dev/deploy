@@ -475,14 +475,16 @@ pub async fn check_deployment_for_update_inner(
     .get(server, image, account, token)
     .await?;
 
+  // Preserve scheduler-set fields (assigned_server, host_ports, last_backup)
+  // and migration_state — update_info replaces the entire info document.
   resource::update_info::<Deployment>(
     &deployment.id,
     &DeploymentInfo {
       latest_image_digest: latest_digest.clone(),
-      assigned_server: Default::default(),
-      host_ports: Default::default(),
-      last_backup: Default::default(),
-      migration_state: Default::default(),
+      assigned_server: deployment.info.assigned_server.clone(),
+      host_ports: deployment.info.host_ports.clone(),
+      last_backup: deployment.info.last_backup.clone(),
+      migration_state: deployment.info.migration_state.clone(),
     },
   )
   .await?;
