@@ -117,9 +117,7 @@ impl Resolve<ReadArgs> for ListServers {
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-      |server| {
-        states.is_empty() || states.contains(&server.info.state)
-      },
+      |_| true,
     )
     .await?;
     Ok(servers)

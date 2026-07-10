@@ -53,9 +53,7 @@ impl Resolve<ReadArgs> for ListActions {
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-      |action| {
-        states.is_empty() || states.contains(&action.info.state)
-      },
+      |_| true,
     )
     .await?;
     Ok(actions)
