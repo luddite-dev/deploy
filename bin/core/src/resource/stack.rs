@@ -449,15 +449,17 @@ async fn validate_config(
     )
     .context("Invalid compose file")?;
   }
+  // Only run the placement scheduler when server_id was explicitly part
+  // of this partial config (Some). If it's None the caller didn't touch
+  // server_id, so re-running the scheduler would overwrite the existing
+  // assignment.
+  if config.server_id.is_none() {
+    return Ok(());
+  }
   // Placement scheduling. Stacks carry their service ports inside the
   // compose YAML rather than typed PortMappings, so fixed-port detection
   // is deferred to compose parsing (Task 5). For now we run pick_target
   // with no fixed ports: any healthy server is eligible.
-  //
-  // TODO(Task 5): extract fixed_ports from compose YAML.
-  // TODO(Task 8): preserve the user's original hint here and write only
-  // info.assigned_server. For now we stash the chosen id back into
-  // config.server_id so post_create / post_update can copy it across.
   let hint = config.server_id.clone().unwrap_or_default();
   let chosen = crate::placement::pick_target(&[], &hint)
     .await
