@@ -51,7 +51,7 @@ impl Resolve<ReadArgs> for ListRepos {
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-      |repo| states.is_empty() || states.contains(&repo.info.state),
+      |_| true,
     )
     .await?;
     Ok(repos)

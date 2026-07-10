@@ -51,9 +51,7 @@ impl Resolve<ReadArgs> for ListProcedures {
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-      |procedure| {
-        states.is_empty() || states.contains(&procedure.info.state)
-      },
+      |_| true,
     )
     .await?;
     Ok(procedures)
