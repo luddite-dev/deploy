@@ -223,6 +223,23 @@ export function useOmniSearch(opened: boolean): {
       }),
 
       {
+        group: "Services",
+        actions:
+          services?.map((service) => {
+            const intention = containerStateIntention(service?.container?.state);
+            const color = hexColorByIntention(intention);
+            return {
+              id: service.stack_id + " " + service.service,
+              label: service.service,
+              description: "Stack: " + service.stack_name,
+              onClick: () =>
+                nav(`/stacks/${service.stack_id}/service/${service.service}`),
+              leftSection: <ICONS.Service size="1.3rem" color={color} />,
+            };
+          }) ?? [],
+      },
+
+      {
         group: "Containers",
         actions:
           containers?.map((container) => ({
@@ -241,23 +258,6 @@ export function useOmniSearch(opened: boolean): {
               />
             ),
           })) ?? [],
-      },
-
-      {
-        group: "Services",
-        actions:
-          services?.map((service) => {
-            const intention = containerStateIntention(service?.container?.state);
-            const color = hexColorByIntention(intention);
-            return {
-              id: service.stack_id + " " + service.service,
-              label: service.service,
-              description: "Stack: " + service.stack_name,
-              onClick: () =>
-                nav(`/stacks/${service.stack_id}/service/${service.service}`),
-              leftSection: <ICONS.Service size="1.3rem" color={color} />,
-            };
-          }) ?? [],
       },
 
       {
