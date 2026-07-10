@@ -46,17 +46,19 @@ impl Resolve<ReadArgs> for ListActions {
       get_all_tags(None).await?
     };
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    Ok(
-      resource::list_for_user::<Action>(
-        self.query,
-        limit as i64,
-        self.page * limit,
-        user,
-        PermissionLevel::Read.into(),
-        &all_tags,
-      )
-      .await?,
+    let actions = resource::list_items_for_user::<Action>(
+      self.query,
+      limit,
+      self.page,
+      user,
+      PermissionLevel::Read.into(),
+      &all_tags,
+      |action| {
+        states.is_empty() || states.contains(&action.info.state)
+      },
     )
+    .await?;
+    Ok(actions)
   }
 }
 

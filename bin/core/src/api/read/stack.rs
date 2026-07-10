@@ -327,29 +327,24 @@ impl Resolve<ReadArgs> for ListStacks {
     };
     let only_update_available = self.query.specific.update_available;
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    let stacks = resource::list_for_user::<Stack>(
+    let stacks = resource::list_items_for_user::<Stack>(
       self.query,
-      limit as i64,
-      self.page * limit,
+      limit,
+      self.page,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-    )
-    .await?;
-    let stacks = if only_update_available {
-      stacks
-        .into_iter()
-        .filter(|stack| {
-          stack
+      |stack| {
+        (!only_update_available
+          || stack
             .info
             .services
             .iter()
-            .any(|service| service.update_available)
-        })
-        .collect()
-    } else {
-      stacks
-    };
+            .any(|service| service.update_available))
+          && (states.is_empty() || states.contains(&stack.info.state))
+      },
+    )
+    .await?;
     Ok(stacks)
   }
 }

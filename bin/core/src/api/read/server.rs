@@ -110,17 +110,19 @@ impl Resolve<ReadArgs> for ListServers {
       get_all_tags(None).await?
     };
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    Ok(
-      resource::list_for_user::<Server>(
-        self.query,
-        limit as i64,
-        self.page * limit,
-        user,
-        PermissionLevel::Read.into(),
-        &all_tags,
-      )
-      .await?,
+    let servers = resource::list_items_for_user::<Server>(
+      self.query,
+      limit,
+      self.page,
+      user,
+      PermissionLevel::Read.into(),
+      &all_tags,
+      |server| {
+        states.is_empty() || states.contains(&server.info.state)
+      },
     )
+    .await?;
+    Ok(servers)
   }
 }
 
