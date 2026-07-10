@@ -3,7 +3,9 @@ use komodo_client::{
   api::read::*,
   entities::{
     permission::PermissionLevel,
-    procedure::{Procedure, ProcedureState},
+    procedure::{
+      Procedure, ProcedureListItem, ProcedureSortBy, ProcedureState,
+    },
   },
 };
 use mogh_resolver::Resolve;
@@ -45,32 +47,34 @@ impl Resolve<ReadArgs> for ListProcedures {
     };
     let states = self.query.specific.states.clone();
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    // When filtering by state, the db level pagination must be
-    // disabled, and applied in memory after the state filter.
-    let (db_limit, db_skip) = if states.is_empty() {
-      (limit, self.page * limit)
-    } else {
-      (0, 0)
-    };
-    let procedures = resource::list_for_user::<Procedure>(
+    let sort_by: resource::ListItemSort<ProcedureListItem> =
+      match self.sort_by {
+        ProcedureSortBy::Name => resource::ListItemSort::Name,
+        ProcedureSortBy::State => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info.state.to_string().cmp(&b.info.state.to_string())
+          }))
+        }
+        ProcedureSortBy::NextRun => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info.next_scheduled_run.cmp(&b.info.next_scheduled_run)
+          }))
+        }
+      };
+    let procedures = resource::list_items_for_user::<Procedure>(
       self.query,
-      db_limit as i64,
-      db_skip,
+      limit,
+      self.page,
+      self.sort_desc,
+      sort_by,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
+      |procedure| {
+        states.is_empty() || states.contains(&procedure.info.state)
+      },
     )
     .await?;
-    let procedures = if states.is_empty() {
-      procedures
-    } else {
-      resource::filter_list_items_paginated(
-        procedures,
-        |procedure| states.contains(&procedure.info.state),
-        limit,
-        self.page,
-      )
-    };
     Ok(procedures)
   }
 }

@@ -3,7 +3,8 @@ use komodo_client::{
   api::read::*,
   entities::{
     action::{
-      Action, ActionActionState, ActionListItem, ActionState,
+      Action, ActionActionState, ActionListItem, ActionSortBy,
+      ActionState,
     },
     permission::PermissionLevel,
   },
@@ -47,32 +48,34 @@ impl Resolve<ReadArgs> for ListActions {
     };
     let states = self.query.specific.states.clone();
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    // When filtering by state, the db level pagination must be
-    // disabled, and applied in memory after the state filter.
-    let (db_limit, db_skip) = if states.is_empty() {
-      (limit, self.page * limit)
-    } else {
-      (0, 0)
-    };
-    let actions = resource::list_for_user::<Action>(
+    let sort_by: resource::ListItemSort<ActionListItem> =
+      match self.sort_by {
+        ActionSortBy::Name => resource::ListItemSort::Name,
+        ActionSortBy::State => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info.state.to_string().cmp(&b.info.state.to_string())
+          }))
+        }
+        ActionSortBy::NextRun => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info.next_scheduled_run.cmp(&b.info.next_scheduled_run)
+          }))
+        }
+      };
+    let actions = resource::list_items_for_user::<Action>(
       self.query,
-      db_limit as i64,
-      db_skip,
+      limit,
+      self.page,
+      self.sort_desc,
+      sort_by,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
+      |action| {
+        states.is_empty() || states.contains(&action.info.state)
+      },
     )
     .await?;
-    let actions = if states.is_empty() {
-      actions
-    } else {
-      resource::filter_list_items_paginated(
-        actions,
-        |action| states.contains(&action.info.state),
-        limit,
-        self.page,
-      )
-    };
     Ok(actions)
   }
 }

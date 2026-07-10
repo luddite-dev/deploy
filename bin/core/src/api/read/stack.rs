@@ -11,7 +11,7 @@ use komodo_client::{
     permission::PermissionLevel,
     stack::{
       Stack, StackActionState, StackListItem, StackQuery,
-      StackService, StackState,
+      StackService, StackSortBy, StackState,
     },
   },
 };
@@ -82,6 +82,11 @@ impl Resolve<ReadArgs> for ListAllStackServices {
     self,
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<ListStackServicesResponse> {
+    let all_tags = if self.tags.is_empty() {
+      vec![]
+    } else {
+      get_all_tags(None).await?
+    };
     let stacks = resource::list_for_user::<Stack>(
       StackQuery::builder()
         .names(self.stacks.clone())
@@ -91,7 +96,7 @@ impl Resolve<ReadArgs> for ListAllStackServices {
       None,
       user,
       PermissionLevel::Read.into(),
-      &[],
+      &all_tags,
     )
     .await?;
 
@@ -99,6 +104,14 @@ impl Resolve<ReadArgs> for ListAllStackServices {
     let mut skipped = 0;
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     let limit_usize = limit as usize;
+    // Eg. page 1 skips until after 100 services, page 2 after 200.
+    let skip = limit.saturating_mul(self.page);
+    // Match terms case insensitively.
+    let terms = self
+      .terms
+      .iter()
+      .map(|term| term.to_lowercase())
+      .collect::<Vec<_>>();
 
     for stack in stacks {
       let cache =
@@ -109,13 +122,15 @@ impl Resolve<ReadArgs> for ListAllStackServices {
           // Apply state filter if defined.
           (self.state.is_empty() || self.state.contains(&service.state)) &&
           // Apply terms filter if defined
-          (self.terms.is_empty()
+          (terms.is_empty()
             // Match when all terms contained within a name.
-            || self.terms.iter().all(|term| service.service.contains(term)))
+            || {
+              let name = service.service.to_lowercase();
+              terms.iter().all(|term| name.contains(term))
+            })
         });
       for service in more {
-        if skipped < limit * self.page {
-          // Eg. page 1 skips until after 100 services, page 2 after 200.
+        if skipped < skip {
           skipped += 1;
         } else {
           // push and maybe early return
@@ -471,45 +486,55 @@ impl Resolve<ReadArgs> for ListStacks {
     let only_update_available = self.query.specific.update_available;
     let states = self.query.specific.states.clone();
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    // Update available / state are computed in memory rather than
-    // stored on the db. When filtering on them, the db level
-    // pagination must be disabled, and applied in memory
-    // after the filters.
-    let use_db_pagination =
-      !only_update_available && states.is_empty();
-    let (db_limit, db_skip) = if use_db_pagination {
-      (limit, self.page * limit)
-    } else {
-      (0, 0)
-    };
-    let stacks = resource::list_for_user::<Stack>(
+    let sort_by: resource::ListItemSort<StackListItem> =
+      match self.sort_by {
+        StackSortBy::Name => resource::ListItemSort::Name,
+        StackSortBy::Source => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info.repo.cmp(&b.info.repo)
+          }))
+        }
+        StackSortBy::Host => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            let host_a = if a.info.swarm_id.is_empty() {
+              &a.info.server_name
+            } else {
+              &a.info.swarm_name
+            };
+            let host_b = if b.info.swarm_id.is_empty() {
+              &b.info.server_name
+            } else {
+              &b.info.swarm_name
+            };
+            host_a.cmp(host_b)
+          }))
+        }
+        StackSortBy::State => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info.state.to_string().cmp(&b.info.state.to_string())
+          }))
+        }
+      };
+    let stacks = resource::list_items_for_user::<Stack>(
       self.query,
-      db_limit as i64,
-      db_skip,
+      limit,
+      self.page,
+      self.sort_desc,
+      sort_by,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
+      |stack| {
+        (!only_update_available
+          || stack
+            .info
+            .services
+            .iter()
+            .any(|service| service.update_available))
+          && (states.is_empty() || states.contains(&stack.info.state))
+      },
     )
     .await?;
-    let stacks = if use_db_pagination {
-      stacks
-    } else {
-      resource::filter_list_items_paginated(
-        stacks,
-        |stack| {
-          (!only_update_available
-            || stack
-              .info
-              .services
-              .iter()
-              .any(|service| service.update_available))
-            && (states.is_empty()
-              || states.contains(&stack.info.state))
-        },
-        limit,
-        self.page,
-      )
-    };
     Ok(stacks)
   }
 }

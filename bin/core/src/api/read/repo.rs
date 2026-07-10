@@ -3,7 +3,9 @@ use komodo_client::{
   api::read::*,
   entities::{
     permission::PermissionLevel,
-    repo::{Repo, RepoActionState, RepoListItem, RepoState},
+    repo::{
+      Repo, RepoActionState, RepoListItem, RepoSortBy, RepoState,
+    },
   },
 };
 use mogh_resolver::Resolve;
@@ -45,32 +47,33 @@ impl Resolve<ReadArgs> for ListRepos {
     };
     let states = self.query.specific.states.clone();
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    // When filtering by state, the db level pagination must be
-    // disabled, and applied in memory after the state filter.
-    let (db_limit, db_skip) = if states.is_empty() {
-      (limit, self.page * limit)
-    } else {
-      (0, 0)
-    };
-    let repos = resource::list_for_user::<Repo>(
+    let sort_by: resource::ListItemSort<RepoListItem> =
+      match self.sort_by {
+        RepoSortBy::Name => resource::ListItemSort::Name,
+        RepoSortBy::Repo => {
+          resource::ListItemSort::DbField("config.repo")
+        }
+        RepoSortBy::Branch => {
+          resource::ListItemSort::DbField("config.branch")
+        }
+        RepoSortBy::State => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info.state.to_string().cmp(&b.info.state.to_string())
+          }))
+        }
+      };
+    let repos = resource::list_items_for_user::<Repo>(
       self.query,
-      db_limit as i64,
-      db_skip,
+      limit,
+      self.page,
+      self.sort_desc,
+      sort_by,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
+      |repo| states.is_empty() || states.contains(&repo.info.state),
     )
     .await?;
-    let repos = if states.is_empty() {
-      repos
-    } else {
-      resource::filter_list_items_paginated(
-        repos,
-        |repo| states.contains(&repo.info.state),
-        limit,
-        self.page,
-      )
-    };
     Ok(repos)
   }
 }

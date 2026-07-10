@@ -16,7 +16,8 @@ use komodo_client::{
   entities::{
     permission::PermissionLevel,
     server::{
-      Server, ServerActionState, ServerListItem, ServerState,
+      Server, ServerActionState, ServerListItem, ServerSortBy,
+      ServerState,
     },
     stats::{SystemInformation, SystemProcess},
   },
@@ -111,32 +112,37 @@ impl Resolve<ReadArgs> for ListServers {
     };
     let states = self.query.specific.states.clone();
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    // When filtering by state, the db level pagination must be
-    // disabled, and applied in memory after the state filter.
-    let (db_limit, db_skip) = if states.is_empty() {
-      (limit, self.page * limit)
-    } else {
-      (0, 0)
-    };
-    let servers = resource::list_for_user::<Server>(
+    let sort_by: resource::ListItemSort<ServerListItem> =
+      match self.sort_by {
+        ServerSortBy::Name => resource::ListItemSort::Name,
+        ServerSortBy::Region => {
+          resource::ListItemSort::DbField("config.region")
+        }
+        ServerSortBy::Version => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info.version.cmp(&b.info.version)
+          }))
+        }
+        ServerSortBy::State => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info.state.to_string().cmp(&b.info.state.to_string())
+          }))
+        }
+      };
+    let servers = resource::list_items_for_user::<Server>(
       self.query,
-      db_limit as i64,
-      db_skip,
+      limit,
+      self.page,
+      self.sort_desc,
+      sort_by,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
+      |server| {
+        states.is_empty() || states.contains(&server.info.state)
+      },
     )
     .await?;
-    let servers = if states.is_empty() {
-      servers
-    } else {
-      resource::filter_list_items_paginated(
-        servers,
-        |server| states.contains(&server.info.state),
-        limit,
-        self.page,
-      )
-    };
     Ok(servers)
   }
 }
@@ -374,7 +380,7 @@ impl Resolve<ReadArgs> for GetHistoricalServerStats {
       },
       FindOptions::builder()
         .sort(doc! { "ts": -1 })
-        .skip(page as u64 * STATS_PER_PAGE as u64)
+        .skip((page as u64).saturating_mul(STATS_PER_PAGE as u64))
         .limit(STATS_PER_PAGE)
         .build(),
     )

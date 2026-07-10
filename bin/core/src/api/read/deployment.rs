@@ -7,7 +7,7 @@ use komodo_client::{
     SwarmOrServer,
     deployment::{
       Deployment, DeploymentActionState, DeploymentConfig,
-      DeploymentListItem, DeploymentState,
+      DeploymentListItem, DeploymentSortBy, DeploymentState,
     },
     docker::{
       container::{Container, ContainerStats},
@@ -67,40 +67,51 @@ impl Resolve<ReadArgs> for ListDeployments {
     let only_update_available = self.query.specific.update_available;
     let states = self.query.specific.states.clone();
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    // Update available / state are computed in memory rather than
-    // stored on the db. When filtering on them, the db level
-    // pagination must be disabled, and applied in memory
-    // after the filters.
-    let use_db_pagination =
-      !only_update_available && states.is_empty();
-    let (db_limit, db_skip) = if use_db_pagination {
-      (limit, self.page * limit)
-    } else {
-      (0, 0)
-    };
-    let deployments = resource::list_for_user::<Deployment>(
+    let sort_by: resource::ListItemSort<DeploymentListItem> =
+      match self.sort_by {
+        DeploymentSortBy::Name => resource::ListItemSort::Name,
+        DeploymentSortBy::Image => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info.image.cmp(&b.info.image)
+          }))
+        }
+        DeploymentSortBy::Host => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            let host_a = if a.info.swarm_id.is_empty() {
+              &a.info.server_name
+            } else {
+              &a.info.swarm_name
+            };
+            let host_b = if b.info.swarm_id.is_empty() {
+              &b.info.server_name
+            } else {
+              &b.info.swarm_name
+            };
+            host_a.cmp(host_b)
+          }))
+        }
+        DeploymentSortBy::State => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info.state.to_string().cmp(&b.info.state.to_string())
+          }))
+        }
+      };
+    let deployments = resource::list_items_for_user::<Deployment>(
       self.query,
-      db_limit as i64,
-      db_skip,
+      limit,
+      self.page,
+      self.sort_desc,
+      sort_by,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
+      |deployment| {
+        (!only_update_available || deployment.info.update_available)
+          && (states.is_empty()
+            || states.contains(&deployment.info.state))
+      },
     )
     .await?;
-    let deployments = if use_db_pagination {
-      deployments
-    } else {
-      resource::filter_list_items_paginated(
-        deployments,
-        |deployment| {
-          (!only_update_available || deployment.info.update_available)
-            && (states.is_empty()
-              || states.contains(&deployment.info.state))
-        },
-        limit,
-        self.page,
-      )
-    };
     Ok(deployments)
   }
 }

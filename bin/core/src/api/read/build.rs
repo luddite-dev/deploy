@@ -11,7 +11,9 @@ use komodo_client::{
   api::read::*,
   entities::{
     Operation,
-    build::{Build, BuildActionState, BuildListItem, BuildState},
+    build::{
+      Build, BuildActionState, BuildListItem, BuildSortBy, BuildState,
+    },
     permission::PermissionLevel,
     update::UpdateStatus,
   },
@@ -55,32 +57,32 @@ impl Resolve<ReadArgs> for ListBuilds {
     };
     let states = self.query.specific.states.clone();
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    // When filtering by state, the db level pagination must be
-    // disabled, and applied in memory after the state filter.
-    let (db_limit, db_skip) = if states.is_empty() {
-      (limit, self.page * limit)
-    } else {
-      (0, 0)
-    };
-    let builds = resource::list_for_user::<Build>(
+    let sort_by: resource::ListItemSort<BuildListItem> =
+      match self.sort_by {
+        BuildSortBy::Name => resource::ListItemSort::Name,
+        BuildSortBy::Source => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info.repo.cmp(&b.info.repo)
+          }))
+        }
+        BuildSortBy::State => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info.state.to_string().cmp(&b.info.state.to_string())
+          }))
+        }
+      };
+    let builds = resource::list_items_for_user::<Build>(
       self.query,
-      db_limit as i64,
-      db_skip,
+      limit,
+      self.page,
+      self.sort_desc,
+      sort_by,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
+      |build| states.is_empty() || states.contains(&build.info.state),
     )
     .await?;
-    let builds = if states.is_empty() {
-      builds
-    } else {
-      resource::filter_list_items_paginated(
-        builds,
-        |build| states.contains(&build.info.state),
-        limit,
-        self.page,
-      )
-    };
     Ok(builds)
   }
 }
@@ -203,7 +205,8 @@ impl Resolve<ReadArgs> for GetBuildMonthlyStats {
     let curr_ts = unix_timestamp_ms() as i64;
     let next_day = curr_ts - curr_ts % ONE_DAY_MS + ONE_DAY_MS;
 
-    let close_ts = next_day - self.page as i64 * 30 * ONE_DAY_MS;
+    let close_ts =
+      next_day - (self.page as i64).saturating_mul(30 * ONE_DAY_MS);
     let open_ts = close_ts - 30 * ONE_DAY_MS;
 
     let mut build_updates = db_client()

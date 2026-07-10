@@ -18,7 +18,7 @@ use database::{
   },
 };
 use formatting::format_serror;
-use futures_util::future::join_all;
+use futures_util::{TryStreamExt, future::join_all};
 use indexmap::IndexSet;
 use komodo_client::{
   api::{read::ExportResourcesToToml, write::CreateTag},
@@ -279,28 +279,124 @@ pub async fn list_all_resources<T: KomodoResource>(
     })
 }
 
-/// Some list item filters (eg. state, update available) are computed
-/// from in-memory caches rather than stored on the database, and can
-/// only be applied after the db query converts to list items.
-/// Callers using these filters should pass `(0, 0)` limit / skip to
-/// the db level query, and apply the equivalent pagination here
-/// after filtering.
-pub fn filter_list_items_paginated<T>(
-  items: Vec<T>,
-  filter: impl Fn(&T) -> bool,
+/// List item pagination for the `List<Resource>` apis, driving the
+/// mongo cursor directly instead of collecting the full resource
+/// list in memory. Each resource pulled from the cursor is checked
+/// against the user permissions and converted to its list item, and
+/// `filter` is applied before the item counts toward `limit` / `page`.
+/// This is required because some list item fields (eg. state,
+/// update available) are computed from in-memory caches rather than
+/// stored on the database, so they cannot be part of the db query.
+/// Stops pulling from the cursor as soon as the page is full.
+pub async fn list_items_for_user<T: KomodoResource>(
+  mut query: ResourceQuery<T::QuerySpecifics>,
   limit: u64,
   page: u64,
-) -> Vec<T> {
-  items
-    .into_iter()
-    .filter(|item| filter(item))
-    .skip((page * limit) as usize)
-    .take(if limit == 0 {
-      usize::MAX
+  sort_desc: bool,
+  sort_by: ListItemSort<T::ListItem>,
+  user: &User,
+  permission: PermissionLevelAndSpecifics,
+  all_tags: &[Tag],
+  filter: impl Fn(&T::ListItem) -> bool,
+) -> anyhow::Result<Vec<T::ListItem>> {
+  validate_resource_query_tags(&mut query, all_tags)?;
+  let mut filters = Document::new();
+  query.add_filters(&mut filters);
+
+  let mut permits =
+    crate::permission::load_list_permits::<T>(user, permission)
+      .await?;
+
+  let direction = if sort_desc { -1 } else { 1 };
+  let sort = match &sort_by {
+    ListItemSort::Name => doc! { "name": direction },
+    // Db field sorts use ascending name as the secondary sort.
+    ListItemSort::DbField(field) => {
+      doc! { *field: direction, "name": 1 }
+    }
+    // In-memory sorts pull items in ascending name db order,
+    // keeping name as the stable tiebreak for equal sort keys.
+    ListItemSort::InMemory(_) => doc! { "name": 1 },
+  };
+
+  let mut cursor =
+    T::coll().find(filters).sort(sort).await.with_context(|| {
+      format!("Failed to query db for {}s", T::resource_type())
+    })?;
+
+  let skip = page.saturating_mul(limit) as usize;
+  let take = if limit == 0 {
+    usize::MAX
+  } else {
+    limit as usize
+  };
+  let mut items = Vec::new();
+
+  if let ListItemSort::InMemory(compare) = sort_by {
+    // The sort can only be applied after all matching items
+    // are collected, so pagination also happens after the sort.
+    while let Some(resource) = cursor
+      .try_next()
+      .await
+      .context("Failed to pull next resource from db cursor")?
+    {
+      if !permits.permitted::<T>(&resource).await? {
+        continue;
+      }
+      let item = T::to_list_item(resource).await;
+      if !filter(&item) {
+        continue;
+      }
+      items.push(item);
+    }
+    // Stable sort keeps equal sort keys in ascending
+    // name order for both directions.
+    if sort_desc {
+      items.sort_by(|a, b| compare(b, a));
     } else {
-      limit as usize
-    })
-    .collect()
+      items.sort_by(|a, b| compare(a, b));
+    }
+    Ok(items.into_iter().skip(skip).take(take).collect())
+  } else {
+    let mut skipped = 0;
+    while let Some(resource) = cursor
+      .try_next()
+      .await
+      .context("Failed to pull next resource from db cursor")?
+    {
+      if !permits.permitted::<T>(&resource).await? {
+        continue;
+      }
+      let item = T::to_list_item(resource).await;
+      if !filter(&item) {
+        continue;
+      }
+      if skipped < skip {
+        skipped += 1;
+        continue;
+      }
+      items.push(item);
+      if take != usize::MAX && items.len() >= take {
+        break;
+      }
+    }
+    Ok(items)
+  }
+}
+
+/// How the `List<Resource>` apis sort the list items.
+pub enum ListItemSort<I> {
+  /// Sort by name at the db level. Default.
+  Name,
+  /// Sort on a db stored field, keeping db level sort
+  /// and streaming pagination. Only usable when the db field
+  /// exactly matches the displayed list item field.
+  DbField(&'static str),
+  /// Compare list items in memory, required for fields computed
+  /// from the in memory caches (eg. state), or which diverge
+  /// from the db field (eg. linked repo sources).
+  /// Collects all matching items before applying pagination.
+  InMemory(Box<dyn Fn(&I, &I) -> std::cmp::Ordering + Send>),
 }
 
 pub async fn list_for_user<T: KomodoResource>(
@@ -426,9 +522,7 @@ pub async fn list_full_for_user_filtered<T: KomodoResource, F>(
   filter: impl Fn(Resource<T::Config, T::Info>) -> F,
 ) -> anyhow::Result<Vec<Resource<T::Config, T::Info>>>
 where
-  F: Future<
-      Output = Option<Resource<T::Config, T::Info>>,
-    > + Send,
+  F: Future<Output = Option<Resource<T::Config, T::Info>>> + Send,
 {
   validate_resource_query_tags(&mut query, all_tags)?;
   let mut filters = Document::new();

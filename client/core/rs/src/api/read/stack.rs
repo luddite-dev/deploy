@@ -7,7 +7,7 @@ use crate::entities::{
   docker::container::Container,
   stack::{
     Stack, StackActionState, StackListItem, StackQuery, StackService,
-    StackServiceState,
+    StackServiceState, StackSortBy,
   },
   update::Log,
 };
@@ -363,6 +363,16 @@ pub struct ListStacks {
   /// Note: the page logic relies on this being consistent
   /// across queries for more pages.
   pub limit: Option<U64>,
+
+  /// Sort the results by this field.
+  /// Defaults to Name. Non-Name sorts are applied in memory
+  /// after querying all matching resources.
+  #[serde(default)]
+  pub sort_by: StackSortBy,
+
+  /// Reverse the sort direction.
+  #[serde(default)]
+  pub sort_desc: bool,
 }
 
 #[typeshare]
