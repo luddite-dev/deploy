@@ -86,7 +86,7 @@ _Commits pulled from upstream and landed on `main`._
 
 ## Porting — Tier 1 (clean picks, no/low conflict)
 
-_Branch: `upstream/tier-1-clean-picks` off `main`. Status: **PR #8 open** (https://github.com/luddite-dev/deploy/pull/8)._
+_Branch: `upstream/tier-1-clean-picks` off `main`. Status: PR open._
 
 Cherry-picks with no swarm entanglement — immediate value, minimal merge risk.
 
@@ -107,11 +107,11 @@ Cherry-picks with no swarm entanglement — immediate value, minimal merge risk.
 
 ## Porting — Tier 2 (pagination backbone, mechanical swarm surgery)
 
-_Branch: `upstream/tier-2-pagination` off tier 1 branch. Status: **PR #9 open** (https://github.com/luddite-dev/deploy/pull/9)._
+_Branch: `upstream/tier-2-pagination` off tier 1 branch. Status: planned._
 
-High-value performance refactor. Applied as a unit after Tier 1. Each commit
-touches `read/swarm.rs` (deleted) or `swarm_name` blocks — stripped per Drop
-Rule 1.
+High-value performance refactor. Do as a unit after Tier 1 lands. Each commit
+touches `read/swarm.rs` (deleted) or `swarm_name` blocks — strip those hunks
+per Drop Rule 1.
 
 | Commit | Summary | Swarm surgery |
 |---|---|---|
@@ -122,25 +122,17 @@ Rule 1.
 | `ef2b6ebc46ea670e4e0e459608a6a97245239a80` | Fix `list permits` to respect `resource.base_permission` (`perm.elevate(...)`) | 3-line correctness fix on top of `3117aa26b`. |
 | `42367c530b0c458dc7b26a62823b17d05e8a0628` | `saturating_mul` in skip computations | Overflow hardening, no swarm. |
 | `97ce46d89aaf56f493d705bdb4576421906339b3` | Linked resource names from `all_resources_cache()` (avoids N×M per-item DB lookups) | Drop `swarm_name` hunks (`all.srms`, `deployment.config.swarm_id`, swarm-stack-cache). Keep `server_name`/`build_name`/`repo_name`/`stack_name` hunks + `StackService.stack_name` field. |
-| `00f77c249c17dbeb740f3810b97d0f323930962f` | Container/stack-service tag filters + case-insensitive search terms, `saturating_mul` skip | Moved from Tier 1. Depends on pagination fields (`DEFAULT_LIST_LIMIT`, `Option<U64>`, `page`). Swarm-free but conflicts with our `docker.rs`/`stack.rs` until pagination lands. **Resolution**: upstream renamed `ListAllDockerContainers.containers` → `.terms`; our fork keeps old field name (rename is part of de-vendor Tier 5). Upstream renamed `ListAllDockerContainersResponse` → `ListAllContainersResponse`; our fork keeps old type name (de-vendor Tier 5). Wildcard matching replaced with lowercase `contains`. |
-
-### Tier 2 additional resolutions
-
-- **State filtering deferred**: `3117aa26b` closures reference `self.query.specific.states` (added by upstream `8f7854599`, a Tier 4 deferred candidate). Closures use `|_| true` for handlers without other filters; deployment/stack closures keep `only_update_available` check only.
-- **`terms` field name**: upstream renamed `containers`/`services` → `terms` on `ListAllDockerContainers`/`ListAllStackServices` clients. Our fork retains the old field names; handler code uses `.containers`/`.services`.
-- **Type name preservation**: `ListAllDockerContainersResponse` kept (not renamed to `ListAllContainersResponse` — that's de-vendor commit `6ca10c9e5`, Tier 5 deferred).
-- **`list_items_for_user` conflict pattern**: every `ListXxx` handler had the same conflict shape — `list_for_user(query, limit as i64, self.page * limit, ...)` → `list_items_for_user(query, limit, self.page, ..., |item| filter_closure)`. Always take upstream side. Redundant post-filter blocks (e.g. `only_update_available` in `deployment.rs`) dropped since the closure handles filtering inline.
+| `00f77c249c17dbeb740f3810b97d0f323930962f` | Container/stack-service tag filters + case-insensitive search terms, `saturating_mul` skip | Moved from Tier 1. Depends on pagination fields (`DEFAULT_LIST_LIMIT`, `Option<U64>`, `page`). Swarm-free but conflicts with our `docker.rs`/`stack.rs` until pagination lands. |
 
 ---
 
 ## Porting — Tier 3 (builder/cancel, zero swarm conflict)
 
-_Branch: `upstream/tier-3-builder-cancel` off tier 2 branch. Status: **PR #10 open** (https://github.com/luddite-dev/deploy/pull/10)._
+_Branch: `upstream/tier-3-builder-cancel` off tier 2 branch. Status: planned._
 
 High value. Builder code path is untouched by our swarm drop — no swarm surgery
 needed. `state.rs` is the one shared hotspot but hunks are in separate regions
-from the swarm-drop deletions (clean append). As predicted: only 1 conflict
-across all 7 commits (in `helpers/builder.rs`, builder usage selection logic).
+from the swarm-drop deletions (clean append).
 
 | Commit | Summary | Notes |
 |---|---|---|
@@ -150,11 +142,7 @@ across all 7 commits (in `helpers/builder.rs`, builder usage selection logic).
 | `ec65db12f37d5829be61d237f2e7d8d21dfd5d92` | Build webhook: cancel-then-rebuild instead of holding `build_locks` Mutex | Better behavior for back-to-back pushes. Polls `CancelBuild` then re-triggers. |
 | `50e04187cf52cf644be4c69fd888787a36e8eaa7` | `BuilderConfig::Server` field `server_id: String` → `server_ids: Vec<String>` | Multi-server build distribution. Touches `sync/toml.rs`, `resource/builder.rs`, `connection/server.rs`, `read/mod.rs`, `write/build.rs`. |
 | `77cdd11c51c6e3f78ed9c91d2b8d94413d4b0e37` | TOML accepts `server`/`servers` aliases for `server_ids` | Companion to `50e04187c`. |
-| `ba7e0137735d5ac3ec570f25a1eadee748e060b9` | Replace naive `building % len` with refcount-based `BuilderUsage` selection | Race-safe for concurrent builds: `HashMap<server_id, count>` + `min_by_key` + `release()` on cleanup. **Conflict resolution**: HEAD had manual build/repo state counting (from commits 1-2); upstream replaced with `builder_usage_cache()` refcount. Took upstream side — drops `Build`/`BuildState`/`Repo`/`RepoState`/`list_all_resources`/`build_state_cache`/`repo_state_cache` imports. `BuildCleanupData::Server` variant changed to `Server(Option<String>)` to carry usage token. |
-
-### Tier 3 chronological order
-
-Applied in this order (not the table order above): `50e04187c` → `77cdd11c5` → `ba7e01377` → `18a310064` → `13ae29eda` → `43ca25e55b` → `ec65db12f`.
+| `ba7e0137735d5ac3ec570f25a1eadee748e060b9` | Replace naive `building % len` with refcount-based `BuilderUsage` selection | Race-safe for concurrent builds: `HashMap<server_id, count>` + `min_by_key` + `release()` on cleanup. |
 
 ---
 
