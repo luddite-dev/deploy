@@ -156,14 +156,14 @@ export interface ResourceListItem<Info> {
 }
 
 export enum ActionState {
-	/** Unknown case */
-	Unknown = "Unknown",
+	/** Currently running */
+	Running = "Running",
 	/** Last clone / pull successful (or never cloned) */
 	Ok = "Ok",
 	/** Last clone / pull failed */
 	Failed = "Failed",
-	/** Currently running */
-	Running = "Running",
+	/** Unknown case */
+	Unknown = "Unknown",
 }
 
 export interface ActionListItemInfo {
@@ -3018,11 +3018,11 @@ export type GetVariableResponse = Variable;
 export enum ContainerStateStatusEnum {
 	Running = "running",
 	Created = "created",
-	Paused = "paused",
 	Restarting = "restarting",
-	Exited = "exited",
 	Stopping = "stopping",
 	Removing = "removing",
+	Paused = "paused",
+	Exited = "exited",
 	Dead = "dead",
 	Empty = "",
 }
@@ -4289,18 +4289,18 @@ export type ProcedureListItem = ResourceListItem<ProcedureListItemInfo>;
 export type ListProceduresResponse = ProcedureListItem[];
 
 export enum RepoState {
-	/** Unknown case */
-	Unknown = "Unknown",
-	/** Last clone / pull successful (or never cloned) */
-	Ok = "Ok",
-	/** Last clone / pull failed */
-	Failed = "Failed",
 	/** Currently cloning */
 	Cloning = "Cloning",
 	/** Currently pulling */
 	Pulling = "Pulling",
 	/** Currently building */
 	Building = "Building",
+	/** Last clone / pull successful (or never cloned) */
+	Ok = "Ok",
+	/** Last clone / pull failed */
+	Failed = "Failed",
+	/** Unknown case */
+	Unknown = "Unknown",
 }
 
 export interface RepoListItemInfo {
@@ -7480,6 +7480,23 @@ export interface ListAlertsResponse {
 	next_page?: I64;
 }
 
+export enum ContainerSortBy {
+	/** Sort by container name. Default. */
+	Name = "Name",
+	/** Sort by host Server name. */
+	Server = "Server",
+	/** Sort by container state. */
+	State = "State",
+	/** Sort by image. */
+	Image = "Image",
+	/** Sort by first network. */
+	Networks = "Networks",
+	/** Sort by first port. */
+	Ports = "Ports",
+	/** Sort by first volume. */
+	Volumes = "Volumes",
+}
+
 /**
  * List all docker containers on the target servers.
  * Response: [ListDockerContainersResponse].
@@ -7511,6 +7528,13 @@ export interface ListAllDockerContainers {
 	 * across queries for more pages.
 	 */
 	limit?: U64;
+	/**
+	 * Sort the results by this field.
+	 * Defaults to Name.
+	 */
+	sort_by?: ContainerSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
 }
 
 /**
