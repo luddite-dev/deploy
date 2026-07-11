@@ -61,7 +61,7 @@ impl Resolve<ReadArgs> for ListBuilds {
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-      |_| true,
+      |build| states.is_empty() || states.contains(&build.info.state),
     )
     .await?;
     Ok(builds)

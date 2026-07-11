@@ -64,7 +64,9 @@ impl Resolve<ReadArgs> for ListDeployments {
       PermissionLevel::Read.into(),
       &all_tags,
       |deployment| {
-        !only_update_available || deployment.info.update_available
+        (!only_update_available || deployment.info.update_available)
+          && (states.is_empty()
+            || states.contains(&deployment.info.state))
       },
     )
     .await?;

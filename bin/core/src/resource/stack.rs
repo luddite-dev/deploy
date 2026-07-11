@@ -204,6 +204,11 @@ impl super::KomodoResource for Stack {
       .get(&stack.config.server_id)
       .map(|server| server.name.clone())
       .unwrap_or_default();
+    let swarm_name = all
+      .swarms
+      .get(&stack.config.swarm_id)
+      .map(|swarm| swarm.name.clone())
+      .unwrap_or_default();
 
     StackListItem {
       name: stack.name,

@@ -107,6 +107,11 @@ impl super::KomodoResource for Deployment {
       .get(&deployment.config.server_id)
       .map(|server| server.name.clone())
       .unwrap_or_default();
+    let swarm_name = all
+      .swarms
+      .get(&deployment.config.swarm_id)
+      .map(|swarm| swarm.name.clone())
+      .unwrap_or_default();
     let (build_image, build_id) = match deployment.config.image {
       DeploymentImage::Build { build_id, version } => {
         let (build_name, build_id, build_version) = all
