@@ -76,7 +76,7 @@ impl Resolve<ReadArgs> for ListFullBuilders {
       resource::list_full_for_user::<Builder>(
         self.query,
         limit as i64,
-        self.page.saturating_mul(limit),
+        self.page * limit,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
