@@ -144,7 +144,7 @@ impl Resolve<ReadArgs> for GetStackLog {
   ) -> mogh_error::Result<GetStackLogResponse> {
     let GetStackLog {
       stack,
-      mut services,
+      services,
       tail,
       timestamps,
     } = self;
@@ -177,7 +177,7 @@ impl Resolve<ReadArgs> for SearchStackLog {
   ) -> mogh_error::Result<SearchStackLogResponse> {
     let SearchStackLog {
       stack,
-      mut services,
+      services,
       terms,
       combinator,
       invert,
