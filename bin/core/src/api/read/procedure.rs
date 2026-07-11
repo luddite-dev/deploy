@@ -46,8 +46,6 @@ impl Resolve<ReadArgs> for ListProcedures {
     Ok(
       resource::list_for_user::<Procedure>(
         self.query,
-        None,
-        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -70,8 +68,6 @@ impl Resolve<ReadArgs> for ListFullProcedures {
     Ok(
       resource::list_full_for_user::<Procedure>(
         self.query,
-        None,
-        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -88,8 +84,6 @@ impl Resolve<ReadArgs> for GetProceduresSummary {
   ) -> mogh_error::Result<GetProceduresSummaryResponse> {
     let procedures = resource::list_full_for_user::<Procedure>(
       Default::default(),
-      None,
-      None,
       user,
       PermissionLevel::Read.into(),
       &[],

@@ -43,8 +43,6 @@ impl Resolve<ReadArgs> for GetServersSummary {
   ) -> mogh_error::Result<GetServersSummaryResponse> {
     let servers = resource::list_for_user::<Server>(
       Default::default(),
-      None,
-      None,
       user,
       PermissionLevel::Read.into(),
       &[],
@@ -112,8 +110,6 @@ impl Resolve<ReadArgs> for ListServers {
     Ok(
       resource::list_for_user::<Server>(
         self.query,
-        None,
-        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -136,8 +132,6 @@ impl Resolve<ReadArgs> for ListFullServers {
     Ok(
       resource::list_full_for_user::<Server>(
         self.query,
-        None,
-        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,

@@ -1034,8 +1034,6 @@ impl Resolve<WriteArgs> for BatchCheckStackForUpdate {
     let stacks = list_full_for_user_using_pattern::<Stack>(
       &self.pattern,
       Default::default(),
-      None,
-      None,
       user,
       PermissionLevel::Execute.into(),
       &[],

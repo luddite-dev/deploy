@@ -46,8 +46,6 @@ impl Resolve<ReadArgs> for ListResourceSyncs {
     Ok(
       resource::list_for_user::<ResourceSync>(
         self.query,
-        None,
-        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -70,8 +68,6 @@ impl Resolve<ReadArgs> for ListFullResourceSyncs {
     Ok(
       resource::list_full_for_user::<ResourceSync>(
         self.query,
-        None,
-        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -110,8 +106,6 @@ impl Resolve<ReadArgs> for GetResourceSyncsSummary {
     let resource_syncs =
       resource::list_full_for_user::<ResourceSync>(
         Default::default(),
-        None,
-        None,
         user,
         PermissionLevel::Read.into(),
         &[],

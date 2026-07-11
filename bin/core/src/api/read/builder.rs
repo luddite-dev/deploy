@@ -48,8 +48,6 @@ impl Resolve<ReadArgs> for ListBuilders {
     Ok(
       resource::list_for_user::<Builder>(
         self.query,
-        None,
-        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -72,8 +70,6 @@ impl Resolve<ReadArgs> for ListFullBuilders {
     Ok(
       resource::list_full_for_user::<Builder>(
         self.query,
-        None,
-        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -89,8 +85,6 @@ impl Resolve<ReadArgs> for GetBuildersSummary {
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<GetBuildersSummaryResponse> {
     let query = match list_resource_ids_for_user::<Builder>(
-      None,
-      None,
       None,
       user,
       PermissionLevel::Read.into(),

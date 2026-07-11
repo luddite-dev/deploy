@@ -177,14 +177,12 @@ pub fn get_user_permission_on_resource<'a, T: KomodoResource>(
 
 pub async fn list_resources_for_user<T: KomodoResource>(
   filters: impl Into<Option<Document>>,
-  limit: impl Into<Option<i64>>,
-  skip: impl Into<Option<u64>>,
   user: &User,
   permission: PermissionLevelAndSpecifics,
 ) -> anyhow::Result<Vec<Resource<T::Config, T::Info>>> {
   // Check admin
   if user.admin {
-    return list_all_resources::<T>(filters, limit, skip).await;
+    return list_all_resources::<T>(filters).await;
   }
 
   let mut base = PermissionLevelAndSpecifics {
@@ -198,7 +196,7 @@ pub async fn list_resources_for_user<T: KomodoResource>(
 
   // 'transparent_mode' early return.
   if base.fulfills(&permission) {
-    return list_all_resources::<T>(filters, limit, skip).await;
+    return list_all_resources::<T>(filters).await;
   }
 
   let resource_type = T::resource_type();
@@ -208,7 +206,7 @@ pub async fn list_resources_for_user<T: KomodoResource>(
     base.elevate(all_permission);
     // 'user.all' early return.
     if base.fulfills(&permission) {
-      return list_all_resources::<T>(filters, limit, skip).await;
+      return list_all_resources::<T>(filters).await;
     }
   }
 
@@ -219,13 +217,13 @@ pub async fn list_resources_for_user<T: KomodoResource>(
       base.elevate(all_permission);
       // 'group.all' early return.
       if base.fulfills(&permission) {
-        return list_all_resources::<T>(filters, limit, skip).await;
+        return list_all_resources::<T>(filters).await;
       }
     }
   }
 
   let (all, permissions) = tokio::try_join!(
-    list_all_resources::<T>(filters, None, None),
+    list_all_resources::<T>(filters),
     // And any ids using the permissions table
     find_collect(
       &db_client().permissions,
@@ -308,8 +306,6 @@ pub async fn list_resources_for_user<T: KomodoResource>(
 /// Returns None if still no need to filter by resource id (eg transparent mode, group membership with all access).
 pub async fn list_resource_ids_for_user<T: KomodoResource>(
   filters: Option<Document>,
-  limit: impl Into<Option<i64>>,
-  skip: impl Into<Option<u64>>,
   user: &User,
   permission: PermissionLevelAndSpecifics,
 ) -> anyhow::Result<Option<Vec<String>>> {
@@ -354,13 +350,11 @@ pub async fn list_resource_ids_for_user<T: KomodoResource>(
     }
   }
 
-  let ids = list_resources_for_user::<T>(
-    filters, limit, skip, user, permission,
-  )
-  .await?
-  .into_iter()
-  .map(|resource| resource.id)
-  .collect();
+  let ids = list_resources_for_user::<T>(filters, user, permission)
+    .await?
+    .into_iter()
+    .map(|resource| resource.id)
+    .collect();
 
   Ok(Some(ids))
 }
@@ -375,8 +369,6 @@ pub async fn user_resource_target_query(
   } else {
     let server_query = list_resource_ids_for_user::<Server>(
       None,
-      None,
-      None,
       user,
       PermissionLevel::Read.into(),
     )
@@ -389,8 +381,6 @@ pub async fn user_resource_target_query(
     .unwrap_or_else(|| doc! { "target.type": "Server" });
 
     let stack_query = list_resource_ids_for_user::<Stack>(
-      None,
-      None,
       None,
       user,
       PermissionLevel::Read.into(),
@@ -405,8 +395,6 @@ pub async fn user_resource_target_query(
 
     let deployment_query = list_resource_ids_for_user::<Deployment>(
       None,
-      None,
-      None,
       user,
       PermissionLevel::Read.into(),
     )
@@ -419,8 +407,6 @@ pub async fn user_resource_target_query(
     .unwrap_or_else(|| doc! { "target.type": "Deployment" });
 
     let build_query = list_resource_ids_for_user::<Build>(
-      None,
-      None,
       None,
       user,
       PermissionLevel::Read.into(),
@@ -435,8 +421,6 @@ pub async fn user_resource_target_query(
 
     let repo_query = list_resource_ids_for_user::<Repo>(
       None,
-      None,
-      None,
       user,
       PermissionLevel::Read.into(),
     )
@@ -449,8 +433,6 @@ pub async fn user_resource_target_query(
     .unwrap_or_else(|| doc! { "target.type": "Repo" });
 
     let procedure_query = list_resource_ids_for_user::<Procedure>(
-      None,
-      None,
       None,
       user,
       PermissionLevel::Read.into(),
@@ -465,8 +447,6 @@ pub async fn user_resource_target_query(
 
     let action_query = list_resource_ids_for_user::<Action>(
       None,
-      None,
-      None,
       user,
       PermissionLevel::Read.into(),
     )
@@ -479,8 +459,6 @@ pub async fn user_resource_target_query(
     .unwrap_or_else(|| doc! { "target.type": "Action" });
 
     let builder_query = list_resource_ids_for_user::<Builder>(
-      None,
-      None,
       None,
       user,
       PermissionLevel::Read.into(),
@@ -495,8 +473,6 @@ pub async fn user_resource_target_query(
 
     let alerter_query = list_resource_ids_for_user::<Alerter>(
       None,
-      None,
-      None,
       user,
       PermissionLevel::Read.into(),
     )
@@ -510,8 +486,6 @@ pub async fn user_resource_target_query(
 
     let resource_sync_query =
       list_resource_ids_for_user::<ResourceSync>(
-        None,
-        None,
         None,
         user,
         PermissionLevel::Read.into(),

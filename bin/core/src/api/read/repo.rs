@@ -46,8 +46,6 @@ impl Resolve<ReadArgs> for ListRepos {
     Ok(
       resource::list_for_user::<Repo>(
         self.query,
-        None,
-        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -70,8 +68,6 @@ impl Resolve<ReadArgs> for ListFullRepos {
     Ok(
       resource::list_full_for_user::<Repo>(
         self.query,
-        None,
-        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -109,8 +105,6 @@ impl Resolve<ReadArgs> for GetReposSummary {
   ) -> mogh_error::Result<GetReposSummaryResponse> {
     let repos = resource::list_full_for_user::<Repo>(
       Default::default(),
-      None,
-      None,
       user,
       PermissionLevel::Read.into(),
       &[],

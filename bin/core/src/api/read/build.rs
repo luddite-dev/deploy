@@ -56,8 +56,6 @@ impl Resolve<ReadArgs> for ListBuilds {
     Ok(
       resource::list_for_user::<Build>(
         self.query,
-        None,
-        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -80,8 +78,6 @@ impl Resolve<ReadArgs> for ListFullBuilds {
     Ok(
       resource::list_full_for_user::<Build>(
         self.query,
-        None,
-        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -119,8 +115,6 @@ impl Resolve<ReadArgs> for GetBuildsSummary {
   ) -> mogh_error::Result<GetBuildsSummaryResponse> {
     let builds = resource::list_full_for_user::<Build>(
       Default::default(),
-      None,
-      None,
       user,
       PermissionLevel::Read.into(),
       &[],
@@ -287,8 +281,6 @@ impl Resolve<ReadArgs> for ListCommonBuildExtraArgs {
     };
     let builds = resource::list_full_for_user::<Build>(
       self.query,
-      None,
-      None,
       user,
       PermissionLevel::Read.into(),
       &all_tags,

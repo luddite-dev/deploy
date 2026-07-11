@@ -47,8 +47,6 @@ impl Resolve<ReadArgs> for GetDockerContainersSummary {
   ) -> mogh_error::Result<GetDockerContainersSummaryResponse> {
     let servers = resource::list_full_for_user::<Server>(
       Default::default(),
-      None,
-      None,
       user,
       PermissionLevel::Read.into(),
       &[],
@@ -92,8 +90,6 @@ impl Resolve<ReadArgs> for ListAllDockerContainers {
         .names(self.servers.clone())
         .tags(self.tags)
         .build(),
-      None,
-      None,
       user,
       PermissionLevel::Read.into(),
       &[],
@@ -228,8 +224,6 @@ impl Resolve<ReadArgs> for GetResourceMatchingContainer {
     // then check stacks
     let stacks = list_resources_for_user::<Stack>(
       doc! { "config.server_id": &server.id },
-      None,
-      None,
       user,
       PermissionLevel::Read.into(),
     )
