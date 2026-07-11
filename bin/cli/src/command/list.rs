@@ -570,10 +570,7 @@ impl ListResources for BuildListItem {
       })
       .collect::<Vec<_>>();
     builds.sort_by(|a, b| {
-      a.name
-        .cmp(&b.name)
-        .then(a.info.builder_id.cmp(&b.info.builder_id))
-        .then(a.info.state.cmp(&b.info.state))
+      a.info.state.cmp(&b.info.state).then(a.name.cmp(&b.name))
     });
     Ok(builds)
   }
@@ -679,7 +676,7 @@ impl ListResources for ProcedureListItem {
         (Some(a), Some(b)) => return a.cmp(&b),
         (None, None) => {}
       }
-      a.name.cmp(&b.name).then(a.info.state.cmp(&b.info.state))
+      a.info.state.cmp(&b.info.state).then(a.name.cmp(&b.name))
     });
     Ok(procedures)
   }
@@ -732,7 +729,7 @@ impl ListResources for ActionListItem {
         (Some(a), Some(b)) => return a.cmp(&b),
         (None, None) => {}
       }
-      a.name.cmp(&b.name).then(a.info.state.cmp(&b.info.state))
+      a.info.state.cmp(&b.info.state).then(a.name.cmp(&b.name))
     });
     Ok(actions)
   }
@@ -782,7 +779,7 @@ impl ListResources for ResourceSyncListItem {
       })
       .collect::<Vec<_>>();
     syncs.sort_by(|a, b| {
-      a.name.cmp(&b.name).then(a.info.state.cmp(&b.info.state))
+      a.info.state.cmp(&b.info.state).then(a.name.cmp(&b.name))
     });
     Ok(syncs)
   }
