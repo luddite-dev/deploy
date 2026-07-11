@@ -479,11 +479,13 @@ export declare enum Operation {
     RenameProcedure = "RenameProcedure",
     DeleteProcedure = "DeleteProcedure",
     RunProcedure = "RunProcedure",
+    CancelProcedure = "CancelProcedure",
     CreateAction = "CreateAction",
     UpdateAction = "UpdateAction",
     RenameAction = "RenameAction",
     DeleteAction = "DeleteAction",
     RunAction = "RunAction",
+    CancelAction = "CancelAction",
     CreateResourceSync = "CreateResourceSync",
     UpdateResourceSync = "UpdateResourceSync",
     RenameResourceSync = "RenameResourceSync",
@@ -972,6 +974,9 @@ export type Execution =
 } | {
     type: "BatchRunProcedure";
     params: BatchRunProcedure;
+} | {
+    type: "CancelProcedure";
+    params: CancelProcedure;
 }
 /** Run the target action. (alias: `action`, `ac`) */
  | {
@@ -980,6 +985,9 @@ export type Execution =
 } | {
     type: "BatchRunAction";
     params: BatchRunAction;
+} | {
+    type: "CancelAction";
+    params: CancelAction;
 }
 /** Execute a Resource Sync. (alias: `sync`) */
  | {
@@ -6040,6 +6048,18 @@ export interface BuildStatsDay {
     count: number;
     ts: number;
 }
+/** Cancels the target action run. Response: [Update] */
+export interface CancelAction {
+    /** Id or name */
+    action: string;
+    /**
+     * The update id associated with the specific
+     * run to cancel
+     * Must provide either `action`
+     * or `update_id`
+     */
+    update_id?: string;
+}
 /**
  * Cancels the target build.
  * Only does anything if the build is `building` when called.
@@ -6048,6 +6068,18 @@ export interface BuildStatsDay {
 export interface CancelBuild {
     /** Can be id or name */
     build: string;
+}
+/** Cancels the target procedure run. Response: [Update] */
+export interface CancelProcedure {
+    /** Id or name */
+    procedure: string;
+    /**
+     * The update id associated with the specific
+     * run to cancel
+     * Must provide either `action`
+     * or `update_id`
+     */
+    update_id?: string;
 }
 /**
  * Cancels the target repo build.
@@ -9869,8 +9901,12 @@ export interface SendAlert {
 }
 /** Configuration for a Komodo Server Builder. */
 export interface ServerBuilderConfig {
-    /** The server id of the builder */
-    server_id?: string;
+    /**
+     * The server ids of the builders.
+     * If multiple are given, builds will overflow
+     * to later specified servers as needed.
+     */
+    server_ids?: string[];
 }
 /** The health of a part of the server. */
 export interface ServerHealthState {
@@ -10643,11 +10679,17 @@ export type ExecuteRequest = {
     type: "BatchRunProcedure";
     params: BatchRunProcedure;
 } | {
+    type: "CancelProcedure";
+    params: CancelProcedure;
+} | {
     type: "RunAction";
     params: RunAction;
 } | {
     type: "BatchRunAction";
     params: BatchRunAction;
+} | {
+    type: "CancelAction";
+    params: CancelAction;
 } | {
     type: "RunSync";
     params: RunSync;

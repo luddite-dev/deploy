@@ -370,13 +370,13 @@ impl ToToml for Builder {
   fn replace_ids(resource: &mut Resource<Self::Config, Self::Info>) {
     if let BuilderConfig::Server(config) = &mut resource.config {
       let all = all_resources_cache().load();
-      config.server_id.clone_from(
-        all
+      for server_id in &mut config.server_ids {
+        *server_id = all
           .servers
-          .get(&config.server_id)
-          .map(|s| &s.name)
-          .unwrap_or(&String::new()),
-      )
+          .get(server_id)
+          .map(|s| s.name.clone())
+          .unwrap_or_default();
+      }
     }
   }
 
@@ -413,8 +413,14 @@ impl ToToml for Builder {
                   .into_iter()
                   .map(|(key, value)| {
                     match key.as_str() {
-                      "server_id" => {
-                        return (String::from("server"), value);
+                      "server_ids" => {
+                        if let serde_json::Value::Array(arr) = &value
+                          && arr.len() > 1
+                        {
+                          return (String::from("servers"), value);
+                        } else {
+                          return (String::from("server"), value);
+                        }
                       }
                       _ => {}
                     }

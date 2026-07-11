@@ -14,12 +14,13 @@ use komodo_client::{
     procedure::{Procedure, ProcedureStage},
     repo::Repo,
     stack::Stack,
-    update::{Log, Update},
+    update::Update,
     user::procedure_user,
   },
 };
 use mogh_resolver::Resolve;
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
@@ -36,8 +37,21 @@ use super::update::{init_execution_update, update_update};
 pub async fn execute_procedure(
   procedure: &Procedure,
   update: &Mutex<Update>,
+  cancel: CancellationToken,
 ) -> anyhow::Result<()> {
   for stage in &procedure.config.stages {
+    if cancel.is_cancelled() {
+      add_line_to_update(
+        update,
+        &format!(
+          "{}: Cancelled before stage: '{}'",
+          muted("ERROR"),
+          bold(&stage.name)
+        ),
+      )
+      .await;
+      return Err(anyhow!("Procedure cancelled before completion"));
+    }
     if !stage.enabled {
       continue;
     }
@@ -274,6 +288,9 @@ async fn execute_execution(
       }
       resolve_execute!(RunProcedure, req)
     }
+    Execution::CancelProcedure(req) => {
+      resolve_execute!(CancelProcedure, req)
+    }
     // Special: write operation
     Execution::CommitSync(req) => req
       .resolve(&WriteArgs { user })
@@ -326,6 +343,9 @@ async fn execute_execution(
     }
     // Standard executions
     Execution::RunAction(req) => resolve_execute!(RunAction, req),
+    Execution::CancelAction(req) => {
+      resolve_execute!(CancelAction, req)
+    }
     Execution::RunBuild(req) => resolve_execute!(RunBuild, req),
     Execution::CancelBuild(req) => resolve_execute!(CancelBuild, req),
     Execution::Deploy(req) => resolve_execute!(Deploy, req),
@@ -471,14 +491,13 @@ async fn handle_resolve_result(
   match res {
     Ok(res) => Ok(res),
     Err(e) => {
-      let log =
-        Log::error("execution error", format_serror(&e.into()));
       let mut update =
         find_one_by_id(&db_client().updates, update_id)
           .await
           .context("Failed to query to db")?
           .context("no update exists with given id")?;
-      update.logs.push(log);
+      update
+        .push_error_log("Execution error", format_serror(&e.into()));
       update.finalize();
       update_update(update.clone()).await?;
       Ok(update)
@@ -693,7 +712,9 @@ pub fn replace_procedure_stage_ids_with_names(
 
       replace_id_with_name!(
         RunProcedure => procedure, procedures;
+        CancelProcedure => procedure, procedures;
         RunAction => action, actions;
+        CancelAction => action, actions;
         RunBuild => build, builds;
         CancelBuild => build, builds;
         Deploy => deployment, deployments;
