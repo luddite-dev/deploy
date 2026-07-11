@@ -793,6 +793,8 @@ export interface BuildListItemInfo {
 	dockerfile_contents: boolean;
 	/** Linked repo, if one is attached. */
 	linked_repo: string;
+	/** The name of the linked repo, if one is attached. */
+	linked_repo_name?: string;
 	/** The git provider domain */
 	git_provider: string;
 	/** The repo used as the source of the build */
@@ -4364,6 +4366,8 @@ export interface ResourceSyncListItemInfo {
 	resource_path: string[];
 	/** Linked repo, if one is attached. */
 	linked_repo: string;
+	/** The name of the linked repo, if one is attached. */
+	linked_repo_name?: string;
 	/** The git provider domain. */
 	git_provider: string;
 	/** The Github repo used as the source of the sync resources */
@@ -4513,6 +4517,8 @@ export interface StackListItemInfo {
 	file_contents: boolean;
 	/** Linked repo, if one is attached. */
 	linked_repo: string;
+	/** The name of the linked repo, if one is attached. */
+	linked_repo_name?: string;
 	/** The git provider domain */
 	git_provider: string;
 	/** The configured repo */

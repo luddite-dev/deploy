@@ -151,8 +151,9 @@ impl super::KomodoResource for Stack {
       stack.config.repo,
       stack.config.branch,
       stack.config.git_https,
+      String::new(),
     );
-    let (git_provider, repo, branch, git_https) =
+    let (git_provider, repo, branch, git_https, linked_repo_name) =
       if stack.config.linked_repo.is_empty() {
         default_git
       } else {
@@ -166,6 +167,7 @@ impl super::KomodoResource for Stack {
               r.config.repo.clone(),
               r.config.branch.clone(),
               r.config.git_https,
+              r.name.clone(),
             )
           })
           .unwrap_or(default_git)
@@ -221,6 +223,7 @@ impl super::KomodoResource for Stack {
         server_id: stack.config.server_id,
         server_name,
         linked_repo: stack.config.linked_repo,
+        linked_repo_name,
         missing_files: stack.info.missing_files,
         files_on_host: stack.config.files_on_host,
         repo_link: repo_link(
