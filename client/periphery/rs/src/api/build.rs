@@ -1,10 +1,8 @@
 use komodo_client::entities::{
-  FileContents, NoData, repo::Repo, update::Log,
+  FileContents, repo::Repo, update::Log,
 };
 use mogh_resolver::Resolve;
 use serde::{Deserialize, Serialize};
-
-//
 
 #[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
 #[response(BuildResponse)]
@@ -28,15 +26,6 @@ pub struct Build {
 }
 
 pub type BuildResponse = Vec<Log>;
-
-//
-
-#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
-#[response(NoData)]
-#[error(anyhow::Error)]
-pub struct CancelBuild {
-  pub id: String,
-}
 
 //
 

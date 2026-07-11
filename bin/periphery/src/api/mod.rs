@@ -69,7 +69,6 @@ pub enum PeripheryRequest {
   GetDockerfileContentsOnHost(GetDockerfileContentsOnHost),
   WriteDockerfileContentsToHost(WriteDockerfileContentsToHost),
   Build(Build),
-  CancelBuild(CancelBuild),
   PruneBuilders(PruneBuilders),
   PruneBuildx(PruneBuildx),
 

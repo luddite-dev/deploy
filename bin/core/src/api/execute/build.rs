@@ -28,7 +28,7 @@ use komodo_client::{
     alert::{Alert, AlertData, SeverityLevel},
     all_logs_success,
     build::{Build, BuildConfig},
-    builder::Builder,
+    builder::{Builder, BuilderConfig},
     deployment::DeploymentState,
     komodo_timestamp, optional_string,
     permission::PermissionLevel,
@@ -175,6 +175,9 @@ impl Resolve<ExecuteArgs> for RunBuild {
     let builder =
       resource::get::<Builder>(&build.config.builder_id).await?;
 
+    let is_server_builder =
+      matches!(&builder.config, BuilderConfig::Server(_));
+
     tokio::spawn(async move {
       let poll = async {
         loop {
@@ -183,13 +186,19 @@ impl Resolve<ExecuteArgs> for RunBuild {
             id = cancel_recv.recv() => id?
           };
           if incoming_build_id == build_id {
-            update.push_simple_log("Cancel acknowledged", "The build cancellation has been queued, it may still take some time.");
+            if is_server_builder {
+              update.push_error_log("Cancel acknowledged", "Build cancellation is not possible on server builders at this time. Use an AWS builder to enable this feature.");
+            } else {
+              update.push_simple_log("Cancel acknowledged", "The build cancellation has been queued, it may still take some time.");
+            }
             update.finalize();
             let id = update.id.clone();
             if let Err(e) = update_update(update).await {
               warn!("Failed to modify Update {id} on db | {e:#}");
             }
-            cancel_clone.cancel();
+            if !is_server_builder {
+              cancel_clone.cancel();
+            }
             return Ok(());
           }
         }
@@ -264,11 +273,11 @@ impl Resolve<ExecuteArgs> for RunBuild {
             replacers: Default::default(),
           }) => res,
         _ = cancel.cancelled() => {
-          debug!("Build cancelled during repo clone, cleaning up builder");
-          update.push_error_log("Build cancelled", String::from("Build cancelled during repo clone"));
+          debug!("Build cancelled during clone, cleaning up builder");
+          update.push_error_log("Build cancelled", String::from("user cancelled build during repo clone"));
           cleanup_builder_instance(periphery, cleanup_data, &mut update)
             .await;
-          debug!("Builder cleaned up");
+          info!("Builder cleaned up");
           return handle_early_return(update, build.id, build.name, true).await
         },
       };
@@ -314,14 +323,7 @@ impl Resolve<ExecuteArgs> for RunBuild {
           }) => res.context("Failed at call to Periphery to build"),
         _ = cancel.cancelled() => {
           info!("Build cancelled during build, cleaning up builder");
-          if let Err(e) = periphery.request(api::build::CancelBuild {
-            id: build.id.clone()
-          })
-          .await
-          .context("Failed to cancel build execution on Server") {
-            update.push_error_log("Cancel Build", format_serror(&e.into()));
-          }
-          update.push_error_log("Build Cancelled", String::from("User cancelled build during image build step"));
+          update.push_error_log("Build cancelled", String::from("User cancelled build during docker build"));
           cleanup_builder_instance(periphery, cleanup_data, &mut update)
             .await;
           return handle_early_return(update, build.id, build.name, true).await
