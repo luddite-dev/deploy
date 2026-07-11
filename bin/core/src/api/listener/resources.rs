@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::OnceLock, time::Duration};
+use std::{str::FromStr, sync::OnceLock};
 
 use anyhow::{Context, anyhow};
 use komodo_client::{
@@ -23,7 +23,6 @@ use crate::{
   },
   helpers::update::init_execution_update,
   resource,
-  state::action_states,
 };
 
 use super::{ANY_BRANCH, ListenerLockCache};
@@ -38,6 +37,11 @@ impl super::CustomSecret for Build {
   }
 }
 
+fn build_locks() -> &'static ListenerLockCache {
+  static BUILD_LOCKS: OnceLock<ListenerLockCache> = OnceLock::new();
+  BUILD_LOCKS.get_or_init(Default::default)
+}
+
 pub async fn handle_build_webhook<B: super::ExtractBranch>(
   build: Build,
   body: String,
@@ -45,6 +49,12 @@ pub async fn handle_build_webhook<B: super::ExtractBranch>(
   if !build.config.webhook_enabled {
     return Ok(());
   }
+
+  // Acquire and hold lock to make a task queue for
+  // subsequent listener calls on same resource.
+  // It would fail if we let it go through from action state busy.
+  let lock = build_locks().get_or_insert_default(&build.id).await;
+  let _lock = lock.lock().await;
 
   // Use the correct target branch when using linked repo.
   let branch = if build.config.linked_repo.is_empty() {
@@ -59,45 +69,13 @@ pub async fn handle_build_webhook<B: super::ExtractBranch>(
 
   B::verify_branch(&body, &branch)?;
 
-  // Cancel if currently building
-  if action_states()
-    .build
-    .get(&build.id)
-    .await
-    .and_then(|states| {
-      states.get().ok().map(|states| states.building)
-    })
-    .unwrap_or_default()
-  {
-    let user = git_webhook_user().to_owned();
-    let cancel = ExecuteRequest::CancelBuild(CancelBuild {
-      build: build.id.clone(),
-    });
-    let update = init_execution_update(&cancel, &user).await?;
-    let ExecuteRequest::CancelBuild(cancel) = cancel else {
-      unreachable!()
-    };
-
-    cancel
-      .resolve(&ExecuteArgs {
-        user,
-        update,
-        task_id: Uuid::new_v4(),
-      })
-      .await
-      .ok();
-
-    poll_build_until_cancelled(&build.id).await?;
-  }
-
   let user = git_webhook_user().to_owned();
-  let run = ExecuteRequest::RunBuild(RunBuild { build: build.id });
-  let update = init_execution_update(&run, &user).await?;
-  let ExecuteRequest::RunBuild(run) = run else {
+  let req = ExecuteRequest::RunBuild(RunBuild { build: build.id });
+  let update = init_execution_update(&req, &user).await?;
+  let ExecuteRequest::RunBuild(req) = req else {
     unreachable!()
   };
-
-  run
+  req
     .resolve(&ExecuteArgs {
       user,
       update,
@@ -105,30 +83,7 @@ pub async fn handle_build_webhook<B: super::ExtractBranch>(
     })
     .await
     .map_err(|e| e.error)?;
-
   Ok(())
-}
-
-async fn poll_build_until_cancelled(
-  build_id: &String,
-) -> anyhow::Result<()> {
-  let action_states = action_states();
-  // Poll to ensure cancelled
-  for _ in 0..10 {
-    if !action_states
-      .build
-      .get(build_id)
-      .await
-      .and_then(|states| {
-        states.get().ok().map(|states| states.building)
-      })
-      .unwrap_or_default()
-    {
-      return Ok(());
-    }
-    tokio::time::sleep(Duration::from_secs(1)).await;
-  }
-  Err(anyhow!("Build still running after cancel"))
 }
 
 // ======
