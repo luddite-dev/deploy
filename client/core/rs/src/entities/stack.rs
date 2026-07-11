@@ -150,6 +150,9 @@ pub type StackListItem = ResourceListItem<StackListItemInfo>;
 pub struct StackListItemInfo {
   /// The server that stack is deployed on, when in Server mode.
   pub server_id: String,
+  /// The name of the server that stack is deployed on, when in Server mode.
+  #[serde(default)]
+  pub server_name: String,
   /// Whether stack is using files on host mode
   pub files_on_host: bool,
   /// Whether stack has file contents defined.
@@ -818,6 +821,9 @@ pub struct StackServiceNames {
 pub struct StackService {
   /// The stack which the service is a part of.
   pub stack_id: String,
+  /// The name of the stack which the service is a part of.
+  #[serde(default)]
+  pub stack_name: String,
   /// The service name
   pub service: String,
   /// The service image

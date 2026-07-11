@@ -107,14 +107,11 @@ pub struct ListAllDockerContainers {
   /// Set the limit for number of containers per-page.
   /// `limit: 300` is default.
   ///
+  /// Passing `limit: 0` returns all results (unlimited).
+  ///
   /// Note: the page logic relies on this being consistent
   /// across queries for more pages.
-  #[serde(default = "default_limit")]
-  pub limit: U64,
-}
-
-fn default_limit() -> u64 {
-  300
+  pub limit: Option<U64>,
 }
 
 #[typeshare]

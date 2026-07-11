@@ -43,15 +43,18 @@ impl Resolve<ReadArgs> for ListRepos {
     } else {
       get_all_tags(None).await?
     };
-    Ok(
-      resource::list_for_user::<Repo>(
-        self.query,
-        user,
-        PermissionLevel::Read.into(),
-        &all_tags,
-      )
-      .await?,
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let repos = resource::list_items_for_user::<Repo>(
+      self.query,
+      limit,
+      self.page,
+      user,
+      PermissionLevel::Read.into(),
+      &all_tags,
+      |_| true,
     )
+    .await?;
+    Ok(repos)
   }
 }
 
@@ -65,9 +68,12 @@ impl Resolve<ReadArgs> for ListFullRepos {
     } else {
       get_all_tags(None).await?
     };
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
       resource::list_full_for_user::<Repo>(
         self.query,
+        limit as i64,
+        self.page * limit,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -105,6 +111,8 @@ impl Resolve<ReadArgs> for GetReposSummary {
   ) -> mogh_error::Result<GetReposSummaryResponse> {
     let repos = resource::list_full_for_user::<Repo>(
       Default::default(),
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &[],

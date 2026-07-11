@@ -45,15 +45,18 @@ impl Resolve<ReadArgs> for ListActions {
     } else {
       get_all_tags(None).await?
     };
-    Ok(
-      resource::list_for_user::<Action>(
-        self.query,
-        user,
-        PermissionLevel::Read.into(),
-        &all_tags,
-      )
-      .await?,
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let actions = resource::list_items_for_user::<Action>(
+      self.query,
+      limit,
+      self.page,
+      user,
+      PermissionLevel::Read.into(),
+      &all_tags,
+      |_| true,
     )
+    .await?;
+    Ok(actions)
   }
 }
 
@@ -67,9 +70,12 @@ impl Resolve<ReadArgs> for ListFullActions {
     } else {
       get_all_tags(None).await?
     };
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
       resource::list_full_for_user::<Action>(
         self.query,
+        limit as i64,
+        self.page * limit,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -107,6 +113,8 @@ impl Resolve<ReadArgs> for GetActionsSummary {
   ) -> mogh_error::Result<GetActionsSummaryResponse> {
     let actions = resource::list_full_for_user::<Action>(
       Default::default(),
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &[],

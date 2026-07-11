@@ -29,11 +29,10 @@ use periphery_client::api::{
     ImageHistory, InspectImage, InspectNetwork, InspectVolume,
   },
 };
-use wildcard::Wildcard;
 
 use crate::{
   api::read::ReadArgs,
-  helpers::periphery_client,
+  helpers::{periphery_client, query::get_all_tags},
   permission::{get_check_permissions, list_resources_for_user},
   resource,
   stack::compose_container_match_regex,
@@ -47,6 +46,8 @@ impl Resolve<ReadArgs> for GetDockerContainersSummary {
   ) -> mogh_error::Result<GetDockerContainersSummaryResponse> {
     let servers = resource::list_full_for_user::<Server>(
       Default::default(),
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &[],
@@ -85,28 +86,36 @@ impl Resolve<ReadArgs> for ListAllDockerContainers {
     self,
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<ListAllDockerContainersResponse> {
+    let all_tags = if self.tags.is_empty() {
+      vec![]
+    } else {
+      get_all_tags(None).await?
+    };
     let servers = resource::list_for_user::<Server>(
       ServerQuery::builder()
         .names(self.servers.clone())
         .tags(self.tags)
         .build(),
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
-      &[],
+      &all_tags,
     )
     .await?;
 
+    let mut containers = Vec::<ContainerListItem>::new();
+    let mut skipped = 0;
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let limit_usize = limit as usize;
+    // Eg. page 1 skips until after 100 containers, page 2 after 200.
+    let skip = limit.saturating_mul(self.page);
+    // Match terms case insensitively.
     let terms = self
       .containers
       .iter()
-      .flat_map(|term| {
-        anyhow::Ok((term, Wildcard::new(term.as_bytes())?))
-      })
+      .map(|term| term.to_lowercase())
       .collect::<Vec<_>>();
-
-    let mut containers = Vec::<ContainerListItem>::new();
-    let mut skipped = 0;
-    let limit_usize = self.limit as usize;
 
     for server in servers {
       let cache = server_status_cache()
@@ -124,18 +133,18 @@ impl Resolve<ReadArgs> for ListAllDockerContainers {
           // Apply terms filter if defined
           (terms.is_empty()
             // Match when all terms contained within a name.
-            || terms.iter().all(|(term, _)| container.name.contains(*term))
-            // Match when any wildcard term directly matches.
-            || terms.iter().any(|(_, wc)| wc.is_match(container.name.as_bytes())))
+            || {
+              let name = container.name.to_lowercase();
+              terms.iter().all(|term| name.contains(term))
+            })
         });
       for container in more {
-        if skipped < self.limit * self.page {
-          // Eg. page 1 skips until after 300 containers, page 2 after 600.
+        if skipped < skip {
           skipped += 1;
         } else {
           // push and maybe early return
           containers.push(container.clone());
-          if containers.len() >= limit_usize {
+          if limit > 0 && containers.len() >= limit_usize {
             return Ok(containers);
           }
         }
@@ -224,6 +233,8 @@ impl Resolve<ReadArgs> for GetResourceMatchingContainer {
     // then check stacks
     let stacks = list_resources_for_user::<Stack>(
       doc! { "config.server_id": &server.id },
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
     )

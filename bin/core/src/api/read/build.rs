@@ -53,15 +53,18 @@ impl Resolve<ReadArgs> for ListBuilds {
     } else {
       get_all_tags(None).await?
     };
-    Ok(
-      resource::list_for_user::<Build>(
-        self.query,
-        user,
-        PermissionLevel::Read.into(),
-        &all_tags,
-      )
-      .await?,
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let builds = resource::list_items_for_user::<Build>(
+      self.query,
+      limit,
+      self.page,
+      user,
+      PermissionLevel::Read.into(),
+      &all_tags,
+      |_| true,
     )
+    .await?;
+    Ok(builds)
   }
 }
 
@@ -75,9 +78,12 @@ impl Resolve<ReadArgs> for ListFullBuilds {
     } else {
       get_all_tags(None).await?
     };
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
       resource::list_full_for_user::<Build>(
         self.query,
+        limit as i64,
+        self.page * limit,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -115,6 +121,8 @@ impl Resolve<ReadArgs> for GetBuildsSummary {
   ) -> mogh_error::Result<GetBuildsSummaryResponse> {
     let builds = resource::list_full_for_user::<Build>(
       Default::default(),
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &[],
@@ -164,7 +172,8 @@ impl Resolve<ReadArgs> for GetBuildMonthlyStats {
     let curr_ts = unix_timestamp_ms() as i64;
     let next_day = curr_ts - curr_ts % ONE_DAY_MS + ONE_DAY_MS;
 
-    let close_ts = next_day - self.page as i64 * 30 * ONE_DAY_MS;
+    let close_ts =
+      next_day - (self.page as i64).saturating_mul(30 * ONE_DAY_MS);
     let open_ts = close_ts - 30 * ONE_DAY_MS;
 
     let mut build_updates = db_client()
@@ -281,6 +290,8 @@ impl Resolve<ReadArgs> for ListCommonBuildExtraArgs {
     };
     let builds = resource::list_full_for_user::<Build>(
       self.query,
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &all_tags,

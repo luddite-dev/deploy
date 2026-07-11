@@ -62,6 +62,10 @@ pub trait KomodoReadRequest: HasResponse {}
 
 //
 
+pub const DEFAULT_LIST_LIMIT: u64 = 100;
+
+//
+
 #[cfg(feature = "utoipa")]
 #[utoipa::path(
   post,
@@ -207,6 +211,8 @@ pub fn list_docker_registries_from_config() {}
 ///   - registries in core config
 ///   - registries configured on builds, deployments
 ///   - registries on the optional Server or Builder
+///
+/// Pre v2.3.0, called `ListDockerRegistriesFromConfig`
 #[typeshare]
 #[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]

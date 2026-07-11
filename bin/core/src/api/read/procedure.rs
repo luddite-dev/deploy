@@ -43,15 +43,18 @@ impl Resolve<ReadArgs> for ListProcedures {
     } else {
       get_all_tags(None).await?
     };
-    Ok(
-      resource::list_for_user::<Procedure>(
-        self.query,
-        user,
-        PermissionLevel::Read.into(),
-        &all_tags,
-      )
-      .await?,
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let procedures = resource::list_items_for_user::<Procedure>(
+      self.query,
+      limit,
+      self.page,
+      user,
+      PermissionLevel::Read.into(),
+      &all_tags,
+      |_| true,
     )
+    .await?;
+    Ok(procedures)
   }
 }
 
@@ -65,9 +68,12 @@ impl Resolve<ReadArgs> for ListFullProcedures {
     } else {
       get_all_tags(None).await?
     };
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
       resource::list_full_for_user::<Procedure>(
         self.query,
+        limit as i64,
+        self.page * limit,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -84,6 +90,8 @@ impl Resolve<ReadArgs> for GetProceduresSummary {
   ) -> mogh_error::Result<GetProceduresSummaryResponse> {
     let procedures = resource::list_full_for_user::<Procedure>(
       Default::default(),
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &[],

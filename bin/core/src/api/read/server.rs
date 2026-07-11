@@ -43,6 +43,8 @@ impl Resolve<ReadArgs> for GetServersSummary {
   ) -> mogh_error::Result<GetServersSummaryResponse> {
     let servers = resource::list_for_user::<Server>(
       Default::default(),
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &[],
@@ -107,15 +109,18 @@ impl Resolve<ReadArgs> for ListServers {
     } else {
       get_all_tags(None).await?
     };
-    Ok(
-      resource::list_for_user::<Server>(
-        self.query,
-        user,
-        PermissionLevel::Read.into(),
-        &all_tags,
-      )
-      .await?,
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let servers = resource::list_items_for_user::<Server>(
+      self.query,
+      limit,
+      self.page,
+      user,
+      PermissionLevel::Read.into(),
+      &all_tags,
+      |_| true,
     )
+    .await?;
+    Ok(servers)
   }
 }
 
@@ -129,9 +134,12 @@ impl Resolve<ReadArgs> for ListFullServers {
     } else {
       get_all_tags(None).await?
     };
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
       resource::list_full_for_user::<Server>(
         self.query,
+        limit as i64,
+        self.page * limit,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -335,7 +343,7 @@ impl Resolve<ReadArgs> for GetHistoricalServerStats {
       },
       FindOptions::builder()
         .sort(doc! { "ts": -1 })
-        .skip(page as u64 * STATS_PER_PAGE as u64)
+        .skip((page as u64).saturating_mul(STATS_PER_PAGE as u64))
         .limit(STATS_PER_PAGE)
         .build(),
     )

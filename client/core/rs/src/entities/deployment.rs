@@ -56,6 +56,9 @@ pub struct DeploymentListItemInfo {
   pub update_available: bool,
   /// The server that deployment is deployed on, when in Server mode.
   pub server_id: String,
+  /// The name of the server that deployment is deployed on, when in Server mode.
+  #[serde(default)]
+  pub server_name: String,
   /// An attached Komodo Build, if it exists.
   pub build_id: Option<String>,
 }

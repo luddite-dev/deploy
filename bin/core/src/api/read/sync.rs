@@ -43,12 +43,16 @@ impl Resolve<ReadArgs> for ListResourceSyncs {
     } else {
       get_all_tags(None).await?
     };
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
-      resource::list_for_user::<ResourceSync>(
+      resource::list_items_for_user::<ResourceSync>(
         self.query,
+        limit,
+        self.page,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
+        |_| true,
       )
       .await?,
     )
@@ -65,9 +69,12 @@ impl Resolve<ReadArgs> for ListFullResourceSyncs {
     } else {
       get_all_tags(None).await?
     };
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
       resource::list_full_for_user::<ResourceSync>(
         self.query,
+        limit as i64,
+        self.page.saturating_mul(limit),
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -106,6 +113,8 @@ impl Resolve<ReadArgs> for GetResourceSyncsSummary {
     let resource_syncs =
       resource::list_full_for_user::<ResourceSync>(
         Default::default(),
+        None,
+        None,
         user,
         PermissionLevel::Read.into(),
         &[],

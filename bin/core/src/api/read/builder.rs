@@ -45,12 +45,16 @@ impl Resolve<ReadArgs> for ListBuilders {
     } else {
       get_all_tags(None).await?
     };
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
-      resource::list_for_user::<Builder>(
+      resource::list_items_for_user::<Builder>(
         self.query,
+        limit,
+        self.page,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
+        |_| true,
       )
       .await?,
     )
@@ -67,9 +71,12 @@ impl Resolve<ReadArgs> for ListFullBuilders {
     } else {
       get_all_tags(None).await?
     };
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
       resource::list_full_for_user::<Builder>(
         self.query,
+        limit as i64,
+        self.page.saturating_mul(limit),
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -85,6 +92,8 @@ impl Resolve<ReadArgs> for GetBuildersSummary {
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<GetBuildersSummaryResponse> {
     let query = match list_resource_ids_for_user::<Builder>(
+      None,
+      None,
       None,
       user,
       PermissionLevel::Read.into(),

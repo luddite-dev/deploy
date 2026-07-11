@@ -17,7 +17,6 @@ use periphery_client::api::{
   compose::{GetComposeLog, GetComposeLogSearch},
   container::InspectContainer,
 };
-use wildcard::Wildcard;
 
 use crate::{
   helpers::{periphery_client, query::get_all_tags},
@@ -74,28 +73,36 @@ impl Resolve<ReadArgs> for ListAllStackServices {
     self,
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<ListStackServicesResponse> {
+    let all_tags = if self.tags.is_empty() {
+      vec![]
+    } else {
+      get_all_tags(None).await?
+    };
     let stacks = resource::list_for_user::<Stack>(
       StackQuery::builder()
         .names(self.stacks.clone())
         .tags(self.tags)
         .build(),
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
-      &[],
+      &all_tags,
     )
     .await?;
 
+    let mut services = Vec::<StackService>::new();
+    let mut skipped = 0;
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let limit_usize = limit as usize;
+    // Eg. page 1 skips until after 100 services, page 2 after 200.
+    let skip = limit.saturating_mul(self.page);
+    // Match terms case insensitively.
     let terms = self
       .services
       .iter()
-      .flat_map(|term| {
-        anyhow::Ok((term, Wildcard::new(term.as_bytes())?))
-      })
+      .map(|term| term.to_lowercase())
       .collect::<Vec<_>>();
-
-    let mut services = Vec::<StackService>::new();
-    let mut skipped = 0;
-    let limit_usize = self.limit as usize;
 
     for stack in stacks {
       let cache =
@@ -106,20 +113,20 @@ impl Resolve<ReadArgs> for ListAllStackServices {
           // Apply state filter if defined.
           (self.state.is_empty() || self.state.contains(&service.state)) &&
           // Apply terms filter if defined
-          terms.is_empty()
+          (terms.is_empty()
             // Match when all terms contained within a name.
-            || terms.iter().all(|(term, _)| service.service.contains(*term))
-            // Match when any wildcard term directly matches.
-            || terms.iter().any(|(_, wc)| wc.is_match(service.service.as_bytes()))
+            || {
+              let name = service.service.to_lowercase();
+              terms.iter().all(|term| name.contains(term))
+            })
         });
       for service in more {
-        if skipped < self.limit * self.page {
-          // Eg. page 1 skips until after 300 services, page 2 after 600.
+        if skipped < skip {
           skipped += 1;
         } else {
           // push and maybe early return
           services.push(service.clone());
-          if services.len() >= limit_usize {
+          if limit > 0 && services.len() >= limit_usize {
             return Ok(services);
           }
         }
@@ -137,7 +144,7 @@ impl Resolve<ReadArgs> for GetStackLog {
   ) -> mogh_error::Result<GetStackLogResponse> {
     let GetStackLog {
       stack,
-      mut services,
+      services,
       tail,
       timestamps,
     } = self;
@@ -170,7 +177,7 @@ impl Resolve<ReadArgs> for SearchStackLog {
   ) -> mogh_error::Result<SearchStackLogResponse> {
     let SearchStackLog {
       stack,
-      mut services,
+      services,
       terms,
       combinator,
       invert,
@@ -252,6 +259,8 @@ impl Resolve<ReadArgs> for ListCommonStackExtraArgs {
     };
     let stacks = resource::list_full_for_user::<Stack>(
       self.query,
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
@@ -286,6 +295,8 @@ impl Resolve<ReadArgs> for ListCommonStackBuildExtraArgs {
     };
     let stacks = resource::list_full_for_user::<Stack>(
       self.query,
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
@@ -319,27 +330,24 @@ impl Resolve<ReadArgs> for ListStacks {
       get_all_tags(None).await?
     };
     let only_update_available = self.query.specific.update_available;
-    let stacks = resource::list_for_user::<Stack>(
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let stacks = resource::list_items_for_user::<Stack>(
       self.query,
+      limit,
+      self.page,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-    )
-    .await?;
-    let stacks = if only_update_available {
-      stacks
-        .into_iter()
-        .filter(|stack| {
-          stack
+      |stack| {
+        !only_update_available
+          || stack
             .info
             .services
             .iter()
             .any(|service| service.update_available)
-        })
-        .collect()
-    } else {
-      stacks
-    };
+      },
+    )
+    .await?;
     Ok(stacks)
   }
 }
@@ -354,9 +362,12 @@ impl Resolve<ReadArgs> for ListFullStacks {
     } else {
       get_all_tags(None).await?
     };
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
       resource::list_full_for_user::<Stack>(
         self.query,
+        limit as i64,
+        self.page * limit,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -394,6 +405,8 @@ impl Resolve<ReadArgs> for GetStacksSummary {
   ) -> mogh_error::Result<GetStacksSummaryResponse> {
     let stacks = resource::list_full_for_user::<Stack>(
       Default::default(),
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &[],

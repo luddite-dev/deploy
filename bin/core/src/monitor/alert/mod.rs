@@ -31,6 +31,8 @@ async fn get_all_servers_map()
 {
   let servers = resource::list_full_for_user::<Server>(
     ResourceQuery::default(),
+    None,
+    None,
     system_user(),
     PermissionLevel::Read.into(),
     &[],

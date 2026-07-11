@@ -45,12 +45,16 @@ impl Resolve<ReadArgs> for ListAlerters {
     } else {
       get_all_tags(None).await?
     };
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
-      resource::list_for_user::<Alerter>(
+      resource::list_items_for_user::<Alerter>(
         self.query,
+        limit,
+        self.page,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
+        |_| true,
       )
       .await?,
     )
@@ -67,9 +71,12 @@ impl Resolve<ReadArgs> for ListFullAlerters {
     } else {
       get_all_tags(None).await?
     };
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
       resource::list_full_for_user::<Alerter>(
         self.query,
+        limit as i64,
+        self.page.saturating_mul(limit),
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -85,6 +92,8 @@ impl Resolve<ReadArgs> for GetAlertersSummary {
     ReadArgs { user }: &ReadArgs,
   ) -> mogh_error::Result<GetAlertersSummaryResponse> {
     let query = match list_resource_ids_for_user::<Alerter>(
+      Default::default(),
+      None,
       None,
       user,
       PermissionLevel::Read.into(),

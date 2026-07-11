@@ -166,6 +166,12 @@ export interface ActionListItemInfo {
     schedule_error?: string;
 }
 export type ActionListItem = ResourceListItem<ActionListItemInfo>;
+export declare enum TagQueryBehavior {
+    /** Returns resources which have strictly all the tags */
+    All = "All",
+    /** Returns resources which have one or more of the tags */
+    Any = "Any"
+}
 export declare enum TemplatesQueryBehavior {
     /** Include templates in results. Default. */
     Include = "Include",
@@ -174,20 +180,20 @@ export declare enum TemplatesQueryBehavior {
     /** Results *only* includes templates. */
     Only = "Only"
 }
-export declare enum TagQueryBehavior {
-    /** Returns resources which have strictly all the tags */
-    All = "All",
-    /** Returns resources which have one or more of the tags */
-    Any = "Any"
-}
 /** Passing empty Vec is the same as not filtering by that field */
 export interface ResourceQuery<T> {
+    /**
+     * List of search terms. Names must contain
+     * all terms to match.
+     */
+    terms?: string[];
+    /** List of exact names to return */
     names?: string[];
-    templates?: TemplatesQueryBehavior;
     /** Pass Vec of tag ids or tag names */
     tags?: string[];
     /** 'All' or 'Any' */
     tag_behavior?: TagQueryBehavior;
+    templates?: TemplatesQueryBehavior;
     specific?: T;
 }
 export interface ActionQuerySpecifics {
@@ -8186,11 +8192,41 @@ export interface LatestCommit {
 export interface ListActions {
     /** optional structured query to filter actions. */
     query?: ActionQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /** List alerters matching optional query. Response: [ListAlertersResponse]. */
 export interface ListAlerters {
     /** Structured query to filter alerters. */
     query?: AlerterQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /**
  * Get a paginated list of alerts sorted by timestamp descending.
@@ -8264,10 +8300,12 @@ export interface ListAllDockerContainers {
      * Set the limit for number of containers per-page.
      * `limit: 300` is default.
      *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /**
  * List all stack services part of the target stacks.
@@ -8294,10 +8332,12 @@ export interface ListAllStackServices {
      * Set the limit for number of services per-page.
      * `limit: 300` is default.
      *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
      * Note: the page logic relies on this being consistent
      * across queries for more pages.
      */
-    limit: U64;
+    limit?: U64;
 }
 /**
  * Gets list of api keys for the calling user.
@@ -8335,11 +8375,41 @@ export interface ListBuildVersions {
 /** List builders matching structured query. Response: [ListBuildersResponse]. */
 export interface ListBuilders {
     query?: BuilderQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /** List builds matching optional query. Response: [ListBuildsResponse]. */
 export interface ListBuilds {
     /** optional structured query to filter builds. */
     query?: BuildQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /**
  * Gets a list of existing values used as extra args across other builds.
@@ -8388,6 +8458,21 @@ export interface ListComposeProjects {
 export interface ListDeployments {
     /** optional structured query to filter deployments. */
     query?: DeploymentQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /**
  * List all docker containers on the target server.
@@ -8455,20 +8540,80 @@ export interface ListDockerVolumes {
 export interface ListFullActions {
     /** optional structured query to filter actions. */
     query?: ActionQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /** List full alerters matching optional query. Response: [ListFullAlertersResponse]. */
 export interface ListFullAlerters {
     /** Structured query to filter alerters. */
     query?: AlerterQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /** List builders matching structured query. Response: [ListFullBuildersResponse]. */
 export interface ListFullBuilders {
     query?: BuilderQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /** List builds matching optional query. Response: [ListFullBuildsResponse]. */
 export interface ListFullBuilds {
     /** optional structured query to filter builds. */
     query?: BuildQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /**
  * List deployments matching optional query.
@@ -8477,36 +8622,141 @@ export interface ListFullBuilds {
 export interface ListFullDeployments {
     /** optional structured query to filter deployments. */
     query?: DeploymentQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /** List procedures matching optional query. Response: [ListFullProceduresResponse]. */
 export interface ListFullProcedures {
     /** optional structured query to filter procedures. */
     query?: ProcedureQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /** List repos matching optional query. Response: [ListFullReposResponse]. */
 export interface ListFullRepos {
     /** optional structured query to filter repos. */
     query?: RepoQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /** List syncs matching optional query. Response: [ListFullResourceSyncsResponse]. */
 export interface ListFullResourceSyncs {
     /** optional structured query to filter syncs. */
     query?: ResourceSyncQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /** List servers matching optional query. Response: [ListFullServersResponse]. */
 export interface ListFullServers {
     /** optional structured query to filter servers. */
     query?: ServerQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /** List stacks matching optional query. Response: [ListFullStacksResponse]. */
 export interface ListFullStacks {
     /** optional structured query to filter stacks. */
     query?: StackQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /** List Swarms matching optional query. Response: [ListFullSwarmsResponse]. */
 export interface ListFullSwarms {
     /** optional structured query to filter swarms. */
     query?: SwarmQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /**
  * List git provider accounts matching optional query.
@@ -8551,16 +8801,61 @@ export interface ListPermissions {
 export interface ListProcedures {
     /** optional structured query to filter procedures. */
     query?: ProcedureQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /** List repos matching optional query. Response: [ListReposResponse]. */
 export interface ListRepos {
     /** optional structured query to filter repos. */
     query?: RepoQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /** List syncs matching optional query. Response: [ListResourceSyncsResponse]. */
 export interface ListResourceSyncs {
     /** optional structured query to filter syncs. */
     query?: ResourceSyncQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /**
  * List configured schedules.
@@ -8587,6 +8882,21 @@ export interface ListSecrets {
 export interface ListServers {
     /** optional structured query to filter servers. */
     query?: ServerQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /** Lists a specific stacks services (the containers). Response: [ListStackServicesResponse]. */
 export interface ListStackServices {
@@ -8597,6 +8907,21 @@ export interface ListStackServices {
 export interface ListStacks {
     /** optional structured query to filter stacks. */
     query?: StackQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /**
  * List configs on the target Swarm.
@@ -8660,6 +8985,21 @@ export interface ListSwarmTasks {
 export interface ListSwarms {
     /** Optional structured query to filter Swarms. */
     query?: SwarmQuery;
+    /**
+     * Retrieve more results by incrementing the page.
+     * `page: 0` is default.
+     */
+    page?: U64;
+    /**
+     * Set the limit for number of resources per-page.
+     * `limit: 100` is default.
+     *
+     * Passing `limit: 0` returns all results (unlimited).
+     *
+     * Note: the page logic relies on this being consistent
+     * across queries for more pages.
+     */
+    limit?: U64;
 }
 /**
  * List the processes running on the target server.

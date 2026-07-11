@@ -70,6 +70,7 @@ pub async fn update_server_stack_cache(
 
       StackService {
         stack_id: stack.id.clone(),
+        stack_name: stack.name.clone(),
         service: service_name.clone(),
         image: image.clone(),
         container,

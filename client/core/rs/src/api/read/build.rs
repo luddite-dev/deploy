@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
 use crate::entities::{
-  I64, Version,
+  I64, U64, Version,
   build::{Build, BuildActionState, BuildListItem, BuildQuery},
 };
 
@@ -66,6 +66,20 @@ pub struct ListBuilds {
   /// optional structured query to filter builds.
   #[serde(default)]
   pub query: BuildQuery,
+
+  /// Retrieve more results by incrementing the page.
+  /// `page: 0` is default.
+  #[serde(default)]
+  pub page: U64,
+
+  /// Set the limit for number of resources per-page.
+  /// `limit: 100` is default.
+  ///
+  /// Passing `limit: 0` returns all results (unlimited).
+  ///
+  /// Note: the page logic relies on this being consistent
+  /// across queries for more pages.
+  pub limit: Option<U64>,
 }
 
 #[typeshare]
@@ -96,6 +110,20 @@ pub struct ListFullBuilds {
   /// optional structured query to filter builds.
   #[serde(default)]
   pub query: BuildQuery,
+
+  /// Retrieve more results by incrementing the page.
+  /// `page: 0` is default.
+  #[serde(default)]
+  pub page: U64,
+
+  /// Set the limit for number of resources per-page.
+  /// `limit: 100` is default.
+  ///
+  /// Passing `limit: 0` returns all results (unlimited).
+  ///
+  /// Note: the page logic relies on this being consistent
+  /// across queries for more pages.
+  pub limit: Option<U64>,
 }
 
 #[typeshare]

@@ -2,8 +2,9 @@ use mogh_resolver::Resolve;
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
-use crate::entities::builder::{
-  Builder, BuilderListItem, BuilderQuery,
+use crate::entities::{
+  U64,
+  builder::{Builder, BuilderListItem, BuilderQuery},
 };
 
 use super::KomodoReadRequest;
@@ -62,6 +63,20 @@ pub fn list_builders() {}
 pub struct ListBuilders {
   #[serde(default)]
   pub query: BuilderQuery,
+
+  /// Retrieve more results by incrementing the page.
+  /// `page: 0` is default.
+  #[serde(default)]
+  pub page: U64,
+
+  /// Set the limit for number of resources per-page.
+  /// `limit: 100` is default.
+  ///
+  /// Passing `limit: 0` returns all results (unlimited).
+  ///
+  /// Note: the page logic relies on this being consistent
+  /// across queries for more pages.
+  pub limit: Option<U64>,
 }
 
 #[typeshare]
@@ -91,6 +106,20 @@ pub fn list_full_builders() {}
 pub struct ListFullBuilders {
   #[serde(default)]
   pub query: BuilderQuery,
+
+  /// Retrieve more results by incrementing the page.
+  /// `page: 0` is default.
+  #[serde(default)]
+  pub page: U64,
+
+  /// Set the limit for number of resources per-page.
+  /// `limit: 100` is default.
+  ///
+  /// Passing `limit: 0` returns all results (unlimited).
+  ///
+  /// Note: the page logic relies on this being consistent
+  /// across queries for more pages.
+  pub limit: Option<U64>,
 }
 
 #[typeshare]

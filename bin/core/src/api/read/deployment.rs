@@ -55,21 +55,19 @@ impl Resolve<ReadArgs> for ListDeployments {
       get_all_tags(None).await?
     };
     let only_update_available = self.query.specific.update_available;
-    let deployments = resource::list_for_user::<Deployment>(
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let deployments = resource::list_items_for_user::<Deployment>(
       self.query,
+      limit,
+      self.page,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
+      |deployment| {
+        !only_update_available || deployment.info.update_available
+      },
     )
     .await?;
-    let deployments = if only_update_available {
-      deployments
-        .into_iter()
-        .filter(|deployment| deployment.info.update_available)
-        .collect()
-    } else {
-      deployments
-    };
     Ok(deployments)
   }
 }
@@ -84,9 +82,12 @@ impl Resolve<ReadArgs> for ListFullDeployments {
     } else {
       get_all_tags(None).await?
     };
+    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
       resource::list_full_for_user::<Deployment>(
         self.query,
+        limit as i64,
+        self.page * limit,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -285,6 +286,8 @@ impl Resolve<ReadArgs> for GetDeploymentsSummary {
   ) -> mogh_error::Result<GetDeploymentsSummaryResponse> {
     let deployments = resource::list_full_for_user::<Deployment>(
       Default::default(),
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &[],
@@ -333,6 +336,8 @@ impl Resolve<ReadArgs> for ListCommonDeploymentExtraArgs {
     };
     let deployments = resource::list_full_for_user::<Deployment>(
       self.query,
+      None,
+      None,
       user,
       PermissionLevel::Read.into(),
       &all_tags,

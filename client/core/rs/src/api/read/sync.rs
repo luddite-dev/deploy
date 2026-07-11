@@ -2,9 +2,12 @@ use mogh_resolver::Resolve;
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
-use crate::entities::sync::{
-  ResourceSync, ResourceSyncActionState, ResourceSyncListItem,
-  ResourceSyncQuery,
+use crate::entities::{
+  U64,
+  sync::{
+    ResourceSync, ResourceSyncActionState, ResourceSyncListItem,
+    ResourceSyncQuery,
+  },
 };
 
 use super::KomodoReadRequest;
@@ -64,6 +67,20 @@ pub struct ListResourceSyncs {
   /// optional structured query to filter syncs.
   #[serde(default)]
   pub query: ResourceSyncQuery,
+
+  /// Retrieve more results by incrementing the page.
+  /// `page: 0` is default.
+  #[serde(default)]
+  pub page: U64,
+
+  /// Set the limit for number of resources per-page.
+  /// `limit: 100` is default.
+  ///
+  /// Passing `limit: 0` returns all results (unlimited).
+  ///
+  /// Note: the page logic relies on this being consistent
+  /// across queries for more pages.
+  pub limit: Option<U64>,
 }
 
 #[typeshare]
@@ -94,6 +111,20 @@ pub struct ListFullResourceSyncs {
   /// optional structured query to filter syncs.
   #[serde(default)]
   pub query: ResourceSyncQuery,
+
+  /// Retrieve more results by incrementing the page.
+  /// `page: 0` is default.
+  #[serde(default)]
+  pub page: U64,
+
+  /// Set the limit for number of resources per-page.
+  /// `limit: 100` is default.
+  ///
+  /// Passing `limit: 0` returns all results (unlimited).
+  ///
+  /// Note: the page logic relies on this being consistent
+  /// across queries for more pages.
+  pub limit: Option<U64>,
 }
 
 #[typeshare]

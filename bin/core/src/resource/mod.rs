@@ -17,7 +17,7 @@ use database::{
   },
 };
 use formatting::format_serror;
-use futures_util::future::join_all;
+use futures_util::{TryStreamExt, future::join_all};
 use indexmap::IndexSet;
 use komodo_client::{
   api::{read::ExportResourcesToToml, write::CreateTag},
@@ -262,20 +262,87 @@ pub async fn get<T: KomodoResource>(
 /// Get full resource list with no permissions check.
 pub async fn list_all_resources<T: KomodoResource>(
   filters: impl Into<Option<Document>>,
+  limit: impl Into<Option<i64>>,
+  skip: impl Into<Option<u64>>,
 ) -> anyhow::Result<Vec<Resource<T::Config, T::Info>>> {
-  find_collect(
-    T::coll(),
-    filters,
-    FindOptions::builder().sort(doc! { "name": 1 }).build(),
-  )
-  .await
-  .with_context(|| {
-    format!("Failed to pull {}s from mongo", T::resource_type())
-  })
+  let options = FindOptions::builder()
+    .sort(doc! { "name": 1 })
+    .limit(limit)
+    .skip(skip);
+  find_collect(T::coll(), filters, options.build())
+    .await
+    .with_context(|| {
+      format!("Failed to pull {}s from mongo", T::resource_type())
+    })
+}
+
+/// List item pagination for the `List<Resource>` apis, driving the
+/// mongo cursor directly instead of collecting the full resource
+/// list in memory. Each resource pulled from the cursor is checked
+/// against the user permissions and converted to its list item, and
+/// `filter` is applied before the item counts toward `limit` / `page`.
+/// This is required because some list item fields (eg. state,
+/// update available) are computed from in-memory caches rather than
+/// stored on the database, so they cannot be part of the db query.
+/// Stops pulling from the cursor as soon as the page is full.
+pub async fn list_items_for_user<T: KomodoResource>(
+  mut query: ResourceQuery<T::QuerySpecifics>,
+  limit: u64,
+  page: u64,
+  user: &User,
+  permission: PermissionLevelAndSpecifics,
+  all_tags: &[Tag],
+  filter: impl Fn(&T::ListItem) -> bool,
+) -> anyhow::Result<Vec<T::ListItem>> {
+  validate_resource_query_tags(&mut query, all_tags)?;
+  let mut filters = Document::new();
+  query.add_filters(&mut filters);
+
+  let mut permits =
+    crate::permission::load_list_permits::<T>(user, permission)
+      .await?;
+
+  let mut cursor = T::coll()
+    .find(filters)
+    .sort(doc! { "name": 1 })
+    .await
+    .with_context(|| {
+      format!("Failed to query db for {}s", T::resource_type())
+    })?;
+
+  let skip = page.saturating_mul(limit);
+  let mut skipped = 0;
+  let mut items = Vec::new();
+
+  while let Some(resource) = cursor
+    .try_next()
+    .await
+    .context("Failed to pull next resource from db cursor")?
+  {
+    if !permits.permitted::<T>(&resource).await? {
+      continue;
+    }
+    let item = T::to_list_item(resource).await;
+    if !filter(&item) {
+      continue;
+    }
+    if skipped < skip {
+      skipped += 1;
+      continue;
+    }
+    items.push(item);
+    if limit != 0 && items.len() as u64 >= limit {
+      break;
+    }
+  }
+
+  Ok(items)
 }
 
 pub async fn list_for_user<T: KomodoResource>(
   mut query: ResourceQuery<T::QuerySpecifics>,
+  limit: impl Into<Option<i64>>,
+  skip: impl Into<Option<u64>>,
   user: &User,
   permission: PermissionLevelAndSpecifics,
   all_tags: &[Tag],
@@ -283,7 +350,10 @@ pub async fn list_for_user<T: KomodoResource>(
   validate_resource_query_tags(&mut query, all_tags)?;
   let mut filters = Document::new();
   query.add_filters(&mut filters);
-  list_for_user_using_document::<T>(filters, user, permission).await
+  list_for_user_using_document::<T>(
+    filters, limit, skip, user, permission,
+  )
+  .await
 }
 
 // // pub async fn list_for_user_using_pattern<T: KomodoResource>(
@@ -308,13 +378,17 @@ pub async fn list_for_user<T: KomodoResource>(
 
 pub async fn list_for_user_using_document<T: KomodoResource>(
   filters: Document,
+  limit: impl Into<Option<i64>>,
+  skip: impl Into<Option<u64>>,
   user: &User,
   permission: PermissionLevelAndSpecifics,
 ) -> anyhow::Result<Vec<T::ListItem>> {
-  let list = list_resources_for_user::<T>(filters, user, permission)
-    .await?
-    .into_iter()
-    .map(|resource| T::to_list_item(resource));
+  let list = list_resources_for_user::<T>(
+    filters, limit, skip, user, permission,
+  )
+  .await?
+  .into_iter()
+  .map(|resource| T::to_list_item(resource));
   Ok(join_all(list).await)
 }
 
@@ -329,13 +403,16 @@ pub async fn list_for_user_using_document<T: KomodoResource>(
 pub async fn list_full_for_user_using_pattern<T: KomodoResource>(
   pattern: &str,
   query: ResourceQuery<T::QuerySpecifics>,
+  limit: impl Into<Option<i64>>,
+  skip: impl Into<Option<u64>>,
   user: &User,
   permission: PermissionLevelAndSpecifics,
   all_tags: &[Tag],
 ) -> anyhow::Result<Vec<Resource<T::Config, T::Info>>> {
-  let resources =
-    list_full_for_user::<T>(query, user, permission, all_tags)
-      .await?;
+  let resources = list_full_for_user::<T>(
+    query, limit, skip, user, permission, all_tags,
+  )
+  .await?;
 
   let patterns = parse_string_list(pattern);
   let mut names = HashSet::<String>::new();
@@ -370,6 +447,8 @@ pub async fn list_full_for_user_using_pattern<T: KomodoResource>(
 
 pub async fn list_full_for_user<T: KomodoResource>(
   mut query: ResourceQuery<T::QuerySpecifics>,
+  limit: impl Into<Option<i64>>,
+  skip: impl Into<Option<u64>>,
   user: &User,
   permissions: PermissionLevelAndSpecifics,
   all_tags: &[Tag],
@@ -377,7 +456,14 @@ pub async fn list_full_for_user<T: KomodoResource>(
   validate_resource_query_tags(&mut query, all_tags)?;
   let mut filters = Document::new();
   query.add_filters(&mut filters);
-  list_resources_for_user::<T>(filters, user, permissions).await
+  list_resources_for_user::<T>(
+    filters,
+    limit,
+    skip,
+    user,
+    permissions,
+  )
+  .await
 }
 
 pub type IdResourceMap<T> = HashMap<
