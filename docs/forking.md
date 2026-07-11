@@ -18,7 +18,7 @@ or on our end. Commit hashes (full where stable) are referenced throughout.
 | Fork base (merge-base) | `7c44ffc8eedc8fb08ceb5a178e1e13504f59f619` |
 | Our canonical branch | `main` on `github.com/luddite-dev/deploy` |
 | Swarm drop commit | `fee066657b21f43bd5484c4de7b5568436e9e9cd` |
-| Divergence at last review | 84 upstream commits, 22 fork commits |
+| Divergence at last review | 89 upstream commits, 55 fork commits |
 
 The fork is a **hard fork**: no backward-compatibility constraints, types may
 be freely broken, no migration shims. All Komodo types can be rewritten freely.
@@ -78,19 +78,20 @@ layer to land first; we port UI as a bundle after the Rust tier it depends on.
 
 ## Merged
 
-_Commits pulled from upstream and landed on `main`._
+_Commits pulled from upstream and landed on `main`._ All three tiers below are
+merged via PRs [#8](https://github.com/luddite-dev/deploy/pull/8),
+[#9](https://github.com/luddite-dev/deploy/pull/9),
+[#10](https://github.com/luddite-dev/deploy/pull/10). Upstream commit hashes
+are shown for traceability; on `main` they appear as rebase-merged commits with
+rewritten short hashes (e.g. `807c7f4f6`, `93fabc149`, `dd84c84d3`).
 
-(none yet)
-
----
-
-## Porting — Tier 1 (clean picks, no/low conflict)
-
-_Branch: `upstream/tier-1-clean-picks` off `main`. Status: **PR #8 open** (https://github.com/luddite-dev/deploy/pull/8)._
+<details>
+<summary>Tier 1 — clean picks (ZFS ARC memory, startup alerts, error formatting) — <b>MERGED via PR #8</b></summary>
 
 Cherry-picks with no swarm entanglement — immediate value, minimal merge risk.
+Branch: `upstream/tier-1-clean-picks` off `main`.
 
-| Commit | Summary | Notes |
+| Upstream commit | Summary | Notes |
 |---|---|---|
 | `ab1b8ca3f8a99370d3a5ff5401d21caa07a080ff` | ZFS ARC / cache-buffers memory breakout in periphery stats | High value for host-based periphery on ZFS hosts. Reads `/proc/meminfo` + `/proc/spl/kstat/zfs/arcstats`; subtracts ARC from "used" to prevent false high-memory alerts. Applied cleanly (module move `stats.rs`→`stats/mod.rs` resolved automatically). |
 | `dded910ea3320a807a8cbe4152a6118ae69f6d54` | `cargo fmt` follow-up to the mem module | Companion to `ab1b8ca3f`. Clean. |
@@ -103,17 +104,16 @@ Cherry-picks with no swarm entanglement — immediate value, minimal merge risk.
 > the Tier 2 pagination commits land. Attempted as a Tier 1 pick; conflicts in
 > `bin/core/src/api/read/{docker.rs,stack.rs}` confirmed the dependency.
 
----
+</details>
 
-## Porting — Tier 2 (pagination backbone, mechanical swarm surgery)
-
-_Branch: `upstream/tier-2-pagination` off tier 1 branch. Status: **PR #9 open** (https://github.com/luddite-dev/deploy/pull/9)._
+<details>
+<summary>Tier 2 — pagination backbone (mechanical swarm surgery) — <b>MERGED via PR #9</b></summary>
 
 High-value performance refactor. Applied as a unit after Tier 1. Each commit
 touches `read/swarm.rs` (deleted) or `swarm_name` blocks — stripped per Drop
-Rule 1.
+Rule 1. Branch: `upstream/tier-2-pagination` off the tier 1 branch.
 
-| Commit | Summary | Swarm surgery |
+| Upstream commit | Summary | Swarm surgery |
 |---|---|---|
 | `47a6dfe95c74b9370fa945643f02cb234882606c` | Startup plumbing for pagination in `permission.rs` | Drop `user_resource_target_query` swarm block + `<Swarm>` query. |
 | `bb55120d94441de3f703b496956718054def2e98` | Wire `limit`/`page` into every `List*` Resolve + client structs | Drop `read/swarm.rs` hunk. |
@@ -131,18 +131,18 @@ Rule 1.
 - **Type name preservation**: `ListAllDockerContainersResponse` kept (not renamed to `ListAllContainersResponse` — that's de-vendor commit `6ca10c9e5`, Tier 5 deferred).
 - **`list_items_for_user` conflict pattern**: every `ListXxx` handler had the same conflict shape — `list_for_user(query, limit as i64, self.page * limit, ...)` → `list_items_for_user(query, limit, self.page, ..., |item| filter_closure)`. Always take upstream side. Redundant post-filter blocks (e.g. `only_update_available` in `deployment.rs`) dropped since the closure handles filtering inline.
 
----
+</details>
 
-## Porting — Tier 3 (builder/cancel, zero swarm conflict)
-
-_Branch: `upstream/tier-3-builder-cancel` off tier 2 branch. Status: **PR #10 open** (https://github.com/luddite-dev/deploy/pull/10)._
+<details>
+<summary>Tier 3 — builder/cancel (zero swarm conflict) — <b>MERGED via PR #10</b></summary>
 
 High value. Builder code path is untouched by our swarm drop — no swarm surgery
 needed. `state.rs` is the one shared hotspot but hunks are in separate regions
 from the swarm-drop deletions (clean append). As predicted: only 1 conflict
 across all 7 commits (in `helpers/builder.rs`, builder usage selection logic).
+Branch: `upstream/tier-3-builder-cancel` off the tier 2 branch.
 
-| Commit | Summary | Notes |
+| Upstream commit | Summary | Notes |
 |---|---|---|
 | `18a310064c9243a8b88f26226750418d59ba800f` | `CancelProcedure`/`CancelAction` Resolve impls + `CancelCache`/`CancellationToken` threading into execute layer | `state.rs` append is clean (different region from swarm drop). Adds `CancelProcedure`/`CancelAction` to `Execution` enum in `helpers/procedure.rs`. |
 | `13ae29eda4de0e36024f4d07dfa09b4f710e13fa` | Finalize update on procedure error | Trivial fix paired with `18a310064`. |
@@ -154,19 +154,23 @@ across all 7 commits (in `helpers/builder.rs`, builder usage selection logic).
 
 ### Tier 3 chronological order
 
-Applied in this order (not the table order above): `50e04187c` → `77cdd11c5` → `ba7e01377` → `18a310064` → `13ae29eda` → `43ca25e55b` → `ec65db12f`.
+Applied in this order (not the table order above): `50e04187c` → `77cdd11c5` → `ba7e01377` → `18a310064` → `13ae29eda` → `43ca25e55` → `ec65db12f`.
+
+</details>
 
 ---
 
 ## Deferred — future candidates
 
-Revisit after Tiers 1–3 land and after further upstream or fork-side progress.
+Revisit after further upstream or fork-side progress.
 
-### Tier 4 — depends on Tier 2 infrastructure
+### Tier 4 — depends on Tier 2 infrastructure (now available)
+
+Tier 2 pagination landed, so these are unblocked.
 
 | Commit(s) | Summary | Notes |
 |---|---|---|
-| `8f7854599` + `ac9037d84` + `6513cf297` | State filtering on list routes (cached state → in-memory repagination) | Med value. Drop swarm hunk in `ac9037d84`. Builds on Tier 2 ListPermits. |
+| `8f7854599` + `ac9037d84` + `6513cf297` | State filtering on list routes (cached state → in-memory repagination) | Med value. Drop swarm hunk in `ac9037d84`. Builds on Tier 2 `ListPermits`. |
 | `a4b4b9bfc` + `47287fadb` | Resource sorting (db-level + in-memory) | Med value. Drop swarm. Builds on Tier 2 + `97ce46d89`. |
 | `3850b3596` | Non-semver image tag support in deploy flow | Med-High. Needs `entities/build.rs` methods ported together. |
 | `2d10b9e79` | Sync alerter ids→names fix (new `ReplaceIds` trait) | Med-High. New module + `Swarm` impl block to drop per Rule 1. |
@@ -198,4 +202,6 @@ When syncing from upstream again: update the Fork context table with the new
 upstream tip, recompute the merge-base, and run
 `git log --oneline <merge-base>..komodo/2.3.0` to enumerate new commits.
 Cross-reference each new commit against the Drop rules before adding it to a
-tier. Update the Merged / Porting / Deferred sections to reflect new state.
+tier. Update the Merged / Deferred sections to reflect new state.
+</content>
+</invoke>
