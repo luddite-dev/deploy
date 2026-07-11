@@ -4,7 +4,7 @@ use anyhow::{Context, anyhow};
 use database::{
   bson::Document, mongo_indexed::doc, mungos::find::find_collect,
 };
-use futures_util::{TryStreamExt, future::BoxFuture};
+use futures_util::{FutureExt, future::BoxFuture};
 use indexmap::IndexSet;
 use komodo_client::{
   api::read::GetPermission,
@@ -16,9 +16,7 @@ use komodo_client::{
     builder::Builder,
     deployment::Deployment,
     permission::SpecificPermission,
-    permission::{
-      Permission, PermissionLevel, PermissionLevelAndSpecifics,
-    },
+    permission::{PermissionLevel, PermissionLevelAndSpecifics},
     procedure::Procedure,
     repo::Repo,
     resource::Resource,
@@ -177,34 +175,16 @@ pub fn get_user_permission_on_resource<'a, T: KomodoResource>(
   })
 }
 
-/// Precomputed user permissions for listing resources of a type.
-/// Load with [load_list_permits], then check visibility of
-/// each resource with [ListPermits::permitted].
-pub enum ListPermits {
-  /// The user can see all resources of the type,
-  /// eg. admin, transparent mode, or 'all' access on the variant.
-  Unrestricted,
-  /// Visibility must be checked per-resource
-  /// against the permissions table.
-  Fine(FineListPermits),
-}
-
-pub struct FineListPermits {
-  required: PermissionLevelAndSpecifics,
-  base: PermissionLevelAndSpecifics,
-  permission_by_resource_id: HashMap<String, Permission>,
-  additional_specific_cache:
-    HashMap<ResourceTarget, IndexSet<SpecificPermission>>,
-  user: User,
-}
-
-pub async fn load_list_permits<T: KomodoResource>(
+pub async fn list_resources_for_user<T: KomodoResource>(
+  filters: impl Into<Option<Document>>,
+  limit: impl Into<Option<i64>>,
+  skip: impl Into<Option<u64>>,
   user: &User,
-  required: PermissionLevelAndSpecifics,
-) -> anyhow::Result<ListPermits> {
+  permission: PermissionLevelAndSpecifics,
+) -> anyhow::Result<Vec<Resource<T::Config, T::Info>>> {
   // Check admin
   if user.admin {
-    return Ok(ListPermits::Unrestricted);
+    return list_all_resources::<T>(filters, limit, skip).await;
   }
 
   let mut base = PermissionLevelAndSpecifics {
@@ -217,8 +197,8 @@ pub async fn load_list_permits<T: KomodoResource>(
   };
 
   // 'transparent_mode' early return.
-  if base.fulfills(&required) {
-    return Ok(ListPermits::Unrestricted);
+  if base.fulfills(&permission) {
+    return list_all_resources::<T>(filters, limit, skip).await;
   }
 
   let resource_type = T::resource_type();
@@ -227,8 +207,8 @@ pub async fn load_list_permits<T: KomodoResource>(
   if let Some(all_permission) = user.all.get(&resource_type) {
     base.elevate(all_permission);
     // 'user.all' early return.
-    if base.fulfills(&required) {
-      return Ok(ListPermits::Unrestricted);
+    if base.fulfills(&permission) {
+      return list_all_resources::<T>(filters, limit, skip).await;
     }
   }
 
@@ -238,23 +218,25 @@ pub async fn load_list_permits<T: KomodoResource>(
     if let Some(all_permission) = group.all.get(&resource_type) {
       base.elevate(all_permission);
       // 'group.all' early return.
-      if base.fulfills(&required) {
-        return Ok(ListPermits::Unrestricted);
+      if base.fulfills(&permission) {
+        return list_all_resources::<T>(filters, limit, skip).await;
       }
     }
   }
 
-  // Pull any permissions on the variant using the permissions table
-  let permissions = find_collect(
-    &db_client().permissions,
-    doc! {
-      "$or": user_target_query(&user.id, &groups)?,
-      "resource_target.type": resource_type.as_ref(),
-    },
-    None,
-  )
-  .await
-  .context("failed to query permissions on db")?;
+  let (all, permissions) = tokio::try_join!(
+    list_all_resources::<T>(filters, None, None),
+    // And any ids using the permissions table
+    find_collect(
+      &db_client().permissions,
+      doc! {
+        "$or": user_target_query(&user.id, &groups)?,
+        "resource_target.type": resource_type.as_ref(),
+      },
+      None,
+    )
+    .map(|res| res.context("failed to query permissions on db"))
+  )?;
 
   let permission_by_resource_id = permissions
     .into_iter()
@@ -266,48 +248,34 @@ pub async fn load_list_permits<T: KomodoResource>(
     })
     .collect::<HashMap<_, _>>();
 
-  Ok(ListPermits::Fine(FineListPermits {
-    required,
-    base,
-    permission_by_resource_id,
-    additional_specific_cache: Default::default(),
-    user: user.clone(),
-  }))
-}
+  let mut resources = Vec::new();
+  let mut additional_specific_cache =
+    HashMap::<ResourceTarget, IndexSet<SpecificPermission>>::new();
 
-impl ListPermits {
-  /// Check whether the user can see the given resource.
-  pub async fn permitted<T: KomodoResource>(
-    &mut self,
-    resource: &Resource<T::Config, T::Info>,
-  ) -> anyhow::Result<bool> {
-    let ListPermits::Fine(fine) = self else {
-      return Ok(true);
-    };
-
+  for resource in all {
     let mut perm = if let Some(perm) =
-      fine.permission_by_resource_id.get(&resource.id)
+      permission_by_resource_id.get(&resource.id)
     {
-      fine.base.join(perm)
+      base.join(perm)
     } else {
-      fine.base.clone()
+      base.clone()
     };
     // Check if already fulfils
-    if perm.fulfills(&fine.required) {
-      return Ok(true);
+    if perm.fulfills(&permission) {
+      resources.push(resource);
+      continue;
     }
 
     // Also check if fulfills with inherited specific
     let additional_target = if let Some(additional_target) =
-      T::inherit_specific_permissions_from(resource)
+      T::inherit_specific_permissions_from(&resource)
       && !additional_target.is_empty()
     {
       additional_target
     } else {
-      return Ok(false);
+      continue;
     };
-    let additional_specific = match fine
-      .additional_specific_cache
+    let additional_specific = match additional_specific_cache
       .get(&additional_target)
       .cloned()
     {
@@ -316,87 +284,21 @@ impl ListPermits {
         let specific = GetPermission {
           target: additional_target.clone(),
         }
-        .resolve(&ReadArgs {
-          user: fine.user.clone(),
-        })
+        .resolve(&ReadArgs { user: user.clone() })
         .await
         .map_err(|e| e.error)
         .context(
           "failed to get user permission on additional target",
         )?
         .specific;
-        fine
-          .additional_specific_cache
+        additional_specific_cache
           .insert(additional_target, specific.clone());
         specific
       }
     };
     perm.specific.extend(additional_specific);
-    Ok(perm.fulfills(&fine.required))
-  }
-}
-
-pub async fn list_resources_for_user<T: KomodoResource>(
-  filters: impl Into<Option<Document>>,
-  limit: impl Into<Option<i64>>,
-  skip: impl Into<Option<u64>>,
-  user: &User,
-  permission: PermissionLevelAndSpecifics,
-) -> anyhow::Result<Vec<Resource<T::Config, T::Info>>> {
-  let mut permits = load_list_permits::<T>(user, permission).await?;
-
-  if let ListPermits::Unrestricted = permits {
-    return list_all_resources::<T>(filters, limit, skip).await;
-  }
-
-  list_resources_with_permits::<T>(
-    &mut permits,
-    filters.into(),
-    limit.into(),
-    skip.into(),
-  )
-  .await
-}
-
-/// Fine grained permissions: drive the cursor directly, checking
-/// each resource against the user permissions, with limit / skip
-/// applied in memory after the permission filter. Stops pulling
-/// from the cursor as soon as the limit is reached, and avoids
-/// collecting resources the user cannot see.
-async fn list_resources_with_permits<T: KomodoResource>(
-  permits: &mut ListPermits,
-  filters: Option<Document>,
-  limit: Option<i64>,
-  skip: Option<u64>,
-) -> anyhow::Result<Vec<Resource<T::Config, T::Info>>> {
-  let mut cursor = T::coll()
-    .find(filters.unwrap_or_default())
-    .sort(doc! { "name": 1 })
-    .await
-    .with_context(|| {
-      format!("Failed to query db for {}s", T::resource_type())
-    })?;
-
-  let limit = limit.unwrap_or_default().max(0) as usize;
-  let skip = skip.unwrap_or_default();
-  let mut skipped = 0;
-  let mut resources = Vec::new();
-
-  while let Some(resource) = cursor
-    .try_next()
-    .await
-    .context("Failed to pull next resource from db cursor")?
-  {
-    if !permits.permitted::<T>(&resource).await? {
-      continue;
-    }
-    if skipped < skip {
-      skipped += 1;
-      continue;
-    }
-    resources.push(resource);
-    if limit != 0 && resources.len() >= limit {
-      break;
+    if perm.fulfills(&permission) {
+      resources.push(resource);
     }
   }
 
@@ -411,17 +313,49 @@ pub async fn list_resource_ids_for_user<T: KomodoResource>(
   user: &User,
   permission: PermissionLevelAndSpecifics,
 ) -> anyhow::Result<Option<Vec<String>>> {
-  let mut permits = load_list_permits::<T>(user, permission).await?;
-
-  if let ListPermits::Unrestricted = permits {
+  // Check admin
+  if user.admin {
     return Ok(None);
   }
 
-  let ids = list_resources_with_permits::<T>(
-    &mut permits,
-    filters,
-    limit.into(),
-    skip.into(),
+  let mut base = PermissionLevelAndSpecifics {
+    level: if core_config().transparent_mode {
+      PermissionLevel::Read
+    } else {
+      PermissionLevel::None
+    },
+    specific: Default::default(),
+  };
+
+  // 'transparent_mode' early return.
+  if base.fulfills(&permission) {
+    return Ok(None);
+  }
+
+  let resource_type = T::resource_type();
+
+  if let Some(all) = user.all.get(&resource_type) {
+    base.elevate(all);
+    // 'user.all' early return.
+    if base.fulfills(&permission) {
+      return Ok(None);
+    }
+  }
+
+  // Check user groups 'all' on variant
+  let groups = get_user_user_groups(&user.id).await?;
+  for group in &groups {
+    if let Some(all) = group.all.get(&resource_type) {
+      base.elevate(all);
+      // 'group.all' early return.
+      if base.fulfills(&permission) {
+        return Ok(None);
+      }
+    }
+  }
+
+  let ids = list_resources_for_user::<T>(
+    filters, limit, skip, user, permission,
   )
   .await?
   .into_iter()

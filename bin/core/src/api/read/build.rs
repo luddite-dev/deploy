@@ -54,17 +54,17 @@ impl Resolve<ReadArgs> for ListBuilds {
       get_all_tags(None).await?
     };
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    let builds = resource::list_items_for_user::<Build>(
-      self.query,
-      limit,
-      self.page,
-      user,
-      PermissionLevel::Read.into(),
-      &all_tags,
-      |build| states.is_empty() || states.contains(&build.info.state),
+    Ok(
+      resource::list_for_user::<Build>(
+        self.query,
+        limit as i64,
+        self.page * limit,
+        user,
+        PermissionLevel::Read.into(),
+        &all_tags,
+      )
+      .await?,
     )
-    .await?;
-    Ok(builds)
   }
 }
 

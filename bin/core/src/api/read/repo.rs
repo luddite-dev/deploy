@@ -44,17 +44,17 @@ impl Resolve<ReadArgs> for ListRepos {
       get_all_tags(None).await?
     };
     let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    let repos = resource::list_items_for_user::<Repo>(
-      self.query,
-      limit,
-      self.page,
-      user,
-      PermissionLevel::Read.into(),
-      &all_tags,
-      |repo| states.is_empty() || states.contains(&repo.info.state),
+    Ok(
+      resource::list_for_user::<Repo>(
+        self.query,
+        limit as i64,
+        self.page * limit,
+        user,
+        PermissionLevel::Read.into(),
+        &all_tags,
+      )
+      .await?,
     )
-    .await?;
-    Ok(repos)
   }
 }
 
