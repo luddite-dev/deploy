@@ -1,5 +1,3 @@
-#![allow(unused_crate_dependencies)]
-
 use command::{CommandOptions, run_standard_command};
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use komodo_client::entities::config::periphery::Command;

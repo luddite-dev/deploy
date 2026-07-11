@@ -100,6 +100,13 @@ fn convert_object_version(
   }
 }
 
+fn convert_driver(driver: bollard::models::Driver) -> Driver {
+  Driver {
+    name: driver.name,
+    options: driver.options,
+  }
+}
+
 fn convert_mount(mount: bollard::models::Mount) -> Mount {
   Mount {
     target: mount.target,
@@ -200,5 +207,54 @@ fn convert_resources_ulimits(
     name: ulimit.name,
     soft: ulimit.soft,
     hard: ulimit.hard,
+  }
+}
+
+fn convert_resource_object(
+  object: bollard::models::ResourceObject,
+) -> ResourceObject {
+  ResourceObject {
+    nano_cpus: object.nano_cpus,
+    memory_bytes: object.memory_bytes,
+    generic_resources: object
+      .generic_resources
+      .map(convert_generic_resources),
+  }
+}
+
+fn convert_generic_resources(
+  resources: Vec<bollard::models::GenericResourcesInner>,
+) -> Vec<GenericResourcesInner> {
+  resources
+    .into_iter()
+    .map(|resource| GenericResourcesInner {
+      named_resource_spec: resource.named_resource_spec.map(|spec| {
+        GenericResourcesInnerNamedResourceSpec {
+          kind: spec.kind,
+          value: spec.value,
+        }
+      }),
+      discrete_resource_spec: resource.discrete_resource_spec.map(
+        |spec| GenericResourcesInnerDiscreteResourceSpec {
+          kind: spec.kind,
+          value: spec.value,
+        },
+      ),
+    })
+    .collect()
+}
+
+fn convert_platform(platform: bollard::models::Platform) -> Platform {
+  Platform {
+    architecture: platform.architecture,
+    os: platform.os,
+  }
+}
+
+fn convert_tls_info(tls_info: bollard::models::TlsInfo) -> TlsInfo {
+  TlsInfo {
+    trust_root: tls_info.trust_root,
+    cert_issuer_subject: tls_info.cert_issuer_subject,
+    cert_issuer_public_key: tls_info.cert_issuer_public_key,
   }
 }

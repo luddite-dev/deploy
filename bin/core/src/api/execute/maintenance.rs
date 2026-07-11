@@ -224,7 +224,7 @@ impl Resolve<ExecuteArgs> for GlobalAutoUpdate {
 
     // This is all done in sequence because there is no rush,
     // the pulls / deploys happen spaced out to ease the load on system.
-    let _servers = find_collect(&db_client().servers, None, None)
+    let servers = find_collect(&db_client().servers, None, None)
       .await
       .context("Failed to query for servers from database")?;
 

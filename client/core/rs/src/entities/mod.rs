@@ -3,11 +3,12 @@ use std::{
   str::FromStr,
 };
 
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use async_timing_util::unix_timestamp_ms;
 use clap::{Parser, ValueEnum};
-use mogh_error::Serror;
+use mogh_error::{AddStatusCodeError, Serror};
 use rand::RngExt as _;
+use reqwest::StatusCode;
 use serde::{
   Deserialize, Serialize,
   de::{Visitor, value::MapAccessDeserializer},
