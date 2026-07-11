@@ -10407,12 +10407,8 @@ export interface SendAlert {
 
 /** Configuration for a Komodo Server Builder. */
 export interface ServerBuilderConfig {
-	/**
-	 * The server ids of the builders.
-	 * If multiple are given, builds will overflow
-	 * to later specified servers as needed.
-	 */
-	server_ids?: string[];
+	/** The server id of the builder */
+	server_id?: string;
 }
 
 /** The health of a part of the server. */

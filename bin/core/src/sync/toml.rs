@@ -370,13 +370,13 @@ impl ToToml for Builder {
   fn replace_ids(resource: &mut Resource<Self::Config, Self::Info>) {
     if let BuilderConfig::Server(config) = &mut resource.config {
       let all = all_resources_cache().load();
-      for server_id in &mut config.server_ids {
-        *server_id = all
+      config.server_id.clone_from(
+        all
           .servers
-          .get(server_id)
-          .map(|s| s.name.clone())
-          .unwrap_or_default();
-      }
+          .get(&config.server_id)
+          .map(|s| &s.name)
+          .unwrap_or(&String::new()),
+      )
     }
   }
 

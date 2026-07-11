@@ -1,8 +1,10 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use anyhow::{Context, anyhow};
-use database::mongo_indexed::doc;
 use database::mungos::mongodb::bson::to_document;
+use database::{
+  mongo_indexed::doc, mungos::mongodb::bson::oid::ObjectId,
+};
 use formatting::format_serror;
 use komodo_client::{
   api::write::*,
@@ -13,6 +15,7 @@ use komodo_client::{
     builder::{Builder, BuilderConfig},
     permission::PermissionLevel,
     repo::Repo,
+    server::ServerState,
     update::Update,
   },
 };
@@ -22,11 +25,12 @@ use periphery_client::api::build::{
 };
 use tokio::fs;
 
-use crate::helpers::builder::connect_builder_periphery;
 use crate::{
   config::core_config,
+  connection::PeripheryConnectionArgs,
   helpers::{
-    git_token,
+    git_token, periphery_client,
+    query::get_server_with_state,
     update::{add_update, make_update},
   },
   periphery::PeripheryClient,
@@ -472,15 +476,48 @@ async fn get_on_host_periphery(
     .await
     .context("Failed to get builder")?;
 
-  if let BuilderConfig::Aws(_) = builder.config {
-    return Err(anyhow!(
-      "Files on host doesn't work with AWS builder"
-    ));
+  match builder.config {
+    BuilderConfig::Aws(_) => {
+      Err(anyhow!("Files on host doesn't work with AWS builder"))
+    }
+    BuilderConfig::Url(config) => {
+      // TODO: Ensure connection is actually established.
+      // Builder id no good because it may be active for multiple connections.
+      let periphery = PeripheryClient::new(
+        PeripheryConnectionArgs::from_url_builder(
+          &ObjectId::new().to_hex(),
+          &config,
+        ),
+        config.insecure_tls,
+      )
+      .await?;
+      // Poll for connection to be estalished
+      let mut err = None;
+      for _ in 0..10 {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        match periphery.health_check().await {
+          Ok(_) => return Ok(periphery),
+          Err(e) => err = Some(e),
+        };
+      }
+      Err(err.context("Missing error")?)
+    }
+    BuilderConfig::Server(config) => {
+      if config.server_id.is_empty() {
+        return Err(anyhow!(
+          "Builder is type server, but has no server attached"
+        ));
+      }
+      let (server, state) =
+        get_server_with_state(&config.server_id).await?;
+      if state != ServerState::Ok {
+        return Err(anyhow!(
+          "Builder server is disabled or not reachable"
+        ));
+      };
+      periphery_client(&server).await
+    }
   }
-
-  connect_builder_periphery(build.name.clone(), None, builder, None)
-    .await
-    .map(|(periphery, _)| periphery)
 }
 
 /// The successful case will be included as Some(remote_contents).

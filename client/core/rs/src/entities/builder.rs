@@ -311,9 +311,7 @@ impl MergePartial for BuilderConfig {
       PartialBuilderConfig::Server(partial) => match self {
         BuilderConfig::Server(config) => {
           let config = ServerBuilderConfig {
-            server_ids: partial
-              .server_ids
-              .unwrap_or(config.server_ids),
+            server_id: partial.server_id.unwrap_or(config.server_id),
           };
           BuilderConfig::Server(config)
         }
@@ -458,27 +456,14 @@ pub type _PartialServerBuilderConfig = PartialServerBuilderConfig;
 #[diff_derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[partial(skip_serializing_none, from, diff)]
 pub struct ServerBuilderConfig {
-  /// The server ids of the builders.
-  /// If multiple are given, builds will overflow
-  /// to later specified servers as needed.
-  #[serde(
-    default,
-    alias = "server_id",
-    alias = "server",
-    alias = "servers",
-    deserialize_with = "string_list_deserializer"
-  )]
-  #[partial_attr(serde(
-    alias = "server_id",
-    alias = "server",
-    alias = "servers",
-    deserialize_with = "option_string_list_deserializer"
-  ))]
+  /// The server id of the builder
+  #[serde(default, alias = "server")]
+  #[partial_attr(serde(alias = "server"))]
   #[cfg_attr(
     feature = "schemars",
-    partial_attr(schemars(rename = "servers"))
+    partial_attr(schemars(rename = "server"))
   )]
-  pub server_ids: Vec<String>,
+  pub server_id: String,
 }
 
 impl ServerBuilderConfig {

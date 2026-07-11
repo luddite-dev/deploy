@@ -54,7 +54,7 @@ impl super::KomodoResource for Builder {
       }
       BuilderConfig::Server(config) => (
         BuilderConfigVariant::Server.to_string(),
-        Some(config.server_ids.join(", ")),
+        Some(config.server_id),
       ),
       BuilderConfig::Aws(config) => (
         BuilderConfigVariant::Aws.to_string(),
@@ -184,11 +184,10 @@ async fn validate_config(
   config: &mut PartialBuilderConfig,
   user: &User,
 ) -> anyhow::Result<()> {
-  if let PartialBuilderConfig::Server(PartialServerBuilderConfig {
-    server_ids: Some(server_ids),
-  }) = config
-  {
-    for server_id in server_ids {
+  match config {
+    PartialBuilderConfig::Server(PartialServerBuilderConfig {
+      server_id: Some(server_id),
+    }) if !server_id.is_empty() => {
       let server = super::get_check_permissions::<Server>(
         server_id,
         user,
@@ -197,6 +196,7 @@ async fn validate_config(
       .await?;
       *server_id = server.id;
     }
+    _ => {}
   }
   Ok(())
 }
