@@ -16,7 +16,7 @@ use crate::entities::{
   update::Log,
 };
 
-use super::KomodoReadRequest;
+use super::{KomodoReadRequest, default_list_limit};
 
 //
 
@@ -107,11 +107,10 @@ pub struct ListAllDockerContainers {
   /// Set the limit for number of containers per-page.
   /// `limit: 300` is default.
   ///
-  /// Passing `limit: 0` returns all results (unlimited).
-  ///
   /// Note: the page logic relies on this being consistent
   /// across queries for more pages.
-  pub limit: Option<U64>,
+  #[serde(default = "default_list_limit")]
+  pub limit: U64,
 }
 
 #[typeshare]

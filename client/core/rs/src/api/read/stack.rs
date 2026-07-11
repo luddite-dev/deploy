@@ -12,7 +12,7 @@ use crate::entities::{
   update::Log,
 };
 
-use super::KomodoReadRequest;
+use super::{KomodoReadRequest, default_list_limit};
 
 //
 
@@ -122,11 +122,14 @@ pub struct ListAllStackServices {
   /// Set the limit for number of services per-page.
   /// `limit: 300` is default.
   ///
-  /// Passing `limit: 0` returns all results (unlimited).
-  ///
   /// Note: the page logic relies on this being consistent
   /// across queries for more pages.
-  pub limit: Option<U64>,
+  #[serde(default = "default_limit")]
+  pub limit: U64,
+}
+
+fn default_limit() -> u64 {
+  300
 }
 
 #[typeshare]
@@ -362,7 +365,8 @@ pub struct ListStacks {
   ///
   /// Note: the page logic relies on this being consistent
   /// across queries for more pages.
-  pub limit: Option<U64>,
+  #[serde(default = "default_list_limit")]
+  pub limit: U64,
 }
 
 #[typeshare]
@@ -406,7 +410,8 @@ pub struct ListFullStacks {
   ///
   /// Note: the page logic relies on this being consistent
   /// across queries for more pages.
-  pub limit: Option<U64>,
+  #[serde(default = "default_list_limit")]
+  pub limit: U64,
 }
 
 #[typeshare]

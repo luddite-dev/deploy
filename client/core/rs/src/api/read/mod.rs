@@ -62,7 +62,9 @@ pub trait KomodoReadRequest: HasResponse {}
 
 //
 
-pub const DEFAULT_LIST_LIMIT: u64 = 100;
+pub fn default_list_limit() -> u64 {
+  100
+}
 
 //
 

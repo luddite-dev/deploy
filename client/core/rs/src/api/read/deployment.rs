@@ -12,7 +12,7 @@ use crate::entities::{
   update::Log,
 };
 
-use super::KomodoReadRequest;
+use super::{KomodoReadRequest, default_list_limit};
 
 //
 
@@ -83,7 +83,8 @@ pub struct ListDeployments {
   ///
   /// Note: the page logic relies on this being consistent
   /// across queries for more pages.
-  pub limit: Option<U64>,
+  #[serde(default = "default_list_limit")]
+  pub limit: U64,
 }
 
 #[typeshare]
@@ -128,7 +129,8 @@ pub struct ListFullDeployments {
   ///
   /// Note: the page logic relies on this being consistent
   /// across queries for more pages.
-  pub limit: Option<U64>,
+  #[serde(default = "default_list_limit")]
+  pub limit: U64,
 }
 
 #[typeshare]

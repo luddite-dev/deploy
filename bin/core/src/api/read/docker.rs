@@ -110,8 +110,7 @@ impl Resolve<ReadArgs> for ListAllDockerContainers {
 
     let mut containers = Vec::<ContainerListItem>::new();
     let mut skipped = 0;
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    let limit_usize = limit as usize;
+    let limit_usize = self.limit as usize;
 
     for server in servers {
       let cache = server_status_cache()
@@ -134,13 +133,13 @@ impl Resolve<ReadArgs> for ListAllDockerContainers {
             || terms.iter().any(|(_, wc)| wc.is_match(container.name.as_bytes())))
         });
       for container in more {
-        if skipped < limit * self.page {
-          // Eg. page 1 skips until after 100 containers, page 2 after 200.
+        if skipped < self.limit * self.page {
+          // Eg. page 1 skips until after 300 containers, page 2 after 600.
           skipped += 1;
         } else {
           // push and maybe early return
           containers.push(container.clone());
-          if limit > 0 && containers.len() >= limit_usize {
+          if containers.len() >= limit_usize {
             return Ok(containers);
           }
         }

@@ -7,7 +7,7 @@ use crate::entities::{
   alerter::{Alerter, AlerterListItem, AlerterQuery},
 };
 
-use super::KomodoReadRequest;
+use super::{KomodoReadRequest, default_list_limit};
 
 //
 
@@ -77,7 +77,8 @@ pub struct ListAlerters {
   ///
   /// Note: the page logic relies on this being consistent
   /// across queries for more pages.
-  pub limit: Option<U64>,
+  #[serde(default = "default_list_limit")]
+  pub limit: U64,
 }
 
 #[typeshare]
@@ -121,7 +122,8 @@ pub struct ListFullAlerters {
   ///
   /// Note: the page logic relies on this being consistent
   /// across queries for more pages.
-  pub limit: Option<U64>,
+  #[serde(default = "default_list_limit")]
+  pub limit: U64,
 }
 
 #[typeshare]

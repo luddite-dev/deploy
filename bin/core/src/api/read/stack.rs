@@ -97,8 +97,7 @@ impl Resolve<ReadArgs> for ListAllStackServices {
 
     let mut services = Vec::<StackService>::new();
     let mut skipped = 0;
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    let limit_usize = limit as usize;
+    let limit_usize = self.limit as usize;
 
     for stack in stacks {
       let cache =
@@ -116,13 +115,13 @@ impl Resolve<ReadArgs> for ListAllStackServices {
             || terms.iter().any(|(_, wc)| wc.is_match(service.service.as_bytes()))
         });
       for service in more {
-        if skipped < limit * self.page {
-          // Eg. page 1 skips until after 100 services, page 2 after 200.
+        if skipped < self.limit * self.page {
+          // Eg. page 1 skips until after 300 services, page 2 after 600.
           skipped += 1;
         } else {
           // push and maybe early return
           services.push(service.clone());
-          if limit > 0 && services.len() >= limit_usize {
+          if services.len() >= limit_usize {
             return Ok(services);
           }
         }
@@ -326,11 +325,10 @@ impl Resolve<ReadArgs> for ListStacks {
       get_all_tags(None).await?
     };
     let only_update_available = self.query.specific.update_available;
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     let stacks = resource::list_for_user::<Stack>(
       self.query,
-      limit as i64,
-      self.page * limit,
+      self.limit as i64,
+      self.page * self.limit,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
@@ -364,12 +362,11 @@ impl Resolve<ReadArgs> for ListFullStacks {
     } else {
       get_all_tags(None).await?
     };
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
       resource::list_full_for_user::<Stack>(
         self.query,
-        limit as i64,
-        self.page * limit,
+        self.limit as i64,
+        self.page * self.limit,
         user,
         PermissionLevel::Read.into(),
         &all_tags,

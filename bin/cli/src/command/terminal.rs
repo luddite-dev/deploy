@@ -132,7 +132,7 @@ async fn get_server(
       tags: Default::default(),
       containers: vec![container.to_string()],
       state: Default::default(),
-      limit: Some(0),
+      limit: 300,
       page: 0,
     })
     .await?;
@@ -162,7 +162,6 @@ async fn get_server(
   let servers = client
     .read(ListServers {
       query: ServerQuery::builder().names(servers).build(),
-      limit: Some(0),
       ..Default::default()
     })
     .await?

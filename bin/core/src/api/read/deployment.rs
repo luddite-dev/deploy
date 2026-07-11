@@ -55,11 +55,10 @@ impl Resolve<ReadArgs> for ListDeployments {
       get_all_tags(None).await?
     };
     let only_update_available = self.query.specific.update_available;
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     let deployments = resource::list_for_user::<Deployment>(
       self.query,
-      limit as i64,
-      self.page * limit,
+      self.limit as i64,
+      self.page * self.limit,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
@@ -87,12 +86,11 @@ impl Resolve<ReadArgs> for ListFullDeployments {
     } else {
       get_all_tags(None).await?
     };
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
       resource::list_full_for_user::<Deployment>(
         self.query,
-        limit as i64,
-        self.page * limit,
+        self.limit as i64,
+        self.page * self.limit,
         user,
         PermissionLevel::Read.into(),
         &all_tags,

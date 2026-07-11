@@ -43,12 +43,11 @@ impl Resolve<ReadArgs> for ListRepos {
     } else {
       get_all_tags(None).await?
     };
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
       resource::list_for_user::<Repo>(
         self.query,
-        limit as i64,
-        self.page * limit,
+        self.limit as i64,
+        self.page * self.limit,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -68,12 +67,11 @@ impl Resolve<ReadArgs> for ListFullRepos {
     } else {
       get_all_tags(None).await?
     };
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
     Ok(
       resource::list_full_for_user::<Repo>(
         self.query,
-        limit as i64,
-        self.page * limit,
+        self.limit as i64,
+        self.page * self.limit,
         user,
         PermissionLevel::Read.into(),
         &all_tags,

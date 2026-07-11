@@ -169,8 +169,15 @@ export function logToHtml(log: string) {
   return convert_ansi.toHtml(sanitized);
 }
 
-export function getUpdateQuery(target: Types.ResourceTarget, buildId?: string) {
-  if (buildId) {
+export function getUpdateQuery(
+  target: Types.ResourceTarget,
+  deployments: Types.DeploymentListItem[] | undefined,
+) {
+  const build_id =
+    target.type === "Deployment"
+      ? deployments?.find((d) => d.id === target.id)?.info.build_id
+      : undefined;
+  if (build_id) {
     return {
       $or: [
         {
@@ -179,7 +186,7 @@ export function getUpdateQuery(target: Types.ResourceTarget, buildId?: string) {
         },
         {
           "target.type": "Build",
-          "target.id": buildId,
+          "target.id": build_id,
           operation: {
             $in: [Types.Operation.RunBuild, Types.Operation.CancelBuild],
           },
