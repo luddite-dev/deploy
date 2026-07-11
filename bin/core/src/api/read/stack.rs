@@ -17,6 +17,7 @@ use periphery_client::api::{
   compose::{GetComposeLog, GetComposeLogSearch},
   container::InspectContainer,
 };
+use wildcard::Wildcard;
 
 use crate::{
   helpers::{periphery_client, query::get_all_tags},

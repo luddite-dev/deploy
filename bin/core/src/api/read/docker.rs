@@ -29,6 +29,7 @@ use periphery_client::api::{
     ImageHistory, InspectImage, InspectNetwork, InspectVolume,
   },
 };
+use wildcard::Wildcard;
 
 use crate::{
   api::read::ReadArgs,
