@@ -52,49 +52,40 @@ pub async fn handle(list: &args::list::List) -> anyhow::Result<()> {
   match &list.command {
     None => list_all(list).await,
     Some(ListCommand::Servers(filters)) => {
-      list_resources::<ServerListItem>(filters, list.page, false)
-        .await
+      list_resources::<ServerListItem>(filters, false).await
     }
     Some(ListCommand::Stacks(filters)) => {
-      list_resources::<StackListItem>(filters, list.page, false).await
+      list_resources::<StackListItem>(filters, false).await
     }
     Some(ListCommand::Deployments(filters)) => {
-      list_resources::<DeploymentListItem>(filters, list.page, false)
-        .await
+      list_resources::<DeploymentListItem>(filters, false).await
     }
     Some(ListCommand::Builds(filters)) => {
-      list_resources::<BuildListItem>(filters, list.page, false).await
+      list_resources::<BuildListItem>(filters, false).await
     }
     Some(ListCommand::Repos(filters)) => {
-      list_resources::<RepoListItem>(filters, list.page, false).await
+      list_resources::<RepoListItem>(filters, false).await
     }
     Some(ListCommand::Procedures(filters)) => {
-      list_resources::<ProcedureListItem>(filters, list.page, false)
-        .await
+      list_resources::<ProcedureListItem>(filters, false).await
     }
     Some(ListCommand::Actions(filters)) => {
-      list_resources::<ActionListItem>(filters, list.page, false)
-        .await
+      list_resources::<ActionListItem>(filters, false).await
     }
     Some(ListCommand::Syncs(filters)) => {
-      list_resources::<ResourceSyncListItem>(
-        filters, list.page, false,
-      )
-      .await
-    }
-    Some(ListCommand::Builders(filters)) => {
-      list_resources::<BuilderListItem>(filters, list.page, false)
-        .await
-    }
-    Some(ListCommand::Alerters(filters)) => {
-      list_resources::<AlerterListItem>(filters, list.page, false)
-        .await
+      list_resources::<ResourceSyncListItem>(filters, false).await
     }
     Some(ListCommand::Terminals(filters)) => {
       list_terminals(filters).await
     }
     Some(ListCommand::Schedules(filters)) => {
       list_schedules(filters).await
+    }
+    Some(ListCommand::Builders(filters)) => {
+      list_resources::<BuilderListItem>(filters, false).await
+    }
+    Some(ListCommand::Alerters(filters)) => {
+      list_resources::<AlerterListItem>(filters, false).await
     }
   }
 }
@@ -118,14 +109,14 @@ async fn list_all(list: &args::list::List) -> anyhow::Result<()> {
       .into_iter()
       .map(|t| (t.id, t.name))
       .collect::<HashMap<_, _>>())),
-    ServerListItem::list(client, &filters, list.page, true),
-    StackListItem::list(client, &filters, list.page, true),
-    DeploymentListItem::list(client, &filters, list.page, true),
-    BuildListItem::list(client, &filters, list.page, true),
-    RepoListItem::list(client, &filters, list.page, true),
-    ProcedureListItem::list(client, &filters, list.page, true),
-    ActionListItem::list(client, &filters, list.page, true),
-    ResourceSyncListItem::list(client, &filters, list.page, true),
+    ServerListItem::list(client, &filters, true),
+    StackListItem::list(client, &filters, true),
+    DeploymentListItem::list(client, &filters, true),
+    BuildListItem::list(client, &filters, true),
+    RepoListItem::list(client, &filters, true),
+    ProcedureListItem::list(client, &filters, true),
+    ActionListItem::list(client, &filters, true),
+    ResourceSyncListItem::list(client, &filters, true),
   )?;
 
   if !servers.is_empty() {
@@ -181,7 +172,6 @@ async fn list_all(list: &args::list::List) -> anyhow::Result<()> {
 
 async fn list_resources<T>(
   filters: &ResourceFilters,
-  page: u64,
   minimal: bool,
 ) -> anyhow::Result<()>
 where
@@ -190,7 +180,7 @@ where
 {
   let client = crate::command::komodo_client().await?;
   let (mut resources, tags) = tokio::try_join!(
-    T::list(client, filters, page, minimal),
+    T::list(client, filters, minimal),
     client.read(ListTags::default()).map(|res| res.map(|res| res
       .into_iter()
       .map(|t| (t.id, t.name))
@@ -289,7 +279,6 @@ where
   async fn list(
     client: &KomodoClient,
     filters: &ResourceFilters,
-    page: u64,
     // For use with root `km ls`
     minimal: bool,
   ) -> anyhow::Result<Vec<ResourceListItem<Self::Info>>>;
@@ -302,7 +291,6 @@ impl ListResources for ServerListItem {
   async fn list(
     client: &KomodoClient,
     filters: &ResourceFilters,
-    page: u64,
     _minimal: bool,
   ) -> anyhow::Result<Vec<Self>> {
     let servers = client
@@ -312,8 +300,6 @@ impl ListResources for ServerListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: 100,
-        page: page.saturating_sub(1),
       })
       .await?;
     let names = parse_wildcards(&filters.names);
@@ -348,14 +334,12 @@ impl ListResources for StackListItem {
   async fn list(
     client: &KomodoClient,
     filters: &ResourceFilters,
-    page: u64,
     _minimal: bool,
   ) -> anyhow::Result<Vec<Self>> {
     let (servers, mut stacks) = tokio::try_join!(
       client
         .read(ListServers {
           query: ResourceQuery::builder().build(),
-          ..Default::default()
         })
         .map(|res| res.map(|res| res
           .into_iter()
@@ -367,8 +351,6 @@ impl ListResources for StackListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: 100,
-        page: page.saturating_sub(1),
       })
     )?;
     stacks.iter_mut().for_each(|stack| {
@@ -424,14 +406,12 @@ impl ListResources for DeploymentListItem {
   async fn list(
     client: &KomodoClient,
     filters: &ResourceFilters,
-    page: u64,
     _minimal: bool,
   ) -> anyhow::Result<Vec<Self>> {
     let (servers, mut deployments) = tokio::try_join!(
       client
         .read(ListServers {
           query: ResourceQuery::builder().build(),
-          ..Default::default()
         })
         .map(|res| res.map(|res| res
           .into_iter()
@@ -443,8 +423,6 @@ impl ListResources for DeploymentListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: 100,
-        page: page.saturating_sub(1),
       })
     )?;
     deployments.iter_mut().for_each(|deployment| {
@@ -501,14 +479,12 @@ impl ListResources for BuildListItem {
   async fn list(
     client: &KomodoClient,
     filters: &ResourceFilters,
-    page: u64,
     minimal: bool,
   ) -> anyhow::Result<Vec<Self>> {
     let (builders, mut builds) = tokio::try_join!(
       client
         .read(ListBuilders {
           query: ResourceQuery::builder().build(),
-          ..Default::default()
         })
         .map(|res| res.map(|res| res
           .into_iter()
@@ -520,8 +496,6 @@ impl ListResources for BuildListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: 100,
-        page: page.saturating_sub(1),
       })
     )?;
     builds.iter_mut().for_each(|build| {
@@ -573,7 +547,6 @@ impl ListResources for RepoListItem {
   async fn list(
     client: &KomodoClient,
     filters: &ResourceFilters,
-    page: u64,
     minimal: bool,
   ) -> anyhow::Result<Vec<Self>> {
     let names = parse_wildcards(&filters.names);
@@ -584,8 +557,6 @@ impl ListResources for RepoListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: 100,
-        page: page.saturating_sub(1),
       })
       .await?
       .into_iter()
@@ -624,7 +595,6 @@ impl ListResources for ProcedureListItem {
   async fn list(
     client: &KomodoClient,
     filters: &ResourceFilters,
-    page: u64,
     minimal: bool,
   ) -> anyhow::Result<Vec<Self>> {
     let names = parse_wildcards(&filters.names);
@@ -635,8 +605,6 @@ impl ListResources for ProcedureListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: 100,
-        page: page.saturating_sub(1),
       })
       .await?
       .into_iter()
@@ -675,7 +643,6 @@ impl ListResources for ActionListItem {
   async fn list(
     client: &KomodoClient,
     filters: &ResourceFilters,
-    page: u64,
     minimal: bool,
   ) -> anyhow::Result<Vec<Self>> {
     let names = parse_wildcards(&filters.names);
@@ -686,8 +653,6 @@ impl ListResources for ActionListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: 100,
-        page: page.saturating_sub(1),
       })
       .await?
       .into_iter()
@@ -726,7 +691,6 @@ impl ListResources for ResourceSyncListItem {
   async fn list(
     client: &KomodoClient,
     filters: &ResourceFilters,
-    page: u64,
     minimal: bool,
   ) -> anyhow::Result<Vec<Self>> {
     let names = parse_wildcards(&filters.names);
@@ -737,8 +701,6 @@ impl ListResources for ResourceSyncListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: 100,
-        page: page.saturating_sub(1),
       })
       .await?
       .into_iter()
@@ -774,7 +736,6 @@ impl ListResources for BuilderListItem {
   async fn list(
     client: &KomodoClient,
     filters: &ResourceFilters,
-    page: u64,
     minimal: bool,
   ) -> anyhow::Result<Vec<Self>> {
     let names = parse_wildcards(&filters.names);
@@ -785,8 +746,6 @@ impl ListResources for BuilderListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: 100,
-        page: page.saturating_sub(1),
       })
       .await?
       .into_iter()
@@ -809,7 +768,6 @@ impl ListResources for AlerterListItem {
   async fn list(
     client: &KomodoClient,
     filters: &ResourceFilters,
-    page: u64,
     minimal: bool,
   ) -> anyhow::Result<Vec<Self>> {
     let names = parse_wildcards(&filters.names);
@@ -820,8 +778,6 @@ impl ListResources for AlerterListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: 100,
-        page: page.saturating_sub(1),
       })
       .await?
       .into_iter()

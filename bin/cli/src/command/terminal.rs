@@ -162,7 +162,6 @@ async fn get_server(
   let servers = client
     .read(ListServers {
       query: ServerQuery::builder().names(servers).build(),
-      ..Default::default()
     })
     .await?
     .into_iter()

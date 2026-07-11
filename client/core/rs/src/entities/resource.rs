@@ -120,21 +120,16 @@ pub struct ResourceListItem<Info> {
 )]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct ResourceQuery<T: Default> {
-  /// List of search terms. Names must contain
-  /// all terms to match.
-  #[serde(default, deserialize_with = "string_list_deserializer")]
-  pub terms: Vec<String>,
-  /// List of exact names to return
-  #[serde(default, deserialize_with = "string_list_deserializer")]
+  #[serde(default)]
   pub names: Vec<String>,
+  #[serde(default)]
+  pub templates: TemplatesQueryBehavior,
   /// Pass Vec of tag ids or tag names
   #[serde(default, deserialize_with = "string_list_deserializer")]
   pub tags: Vec<String>,
   /// 'All' or 'Any'
   #[serde(default)]
   pub tag_behavior: TagQueryBehavior,
-  #[serde(default)]
-  pub templates: TemplatesQueryBehavior,
   #[serde(default)]
   pub specific: T,
 }
@@ -182,36 +177,13 @@ impl AddFilters for () {}
 
 impl<T: AddFilters + Default> AddFilters for ResourceQuery<T> {
   fn add_filters(&self, filters: &mut Document) {
-    // Seperate _id query
     let (ids, names) = split_names(&self.names);
     if !ids.is_empty() {
       filters.insert("_id", doc! { "$in": ids });
     }
-
-    // Name queries using $and doc array.
-    let mut name_queries = Vec::<Document>::new();
-
     if !names.is_empty() {
-      name_queries.push(doc! { "name": { "$in": names } });
+      filters.insert("name", doc! { "$in": names });
     }
-
-    for term in &self.terms {
-      if term.is_empty() {
-        continue;
-      }
-      name_queries.push(doc! {
-        "name": {
-          "$regex": regex::escape(term),
-          "$options": "i"
-        },
-      });
-    }
-
-    if !name_queries.is_empty() {
-      filters.insert("$and", name_queries);
-    }
-
-    // Template query
     match self.templates {
       TemplatesQueryBehavior::Exclude => {
         filters.insert("template", doc! { "$ne": true });
@@ -223,8 +195,6 @@ impl<T: AddFilters + Default> AddFilters for ResourceQuery<T> {
         // No query on template field necessary
       }
     };
-
-    // Tag queries maybe using $or doc array
     if !self.tags.is_empty() {
       match self.tag_behavior {
         TagQueryBehavior::All => {
@@ -240,7 +210,6 @@ impl<T: AddFilters + Default> AddFilters for ResourceQuery<T> {
         }
       }
     }
-
     self.specific.add_filters(filters);
   }
 }

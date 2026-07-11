@@ -46,8 +46,8 @@ impl Resolve<ReadArgs> for ListResourceSyncs {
     Ok(
       resource::list_for_user::<ResourceSync>(
         self.query,
-        self.limit as i64,
-        self.page * self.limit,
+        None,
+        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -70,8 +70,8 @@ impl Resolve<ReadArgs> for ListFullResourceSyncs {
     Ok(
       resource::list_full_for_user::<ResourceSync>(
         self.query,
-        self.limit as i64,
-        self.page * self.limit,
+        None,
+        None,
         user,
         PermissionLevel::Read.into(),
         &all_tags,

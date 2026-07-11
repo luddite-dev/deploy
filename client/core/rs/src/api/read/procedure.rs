@@ -2,15 +2,11 @@ use mogh_resolver::Resolve;
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
-use crate::entities::{
-  U64,
-  procedure::{
-    Procedure, ProcedureActionState, ProcedureListItem,
-    ProcedureQuery,
-  },
+use crate::entities::procedure::{
+  Procedure, ProcedureActionState, ProcedureListItem, ProcedureQuery,
 };
 
-use super::{KomodoReadRequest, default_list_limit};
+use super::KomodoReadRequest;
 
 //
 
@@ -67,21 +63,6 @@ pub struct ListProcedures {
   /// optional structured query to filter procedures.
   #[serde(default)]
   pub query: ProcedureQuery,
-
-  /// Retrieve more results by incrementing the page.
-  /// `page: 0` is default.
-  #[serde(default)]
-  pub page: U64,
-
-  /// Set the limit for number of resources per-page.
-  /// `limit: 100` is default.
-  ///
-  /// Passing `limit: 0` returns all results (unlimited).
-  ///
-  /// Note: the page logic relies on this being consistent
-  /// across queries for more pages.
-  #[serde(default = "default_list_limit")]
-  pub limit: U64,
 }
 
 #[typeshare]
@@ -112,21 +93,6 @@ pub struct ListFullProcedures {
   /// optional structured query to filter procedures.
   #[serde(default)]
   pub query: ProcedureQuery,
-
-  /// Retrieve more results by incrementing the page.
-  /// `page: 0` is default.
-  #[serde(default)]
-  pub page: U64,
-
-  /// Set the limit for number of resources per-page.
-  /// `limit: 100` is default.
-  ///
-  /// Passing `limit: 0` returns all results (unlimited).
-  ///
-  /// Note: the page logic relies on this being consistent
-  /// across queries for more pages.
-  #[serde(default = "default_list_limit")]
-  pub limit: U64,
 }
 
 #[typeshare]
