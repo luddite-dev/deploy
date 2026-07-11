@@ -198,18 +198,6 @@ impl super::KomodoResource for Stack {
         (false, None)
       };
 
-    let all = all_resources_cache().load();
-    let server_name = all
-      .servers
-      .get(&stack.config.server_id)
-      .map(|server| server.name.clone())
-      .unwrap_or_default();
-    let swarm_name = all
-      .swarms
-      .get(&stack.config.swarm_id)
-      .map(|swarm| swarm.name.clone())
-      .unwrap_or_default();
-
     StackListItem {
       name: stack.name,
       id: stack.id,
@@ -223,7 +211,6 @@ impl super::KomodoResource for Stack {
         project_missing,
         file_contents: !stack.config.file_contents.is_empty(),
         server_id: stack.config.server_id,
-        server_name,
         linked_repo: stack.config.linked_repo,
         missing_files: stack.info.missing_files,
         files_on_host: stack.config.files_on_host,

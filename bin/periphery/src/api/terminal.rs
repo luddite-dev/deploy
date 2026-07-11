@@ -74,7 +74,6 @@ impl Resolve<crate::api::Args> for CreateServerTerminal {
     .map(|terminal| Terminal {
       name: terminal.name.clone(),
       target: TerminalTarget::Server { server: None },
-      target_name: None,
       command: terminal.command.clone(),
       stored_size_kb: terminal.history.size_kb(),
       created_at: terminal.created_at,
@@ -132,7 +131,6 @@ impl Resolve<crate::api::Args> for CreateContainerExecTerminal {
     .map(|terminal| Terminal {
       name: terminal.name.clone(),
       target: terminal.target.clone(),
-      target_name: None,
       command: terminal.command.clone(),
       stored_size_kb: terminal.history.size_kb(),
       created_at: terminal.created_at,
@@ -187,7 +185,6 @@ impl Resolve<crate::api::Args> for CreateContainerAttachTerminal {
     .map(|terminal| Terminal {
       name: terminal.name.clone(),
       target: terminal.target.clone(),
-      target_name: None,
       command: terminal.command.clone(),
       stored_size_kb: terminal.history.size_kb(),
       created_at: terminal.created_at,
