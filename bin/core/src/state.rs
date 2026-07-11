@@ -15,7 +15,6 @@ use komodo_client::entities::{
   stats::{SystemInformation, SystemStats},
 };
 use mogh_cache::CloneCache;
-use tokio_util::sync::CancellationToken;
 
 use crate::{
   config::core_config,
@@ -211,19 +210,4 @@ pub fn builder_usage_cache() -> &'static BuilderUsageCache {
   static BUILDER_USAGE_CACHE: OnceLock<BuilderUsageCache> =
     OnceLock::new();
   BUILDER_USAGE_CACHE.get_or_init(Default::default)
-}
-
-type CancelCache = CloneCache<String, CancellationToken>;
-
-/// Maps procedure id => CancellationToken
-pub fn procedure_cancel_cache() -> &'static CancelCache {
-  static PROCEDURE_CANCEL_CACHE: OnceLock<CancelCache> =
-    OnceLock::new();
-  PROCEDURE_CANCEL_CACHE.get_or_init(Default::default)
-}
-
-/// Maps update id => CancellationToken
-pub fn action_cancel_cache() -> &'static CancelCache {
-  static ACTION_CANCEL_CACHE: OnceLock<CancelCache> = OnceLock::new();
-  ACTION_CANCEL_CACHE.get_or_init(Default::default)
 }

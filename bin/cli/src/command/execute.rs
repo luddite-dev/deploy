@@ -81,9 +81,7 @@ pub async fn handle(
   let res = handle_execution!(
     execute: [
       RunAction,
-      CancelAction,
       RunProcedure,
-      CancelProcedure,
       RunBuild,
       CancelBuild,
       Deploy,

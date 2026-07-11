@@ -1,6 +1,6 @@
 use async_timing_util::unix_timestamp_ms;
 use serde::{Deserialize, Serialize};
-use strum::{AsRefStr, Display, EnumString};
+use strum::{Display, EnumString};
 use typeshare::typeshare;
 
 use crate::entities::{
@@ -208,18 +208,17 @@ impl Log {
 /// An update's status
 #[typeshare]
 #[derive(
-  Default,
-  Debug,
-  Clone,
-  Copy,
-  PartialEq,
-  Eq,
-  Hash,
   Serialize,
   Deserialize,
+  Debug,
   Display,
   EnumString,
-  AsRefStr,
+  PartialEq,
+  Hash,
+  Eq,
+  Clone,
+  Copy,
+  Default,
 )]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub enum UpdateStatus {

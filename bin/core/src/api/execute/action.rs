@@ -4,26 +4,23 @@ use std::{
   sync::OnceLock,
 };
 
-use anyhow::Context as _;
+use anyhow::Context;
 use command::{CommandOptions, run_komodo_standard_command};
-use database::{
-  bson::doc,
-  mungos::{by_id::update_one_by_id, mongodb::bson::to_document},
+use database::mungos::{
+  by_id::update_one_by_id, mongodb::bson::to_document,
 };
 use interpolate::Interpolator;
 use komodo_client::{
-  api::execute::{
-    BatchExecutionResponse, BatchRunAction, CancelAction, RunAction,
-  },
+  api::execute::{BatchExecutionResponse, BatchRunAction, RunAction},
   entities::{
-    FileFormat, JsonObject, Operation,
+    FileFormat, JsonObject,
     action::Action,
     alert::{Alert, AlertData, SeverityLevel},
     config::core::CoreConfig,
     komodo_timestamp,
     permission::PermissionLevel,
     random_string,
-    update::{Update, UpdateStatus},
+    update::Update,
     user::action_user,
   },
   parsers::parse_key_value_list,
@@ -37,7 +34,6 @@ use mogh_auth_server::api::manage::api_key::{
 use mogh_config::merge_objects;
 use mogh_resolver::Resolve;
 use tokio::fs;
-use tokio_util::sync::CancellationToken;
 
 use crate::{
   alert::send_alerts,
@@ -50,7 +46,7 @@ use crate::{
   },
   permission::get_check_permissions,
   resource::refresh_action_state_cache,
-  state::{action_cancel_cache, action_states, db_client},
+  state::{action_states, db_client},
 };
 
 use super::ExecuteArgs;
@@ -201,12 +197,6 @@ impl Resolve<ExecuteArgs> for RunAction {
         ""
       };
 
-      let cancel = CancellationToken::new();
-
-      action_cancel_cache()
-        .insert(update.id.clone(), cancel.clone())
-        .await;
-
       let mut res = run_komodo_standard_command(
         // Keep this stage name as is, the UI will find the latest update log by matching the stage name
         "Execute Action",
@@ -214,7 +204,7 @@ impl Resolve<ExecuteArgs> for RunAction {
           "deno run --allow-all{https_cert_flag}{reload} {}",
           path.display()
         ),
-        CommandOptions::default().cancel(cancel),
+        CommandOptions::default(),
       )
       .await;
 
@@ -228,7 +218,7 @@ impl Resolve<ExecuteArgs> for RunAction {
       update.logs.push(res);
       update.finalize();
 
-      mogh_error::Ok(())
+      mogh_error::Ok(update)
     }
     .await;
 
@@ -241,9 +231,7 @@ impl Resolve<ExecuteArgs> for RunAction {
       );
     };
 
-    action_cancel_cache().remove(&update.id).await;
-
-    res?;
+    let update = res?;
 
     // Need to manually update the update before cache refresh,
     // and before broadcast with update_update.
@@ -469,67 +457,5 @@ fn parse_action_arguments(
       .context("Failed to parse Yaml to action args"),
     FileFormat::Json => serde_json::from_str(args)
       .context("Failed to parse Json to action args"),
-  }
-}
-
-impl Resolve<ExecuteArgs> for CancelAction {
-  #[instrument(
-    "CancelAction",
-    skip_all,
-    fields(
-      task_id = task_id.to_string(),
-      operator = user.id,
-      update_id = update.id,
-      action = self.action,
-    )
-  )]
-  async fn resolve(
-    self,
-    ExecuteArgs {
-      user,
-      update,
-      task_id,
-    }: &ExecuteArgs,
-  ) -> Result<Self::Response, Self::Error> {
-    let action = get_check_permissions::<Action>(
-      &self.action,
-      user,
-      PermissionLevel::Execute.into(),
-    )
-    .await?;
-
-    let update_id = if let Some(update_id) = self.update_id
-      && !update_id.is_empty()
-    {
-      update_id
-    } else {
-      db_client()
-        .updates
-        .find_one(doc! {
-          "target.type": "Action",
-          "target.id": &action.id,
-          "operation": Operation::RunAction.as_ref(),
-          "status": UpdateStatus::InProgress.as_ref(),
-        })
-        .await?
-        .context("No active run to cancel found")?
-        .id
-    };
-
-    action_cancel_cache()
-      .get(&update_id)
-      .await
-      .context("Action run cancel token not found")?
-      .cancel();
-
-    let mut update = update.clone();
-    update.push_simple_log(
-      "Cancel Triggered",
-      "The action cancel has been triggered",
-    );
-    update.finalize();
-    update_update(update.clone()).await?;
-
-    Ok(update)
   }
 }
