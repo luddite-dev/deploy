@@ -34,9 +34,9 @@ adapt:
 - **Node draining** — mark a server `Drain`; Core walks its deployments and
   migrates them to other nodes with volume data intact.
 
-## Current milestone
+## Milestone 1 — adaptive placement (landed)
 
-The active milestone adds three interlocking capabilities:
+The first milestone added three interlocking capabilities, all merged to `main`:
 
 1. **Placement scheduler & port allocation** — Core picks a target node by
    probing free host ports via `netstat2` (`/proc/net/tcp` reads, no
@@ -48,7 +48,8 @@ The active milestone adds three interlocking capabilities:
    `Drain`; Core orchestrates backup → restore → deploy → stop migrations
    to other nodes.
 
-Design spec: [`docs/compose/specs/2026-06-25-adaptive-placement-design.md`](docs/compose/specs/2026-06-25-adaptive-placement-design.md)
+Design spec: [`docs/compose/specs/2026-06-25-adaptive-placement-design.md`](docs/compose/specs/2026-06-25-adaptive-placement-design.md) ·
+Implementation plan: [`docs/compose/plans/2026-06-25-adaptive-placement.md`](docs/compose/plans/2026-06-25-adaptive-placement.md)
 
 Out of scope for this milestone: Iroh transport swap, MongoDB replacement,
 Caddy reverse-proxy integration (only the data contract for assigned ports).

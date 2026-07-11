@@ -1,10 +1,28 @@
 # Roadmap
 
-In order to clarify the goals and invite community participation in the direction of the project, this document will serve as a roadmap for upcoming features / releases.
+This is a hard fork of [Komodo](https://github.com/moghtech/komodo) (GPL-V3).
+The milestones below track the fork's own direction; Komodo's upstream
+release history is preserved for reference where still relevant.
 
-If you have an idea for Komodo, feel free to open an issue beginning with the `[Request]` tag. The community is also encouraged to open PRs fulfilling the goals of any planned release.
+If you have an idea, open an issue beginning with the `[Request]` tag. PRs
+fulfilling any planned milestone are welcome.
 
-## Release plans
+## Fork milestones
+
+- **M1 — Adaptive placement** ✅ — placement scheduler with host-port probing,
+  typed port/volume config (named volumes only), S3-backed volume
+  backup/restore, node draining with migration orchestration.
+- **M2 — Upstream sync (Tiers 1–3)** ✅ — ZFS ARC memory stats, pagination
+  backbone (`ListPermits`), builder cancel + multi-server distribution. See
+  [`docs/forking.md`](docs/forking.md).
+- **M3 — Iroh transport swap** — replace WebSocket/mTLS Core↔Periphery
+  transport with Iroh p2p. Investigation done; implementation pending.
+- **M4 — MongoDB replacement** — swap Mongo for an embedded store suited to
+  small self-hosted deployments. Out of scope until M3 lands.
+- **M5 — Caddy reverse-proxy integration** — consume the assigned-port data
+  contract to auto-configure Caddy for HTTP-proxied services.
+
+## Upstream release history (Komodo, inherited)
 
 - **v1.12**: Support any git provider / docker registry (supports self-hosted providers like Gitea) ✅
 - **v1.13**: Support "Compose" resource - Paste in a docker compose file and manage it like a Portainer "Stack" ✅
@@ -13,7 +31,9 @@ If you have an idea for Komodo, feel free to open an issue beginning with the `[
 - **v1.16**: "Action" resource: Run requests on the Komodo API using snippets of typescript. ✅
 - **v1.17**: Procedure Schedules: Run procedures / Actions at scheduled times, like CRON job. Connect to host terminals and exec into containers ✅
 - **v1.18**: Upgrade granular role based access control system ✅
-- **v2.0**: Support "Swarm" resource - Manage docker swarms, attach Deployments / Stacks to "Swarm". ✅
-- **Undecided**: Support "Cluster" resource - Manage Kubernetes cluster, can attach deployments to "Cluster"
+- **v2.0**: Support "Swarm" resource — ⛔ **dropped in this fork** (see
+  `docs/forking.md`, Drop Rule 1). Replaced by the `server_id`-only model and
+  the M1 placement scheduler.
+- **Undecided**: Support "Cluster" resource - Manage Kubernetes cluster, can attach deployments to "Cluster" — not planned for this fork.
 
-**Note. The specific versions associated with these features are not final.**
+**Note.** The fork does NOT follow Komodo's version numbers.
