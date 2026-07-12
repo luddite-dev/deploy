@@ -13,15 +13,11 @@
 //!
 
 use clap::Parser;
-use ipnetwork::IpNetwork;
 use serde::Deserialize;
-use std::{collections::HashMap, path::PathBuf, sync::OnceLock};
+use std::{collections::HashMap, path::PathBuf};
 
 use crate::{
-  deserializers::{
-    ForgivingVec, option_string_list_deserializer,
-    string_list_deserializer,
-  },
+  deserializers::{ForgivingVec, string_list_deserializer},
   entities::{
     Timelength,
     logger::{LogConfig, LogLevel, StdioLogMode},
@@ -73,7 +69,7 @@ pub struct CliArgs {
   #[arg(long)]
   pub merge_nested_config: Option<bool>,
 
-  /// Extends config arrays, eg. allowed_ips, passkeys.
+  /// Extends config arrays, eg. core_endpoint_addrs.
   /// Will override the equivalent env configuration.
   /// Default: true
   #[arg(long)]
@@ -88,14 +84,7 @@ pub struct CliArgs {
 
 #[cfg(feature = "cli")]
 #[derive(Debug, Clone, clap::Subcommand)]
-pub enum Command {
-  /// Private-Public key utilities. (alias: `k`)
-  #[clap(alias = "k")]
-  Key {
-    #[command(subcommand)]
-    command: mogh_pki::cli::KeyCommand,
-  },
-}
+pub enum Command {}
 
 /// # Periphery Environment Variables
 ///
@@ -131,41 +120,26 @@ pub struct Env {
   #[serde(default = "super::default_merge_nested_config")]
   pub periphery_merge_nested_config: bool,
 
-  /// Will extend config arrays (eg. `allowed_ips`, `passkeys`) across multiple config files.
+  /// Will extend config arrays (eg. `core_endpoint_addrs`) across multiple config files.
   /// Default: `true`
   ///
   /// Note. This is overridden if the equivalent arg is passed in [CliArgs].
   #[serde(default = "super::default_extend_config_arrays")]
   pub periphery_extend_config_arrays: bool,
 
-  /// Override `private_key`
-  pub periphery_private_key: Option<String>,
-  /// Override `private_key` from file
-  pub periphery_private_key_file: Option<PathBuf>,
+  /// Override `iroh_secret_key`
+  pub periphery_iroh_secret_key: Option<String>,
+  /// Override `iroh_secret_key` from file
+  pub periphery_iroh_secret_key_file: Option<PathBuf>,
   /// Override `onboarding_key`
   pub periphery_onboarding_key: Option<String>,
   /// Override `onboarding_key` from file
   pub periphery_onboarding_key_file: Option<PathBuf>,
-  /// Override `core_public_keys`
-  #[serde(alias = "periphery_core_public_key")]
-  pub periphery_core_public_keys: Option<Vec<String>>,
-  /// Override `passkeys`
-  pub periphery_passkeys: Option<Vec<String>>,
-  /// Override `passkeys` from file
-  pub periphery_passkeys_file: Option<PathBuf>,
-  /// Override `core_addresses`
-  #[serde(alias = "periphery_core_address")]
-  pub periphery_core_addresses: Option<Vec<String>>,
-  /// Override `core_tls_insecure_skip_verify`
-  pub periphery_core_tls_insecure_skip_verify: Option<bool>,
+  /// Override `core_endpoint_addrs`
+  #[serde(alias = "periphery_core_endpoint_addr")]
+  pub periphery_core_endpoint_addrs: Option<Vec<String>>,
   /// Override `connect_as`
   pub periphery_connect_as: Option<String>,
-  /// Override `server_enabled`
-  pub periphery_server_enabled: Option<bool>,
-  /// Override `port`
-  pub periphery_port: Option<u16>,
-  /// Override `bind_ip`
-  pub periphery_bind_ip: Option<String>,
   /// Override `root_directory`
   pub periphery_root_directory: Option<PathBuf>,
   /// Override `repo_dir`
@@ -210,19 +184,10 @@ pub struct Env {
   /// Override `pretty_startup_config`
   pub periphery_pretty_startup_config: Option<bool>,
 
-  /// Override `allowed_ips`
-  pub periphery_allowed_ips: Option<ForgivingVec<IpNetwork>>,
   /// Override `include_disk_mounts`
   pub periphery_include_disk_mounts: Option<ForgivingVec<PathBuf>>,
   /// Override `exclude_disk_mounts`
   pub periphery_exclude_disk_mounts: Option<ForgivingVec<PathBuf>>,
-
-  /// Override `ssl_enabled`
-  pub periphery_ssl_enabled: Option<bool>,
-  /// Override `ssl_key_file`
-  pub periphery_ssl_key_file: Option<String>,
-  /// Override `ssl_cert_file`
-  pub periphery_ssl_cert_file: Option<String>,
 }
 
 /// # Periphery Configuration File
@@ -230,102 +195,34 @@ pub struct Env {
 /// Refer to the [example file](https://github.com/moghtech/komodo/blob/main/config/periphery.config.toml) for a full example.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PeripheryConfig {
-  /// The private key used with noise handshake.
+  /// The Iroh secret key file path (32 raw bytes).
   ///
-  /// Supports openssl generated pem file, `openssl genpkey -algorithm X25519 -out private.key`.
-  /// To load from file, use `private_key = "file:/path/to/private.key"`
+  /// If the file does not exist, will generate a new key and persist it
+  /// so that the endpoint's identity is stable across restarts.
   ///
-  /// If a file is specified and does not exist, will try to generate one at the path
-  /// and use it going forward.
-  ///
-  /// Default: ${root_directory}/keys/periphery.key
+  /// Default: ${root_directory}/keys/iroh.key
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub private_key: Option<String>,
+  pub iroh_secret_key: Option<String>,
 
   /// Provide an onboarding key to use with the new Server
   /// creation flow.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub onboarding_key: Option<String>,
 
-  /// Optionally pin a specific Core public key for additional trust.
-  ///
-  /// Supports openssl generated pem file, `openssl pkey -in private.key -pubout -out public.key`.
-  /// To load from file, include `file:/path/to/public.key` in the list.
-  ///
-  /// If not provided and `core_addresses` are defined, defaults to ["file:${root_directory}/keys/core.pub"]
-  #[serde(
-    default,
-    alias = "core_public_key",
-    deserialize_with = "option_string_list_deserializer",
-    skip_serializing_if = "Option::is_none"
-  )]
-  pub core_public_keys: Option<Vec<String>>,
-  /// Deprecated. Legacy v1 compatibility.
-  /// Users should upgrade to private / public key authentication.
-  /// Can only be used with Core -> Periphery connection.
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub passkeys: Option<Vec<String>>,
-
   // =======================
   // = OUTBOUND CONNECTION =
   // =======================
-  /// Address of Komodo Core when connecting outbound
+  /// Iroh endpoint addresses of Komodo Core to connect outbound to.
   #[serde(
     default,
-    alias = "core_address",
+    alias = "core_endpoint_addr",
     deserialize_with = "string_list_deserializer"
   )]
-  pub core_addresses: Vec<String>,
-
-  /// Allow Periphery to connect to Core
-  /// without validating the Core certs
-  #[serde(default)]
-  pub core_tls_insecure_skip_verify: bool,
+  pub core_endpoint_addrs: Vec<String>,
 
   /// Server name / id to connect as
   #[serde(default)]
   pub connect_as: String,
-
-  // ======================
-  // = INBOUND CONNECTION =
-  // ======================
-  /// Enable the inbound connection server.
-  ///
-  /// - If `core_addresses` set, defaults to `false`.
-  /// - If `core_addresses` unset, defaults to `true`.
-  pub server_enabled: Option<bool>,
-
-  /// The port periphery will run on.
-  /// Default: `8120`
-  #[serde(default = "default_periphery_port")]
-  pub port: u16,
-
-  /// IP address the periphery server binds to.
-  /// Default: [::].
-  #[serde(default = "default_periphery_bind_ip")]
-  pub bind_ip: String,
-
-  /// Limits which IP addresses are allowed to call the api.
-  /// Default: none
-  ///
-  /// Note: this should be configured to increase security.
-  #[serde(default)]
-  pub allowed_ips: ForgivingVec<IpNetwork>,
-
-  /// Whether to enable ssl.
-  /// Default: true
-  #[serde(default = "default_ssl_enabled")]
-  pub ssl_enabled: bool,
-
-  /// Path to the ssl key.
-  /// Default: `${root_directory}/ssl/key.pem`.
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub ssl_key_file: Option<String>,
-
-  /// Path to the ssl cert.
-  /// Default: `${root_directory}/ssl/cert.pem`.
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub ssl_cert_file: Option<String>,
 
   // ==================
   // = OTHER SETTINGS =
@@ -430,14 +327,6 @@ pub struct PeripheryConfig {
   pub docker_registries: ForgivingVec<DockerRegistry>,
 }
 
-fn default_periphery_port() -> u16 {
-  8120
-}
-
-fn default_periphery_bind_ip() -> String {
-  "[::]".to_string()
-}
-
 fn default_root_directory() -> PathBuf {
   "/etc/komodo".parse().unwrap()
 }
@@ -454,23 +343,13 @@ fn default_container_stats_polling_rate() -> Timelength {
   Timelength::ThirtySeconds
 }
 
-fn default_ssl_enabled() -> bool {
-  true
-}
-
 impl Default for PeripheryConfig {
   fn default() -> Self {
     Self {
-      private_key: None,
+      iroh_secret_key: None,
       onboarding_key: None,
-      core_public_keys: None,
-      passkeys: None,
-      core_addresses: Default::default(),
-      core_tls_insecure_skip_verify: Default::default(),
+      core_endpoint_addrs: Default::default(),
       connect_as: Default::default(),
-      server_enabled: Default::default(),
-      port: default_periphery_port(),
-      bind_ip: default_periphery_bind_ip(),
       root_directory: default_root_directory(),
       repo_dir: None,
       stack_dir: None,
@@ -484,15 +363,11 @@ impl Default for PeripheryConfig {
       legacy_compose_cli: Default::default(),
       logging: Default::default(),
       pretty_startup_config: Default::default(),
-      allowed_ips: Default::default(),
       include_disk_mounts: Default::default(),
       exclude_disk_mounts: Default::default(),
       secrets: Default::default(),
       git_providers: Default::default(),
       docker_registries: Default::default(),
-      ssl_enabled: default_ssl_enabled(),
-      ssl_key_file: None,
-      ssl_cert_file: None,
     }
   }
 }
@@ -500,28 +375,19 @@ impl Default for PeripheryConfig {
 impl PeripheryConfig {
   pub fn sanitized(&self) -> PeripheryConfig {
     PeripheryConfig {
-      private_key: self.private_key.as_ref().map(|private_key| {
-        if private_key.starts_with("file:") {
-          private_key.clone()
+      iroh_secret_key: self.iroh_secret_key.as_ref().map(|key| {
+        if key.starts_with("file:") {
+          key.clone()
         } else {
-          empty_or_redacted(private_key)
+          empty_or_redacted(key)
         }
       }),
       onboarding_key: self
         .onboarding_key
         .as_ref()
         .map(|key| empty_or_redacted(key)),
-      core_public_keys: self.core_public_keys.clone(),
-      passkeys: self.passkeys.as_ref().map(|passkeys| {
-        passkeys.iter().map(|p| empty_or_redacted(p)).collect()
-      }),
-      core_addresses: self.core_addresses.clone(),
-      core_tls_insecure_skip_verify: self
-        .core_tls_insecure_skip_verify,
+      core_endpoint_addrs: self.core_endpoint_addrs.clone(),
       connect_as: self.connect_as.clone(),
-      server_enabled: self.server_enabled,
-      port: self.port,
-      bind_ip: self.bind_ip.clone(),
       root_directory: self.root_directory.clone(),
       repo_dir: self.repo_dir.clone(),
       stack_dir: self.stack_dir.clone(),
@@ -534,7 +400,6 @@ impl PeripheryConfig {
       legacy_compose_cli: self.legacy_compose_cli,
       logging: self.logging.clone(),
       pretty_startup_config: self.pretty_startup_config,
-      allowed_ips: self.allowed_ips.clone(),
       include_disk_mounts: self.include_disk_mounts.clone(),
       exclude_disk_mounts: self.exclude_disk_mounts.clone(),
       secrets: self
@@ -576,36 +441,7 @@ impl PeripheryConfig {
             .collect(),
         })
         .collect(),
-      ssl_enabled: self.ssl_enabled,
-      ssl_key_file: self.ssl_key_file.clone(),
-      ssl_cert_file: self.ssl_cert_file.clone(),
     }
-  }
-
-  /// If `server_enabled` is None, defaults based on
-  /// whether there are any core_addresses defined.
-  pub fn server_enabled(&self) -> bool {
-    self
-      .server_enabled
-      .unwrap_or(self.core_addresses.is_empty())
-  }
-
-  pub fn core_public_keys_spec(&self) -> Option<Vec<String>> {
-    // Return explicitly set public key spec.
-    if let Some(public_keys) = self.core_public_keys.clone() {
-      return Some(public_keys);
-    };
-    // If server enabled, pass through empty public keys exactly
-    if self.server_enabled() {
-      return None;
-    }
-    // Defaults to $root_directory/keys/core.pub for Periphery -> Core.
-    // If it doesn't exist, will be auto written on first connection with Core.
-    let path = format!(
-      "file:{}",
-      self.root_directory.join("keys/core.pub").display()
-    );
-    Some(vec![path])
   }
 
   pub fn repo_dir(&self) -> PathBuf {
@@ -630,51 +466,5 @@ impl PeripheryConfig {
     } else {
       self.root_directory.join("builds")
     }
-  }
-
-  pub fn ssl_key_file(&self) -> PathBuf {
-    if let Some(dir) = &self.ssl_key_file {
-      dir.into()
-    } else {
-      self.root_directory.join("ssl/key.pem")
-    }
-  }
-
-  pub fn ssl_cert_file(&self) -> PathBuf {
-    if let Some(dir) = &self.ssl_cert_file {
-      dir.into()
-    } else {
-      self.root_directory.join("ssl/cert.pem")
-    }
-  }
-}
-
-impl mogh_server::ServerConfig for &PeripheryConfig {
-  fn bind_ip(&self) -> &str {
-    &self.bind_ip
-  }
-  fn port(&self) -> u16 {
-    self.port
-  }
-  fn ssl_enabled(&self) -> bool {
-    self.ssl_enabled
-  }
-  fn ssl_key_file(&self) -> &str {
-    static SSL_KEY_FILE: OnceLock<String> = OnceLock::new();
-    SSL_KEY_FILE.get_or_init(|| {
-      PeripheryConfig::ssl_key_file(self)
-        .into_os_string()
-        .into_string()
-        .expect("Invalid ssl key file path.")
-    })
-  }
-  fn ssl_cert_file(&self) -> &str {
-    static SSL_CERT_FILE: OnceLock<String> = OnceLock::new();
-    SSL_CERT_FILE.get_or_init(|| {
-      PeripheryConfig::ssl_cert_file(self)
-        .into_os_string()
-        .into_string()
-        .expect("Invalid ssl cert file path.")
-    })
   }
 }

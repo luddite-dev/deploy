@@ -2,7 +2,6 @@ use anyhow::{Context, anyhow};
 use encoding::{
   Encode, EncodedJsonMessage, EncodedResponse, JsonMessage,
 };
-use futures_util::FutureExt;
 use periphery_client::transport::{
   EncodedTransportMessage, RequestMessage, ResponseMessage,
   TerminalMessage,
@@ -11,8 +10,6 @@ use serde::Serialize;
 use tokio::sync::{Mutex, MutexGuard, mpsc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
-
-use crate::timeout::MaybeWithTimeout;
 
 const RESPONSE_BUFFER_MAX_LEN: usize = 1_024;
 
@@ -163,24 +160,19 @@ impl<T: Send> Receiver<T> {
     self.receiver.poll_recv(cx)
   }
 
-  pub fn recv(
-    &mut self,
-  ) -> MaybeWithTimeout<impl Future<Output = anyhow::Result<T>> + Send>
-  {
-    MaybeWithTimeout::new(async {
-      let recv = self
+  pub async fn recv(&mut self) -> anyhow::Result<T> {
+    if let Some(cancel) = &self.cancel {
+      tokio::select! {
+        message = self.receiver.recv() => message.context("Channel is permanently closed"),
+        _ = cancel.cancelled() => Err(anyhow!("Stream cancelled"))
+      }
+    } else {
+      self
         .receiver
         .recv()
-        .map(|res| res.context("Channel is permanently closed"));
-      if let Some(cancel) = &self.cancel {
-        tokio::select! {
-          message = recv => message,
-          _ = cancel.cancelled() => Err(anyhow!("Stream cancelled"))
-        }
-      } else {
-        recv.await
-      }
-    })
+        .await
+        .context("Channel is permanently closed")
+    }
   }
 }
 
@@ -209,19 +201,14 @@ impl<T: Send + Clone> BufferedReceiver<T> {
   ///   - Wait for next item.
   ///   - store in buffer.
   ///   - return borrow of buffer.
-  pub fn recv(
-    &mut self,
-  ) -> MaybeWithTimeout<impl Future<Output = anyhow::Result<T>> + Send>
-  {
-    MaybeWithTimeout::new(async {
-      if let Some(buffer) = self.buffer.clone() {
-        Ok(buffer)
-      } else {
-        let message = self.receiver.recv().await?;
-        self.buffer = Some(message.clone());
-        Ok(message)
-      }
-    })
+  pub async fn recv(&mut self) -> anyhow::Result<T> {
+    if let Some(buffer) = self.buffer.clone() {
+      Ok(buffer)
+    } else {
+      let message = self.receiver.recv().await?;
+      self.buffer = Some(message.clone());
+      Ok(message)
+    }
   }
 
   /// Clears buffer.

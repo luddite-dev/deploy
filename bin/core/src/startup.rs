@@ -228,7 +228,7 @@ async fn action_api_key_cleanup() {
 async fn ensure_first_server_and_builder() {
   let config = core_config();
   if config.first_server_name.is_none()
-    && config.first_server_address.is_none()
+    && config.first_server_endpoint_id.is_none()
   {
     // If neither defined, early return
     return;
@@ -250,11 +250,10 @@ async fn ensure_first_server_and_builder() {
   let server = match (CreateServer {
     name: name.to_string(),
     config: PartialServerConfig {
-      address: config.first_server_address.clone(),
       enabled: Some(true),
       ..Default::default()
     },
-    public_key: None,
+    public_key: config.first_server_endpoint_id.clone(),
   })
   .resolve(&WriteArgs {
     user: system_user().to_owned(),

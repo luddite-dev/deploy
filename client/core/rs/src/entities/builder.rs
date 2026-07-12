@@ -296,13 +296,9 @@ impl MergePartial for BuilderConfig {
         BuilderConfig::Url(config) => {
           let config = UrlBuilderConfig {
             address: partial.address.unwrap_or(config.address),
-            periphery_public_key: partial
-              .periphery_public_key
-              .unwrap_or(config.periphery_public_key),
-            insecure_tls: partial
-              .insecure_tls
-              .unwrap_or(config.insecure_tls),
-            passkey: partial.passkey.unwrap_or(config.passkey),
+            endpoint_id: partial
+              .endpoint_id
+              .unwrap_or(config.endpoint_id),
           };
           BuilderConfig::Url(config)
         }
@@ -343,12 +339,6 @@ impl MergePartial for BuilderConfig {
               .unwrap_or(config.use_public_ip),
             port: partial.port.unwrap_or(config.port),
             use_https: partial.use_https.unwrap_or(config.use_https),
-            periphery_public_key: partial
-              .periphery_public_key
-              .unwrap_or(config.periphery_public_key),
-            insecure_tls: partial
-              .insecure_tls
-              .unwrap_or(config.insecure_tls),
             user_data: partial.user_data.unwrap_or(config.user_data),
             git_providers: partial
               .git_providers
@@ -386,40 +376,21 @@ pub struct UrlBuilderConfig {
   #[builder(default = default_address())]
   #[partial_default(default_address())]
   pub address: String,
-  /// An expected public key associated with Periphery private key.
-  /// If empty, doesn't validate Periphery public key.
+  /// The Iroh endpoint ID of the Periphery agent.
   #[serde(default)]
   #[builder(default)]
-  pub periphery_public_key: String,
-  /// Whether to validate the Periphery tls certificates.
-  #[serde(default = "default_insecure_tls")]
-  #[builder(default = default_insecure_tls())]
-  #[partial_default(default_insecure_tls())]
-  pub insecure_tls: bool,
-  /// Deprecated. Use private / public keys instead.
-  /// An optional override passkey to use
-  /// to authenticate with periphery agent.
-  /// If this is empty, will use passkey in core config.
-  #[serde(default)]
-  #[builder(default)]
-  pub passkey: String,
+  pub endpoint_id: String,
 }
 
 fn default_address() -> String {
   String::from("https://periphery:8120")
 }
 
-fn default_insecure_tls() -> bool {
-  true
-}
-
 impl Default for UrlBuilderConfig {
   fn default() -> Self {
     Self {
       address: default_address(),
-      periphery_public_key: Default::default(),
-      insecure_tls: default_insecure_tls(),
-      passkey: Default::default(),
+      endpoint_id: Default::default(),
     }
   }
 }
@@ -581,17 +552,6 @@ pub struct AwsBuilderConfig {
   #[partial_default(default_use_https())]
   pub use_https: bool,
 
-  /// An expected public key associated with Periphery private key.
-  /// If empty, doesn't validate Periphery public key.
-  #[serde(default)]
-  pub periphery_public_key: String,
-
-  /// Whether to validate the Periphery tls certificates.
-  #[serde(default = "default_insecure_tls")]
-  #[builder(default = default_insecure_tls())]
-  #[partial_default(default_insecure_tls())]
-  pub insecure_tls: bool,
-
   /// Which git providers are available on the AMI
   #[serde(default)]
   #[builder(default)]
@@ -625,8 +585,6 @@ impl Default for AwsBuilderConfig {
       assign_public_ip: Default::default(),
       use_public_ip: Default::default(),
       user_data: Default::default(),
-      periphery_public_key: Default::default(),
-      insecure_tls: default_insecure_tls(),
       git_providers: Default::default(),
       docker_registries: Default::default(),
       secrets: Default::default(),

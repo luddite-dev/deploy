@@ -60,13 +60,15 @@ pub async fn connect_builder_periphery(
         ));
       }
       // Builder id no good because it may be active for multiple connections.
-      let periphery = PeripheryClient::new(
-        PeripheryConnectionArgs::from_url_builder(
-          &ObjectId::new().to_hex(),
-          &config,
-        ),
-        config.insecure_tls,
-      )
+      let id = ObjectId::new().to_hex();
+      let periphery = PeripheryClient::new(PeripheryConnectionArgs {
+        id: &id,
+        endpoint_id: if config.endpoint_id.is_empty() {
+          None
+        } else {
+          Some(&config.endpoint_id)
+        },
+      })
       .await?;
       // Poll for connection to be estalished
       let mut err = None;
@@ -167,19 +169,12 @@ async fn get_aws_builder(
     update_update((*update).clone()).await?;
   }
 
-  let protocol = if config.use_https { "wss" } else { "ws" };
-
   // TODO: Handle ad-hoc (non server) periphery connections. These don't have ids.
-  let periphery_address =
-    format!("{protocol}://{ip}:{}", config.port);
-  let periphery = PeripheryClient::new(
-    PeripheryConnectionArgs::from_aws_builder(
-      &ObjectId::new().to_hex(),
-      &periphery_address,
-      &config,
-    ),
-    config.insecure_tls,
-  )
+  let id = ObjectId::new().to_hex();
+  let periphery = PeripheryClient::new(PeripheryConnectionArgs {
+    id: &id,
+    endpoint_id: None,
+  })
   .await?;
 
   let start_connect_ts = komodo_timestamp();

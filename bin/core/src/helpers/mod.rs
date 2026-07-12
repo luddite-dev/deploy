@@ -184,11 +184,8 @@ pub async fn periphery_client(
   if !server.config.enabled {
     return Err(anyhow!("server not enabled"));
   }
-  PeripheryClient::new(
-    PeripheryConnectionArgs::from_server(server),
-    server.config.insecure_tls,
-  )
-  .await
+  PeripheryClient::new(PeripheryConnectionArgs::from_server(server))
+    .await
 }
 
 #[instrument(

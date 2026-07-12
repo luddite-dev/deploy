@@ -9,7 +9,7 @@ use crate::{
   config::periphery_config,
   docker::{DockerClient, compose::list_compose_projects},
   state::{
-    docker_client, host_public_ip, periphery_keys, stats_client,
+    docker_client, host_public_ip, periphery_secret_key, stats_client,
   },
 };
 
@@ -50,7 +50,7 @@ async fn periphery_information() -> PeripheryInformation {
   let config = periphery_config();
   PeripheryInformation {
     version: env!("CARGO_PKG_VERSION").to_string(),
-    public_key: periphery_keys().load().public.to_string(),
+    endpoint_id: periphery_secret_key().public().to_string(),
     terminals_disabled: config.disable_terminals,
     container_terminals_disabled: config.disable_container_terminals,
     stats_polling_rate: config.stats_polling_rate,

@@ -74,6 +74,38 @@ case.
 UI (.tsx/.ts) commits are deferred, not dropped. They require the Rust API
 layer to land first; we port UI as a bundle after the Rust tier it depends on.
 
+### Rule 4 — WebSocket/Noise transport changes (explicit drop after M3)
+
+Milestone 3 replaced the entire WebSocket + mutual Noise XX handshake
+transport with Iroh (QUIC + TLS 1.3, raw public keys). Upstream commits that
+touch the old transport stack are no longer cherry-pickable:
+
+**Files that no longer exist in our fork** (upstream hunks against these are dropped):
+- `lib/transport/src/auth.rs` — deleted (Noise handshake layer)
+- `lib/transport/src/websocket/` — deleted (entire WS trait family)
+- `lib/transport/src/timeout.rs` — deleted (WS-specific timeout wrapper)
+- `bin/core/src/connection/client.rs` — deleted (Core no longer dials out)
+- `bin/periphery/src/connection/server.rs` — deleted (Periphery no longer listens)
+- `bin/periphery/src/helpers.rs` SSL functions — deleted (no self-signed certs)
+
+**Fields/patterns stripped from upstream diffs when they appear**:
+- `ServerConfig.address`, `insecure_tls`, `passkey` — deleted (unified direction)
+- `ServerInfo.public_key` → renamed to `endpoint_id` (Iroh EndpointId)
+- `PeripheryConfig.private_key` → renamed to `iroh_secret_key`
+- `CoreConfig.periphery_public_keys` → renamed to `iroh_periphery_endpoint_ids`
+- `LoginMessage` variants (`Nonce`, `Handshake`, `OnboardingFlow`, `PublicKey`,
+  `V1PasskeyFlow`, `V1Passkey`) — deleted, replaced with `OnboardingToken`/
+  `EndpointId`/`Success`
+- `LoginFlow`, `PublicKeyValidator`, `ConnectionIdentifiers`, `Websocket` trait
+  — all deleted
+
+**Rationale:** Iroh's built-in TLS 1.3 + raw public key mutual auth makes the
+Noise layer redundant (double-encryption otherwise). The `Websocket` trait is
+WS-frame-oriented and would need a length-prefix framing hack for Iroh
+byte-streams. Since the hot paths (`handle_socket`, `handle_login`,
+`handle_incoming_message`) were rewritten regardless, a full replacement was
+cleaner than an adapter.
+
 ---
 
 ## Merged

@@ -1,231 +1,222 @@
-use std::time::Duration;
-
-use anyhow::{Context, anyhow};
-use axum::http::{HeaderValue, StatusCode};
-use periphery_client::{
-  CONNECTION_RETRY_SECONDS, transport::LoginMessage,
-};
-use tracing::Instrument;
-use transport::{
-  auth::{
-    AddressConnectionIdentifiers, ClientLoginFlow,
-    ConnectionIdentifiers, LoginFlow, LoginFlowArgs,
+use std::{
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
   },
-  fix_ws_address,
-  websocket::{
-    WebsocketExt, login::LoginWebsocketExt,
-    tungstenite::TungsteniteWebsocket,
-  },
+  time::Duration,
 };
 
-use crate::{
-  config::periphery_config,
-  connection::core_public_keys,
-  state::{core_connections, periphery_keys},
+use anyhow::Context;
+use encoding::{Decode as _, Encode as _};
+use iroh::{
+  Endpoint, EndpointAddr, EndpointId, endpoint::Connection,
+};
+use periphery_client::transport::{LoginMessage, TransportMessage};
+use transport::iroh::{
+  endpoint::ALPN,
+  framing::{FramedReader, FramedWriter},
 };
 
-#[instrument("StartCoreConnection")]
+use crate::{config::periphery_config, state::core_connections};
+
+/// Initiate an outbound Iroh connection to Komodo Core.
+///
+/// `core_addr` is an Iroh [`NodeAddr`] string (e.g. "node_id@relay_url").
+#[instrument("StartCoreConnection", skip(endpoint))]
 pub async fn handler(
-  address: &str,
+  endpoint: Endpoint,
+  core_addr: &str,
 ) -> anyhow::Result<tokio::task::JoinHandle<anyhow::Result<()>>> {
   let config = periphery_config();
-  let address = fix_ws_address(address);
-  let identifiers = AddressConnectionIdentifiers::extract(&address)?;
-  let query =
-    format!("server={}", urlencoding::encode(&config.connect_as));
-  let endpoint = format!("{address}/ws/periphery?{query}");
 
-  info!("Initiating outbound connection to {endpoint}");
+  let node_addr: EndpointAddr = core_addr
+    .parse::<EndpointId>()
+    .with_context(|| {
+      format!("Failed to parse Iroh EndpointId from '{core_addr}'")
+    })?
+    .into();
 
-  let mut already_logged_connection_error = false;
-  let mut already_logged_login_error = false;
-  let mut already_logged_onboarding_error = false;
+  let core = if config.connect_as.is_empty() {
+    core_addr.to_string()
+  } else {
+    config.connect_as.clone()
+  };
 
-  let core = identifiers.host().to_string();
+  info!("Initiating outbound Iroh connection to Core: {core_addr}");
 
   let channel = core_connections().get_or_insert_default(&core).await;
+
+  let our_endpoint_id = endpoint.id().to_string();
+  let onboarding_key = config.onboarding_key.clone();
+  let node_addr = node_addr;
+  let onboarded = Arc::new(AtomicBool::new(false));
 
   let handle = tokio::spawn(async move {
     let mut receiver = channel.receiver()?;
     loop {
-      let (mut socket, accept) =
-        match connect_websocket(&endpoint).await {
-          Ok(res) => res,
-          Err(e) => {
-            if !already_logged_connection_error {
-              warn!("{e:#}");
-              already_logged_connection_error = true;
-              // If error transitions from login to connection,
-              // set to false to see login error after reconnect.
-              already_logged_login_error = false;
-              already_logged_onboarding_error = false;
-            }
-            tokio::time::sleep(Duration::from_secs(
-              CONNECTION_RETRY_SECONDS,
-            ))
-            .await;
-            continue;
-          }
-        };
+      // After a successful onboarding, switch to EndpointId login
+      // for all future reconnections.
+      let use_onboarding = onboarding_key.is_some()
+        && !onboarded.load(Ordering::Relaxed);
 
-      // Receive whether to use Server connection flow vs Server onboarding flow.
-      let onboarding_flow = match socket
-        .recv_login_onboarding_flow()
-        .await
-        .context("Failed to receive Login OnboardingFlow message")
-      {
-        Ok(onboarding_flow) => onboarding_flow,
+      let conn = match connect_to_core(&endpoint, &node_addr).await {
+        Ok(conn) => conn,
         Err(e) => {
-          if !already_logged_connection_error {
-            warn!("{e:#}");
-            already_logged_connection_error = true;
-            // If error transitions from login to connection,
-            // set to false to see login error after reconnect.
-            already_logged_login_error = false;
-            already_logged_onboarding_error = false;
-          }
+          warn!("Failed to connect to Core | {e:#}");
           tokio::time::sleep(Duration::from_secs(
-            CONNECTION_RETRY_SECONDS,
+            periphery_client::CONNECTION_RETRY_SECONDS,
           ))
           .await;
           continue;
         }
       };
 
-      already_logged_connection_error = false;
-
-      debug!(
-        host = identifiers.host(),
-        query,
-        sec_websocket_accept = accept.to_str().unwrap_or_default(),
-        "[CORE AUTH] Zero trust identifiers"
-      );
-
-      let identifiers =
-        identifiers.build(accept.as_bytes(), query.as_bytes());
-
-      if onboarding_flow {
-        if let Err(e) = handle_onboarding(socket, identifiers).await.map(|onboarding_key| if onboarding_key {
-          Ok(())
-        } else {
-          Err(anyhow!("Server '{}' does not exist or is misconfigured, and no PERIPHERY_ONBOARDING_KEY is provided.", config.connect_as))
-        }) {
-          if !already_logged_onboarding_error {
-            error!("{e:#}");
-            already_logged_onboarding_error = true;
-          }
+      // Open bidi stream for login + data
+      let (send, recv) = match conn.open_bi().await {
+        Ok(streams) => streams,
+        Err(e) => {
+          warn!("Failed to open bidi stream to Core | {e:#}");
           tokio::time::sleep(Duration::from_secs(
-            CONNECTION_RETRY_SECONDS,
+            periphery_client::CONNECTION_RETRY_SECONDS,
           ))
           .await;
           continue;
-        };
-      } else {
-        let span = info_span!(
-          "CoreLogin",
-          address,
-          direction = "PeripheryToCore",
-        );
-        let login = async {
-          super::handle_login::<_, ClientLoginFlow>(
-            &mut socket,
-            identifiers,
-            false,
+        }
+      };
+
+      let mut writer = FramedWriter::new(send);
+      let mut reader = FramedReader::new(recv);
+
+      // Send login message(s).
+      // If we have an onboarding key and haven't onboarded yet, send
+      // OnboardingToken followed by our EndpointId so Core can register us.
+      // After onboarding, send EndpointId for normal reconnection.
+      if use_onboarding {
+        let token = onboarding_key.as_ref().unwrap();
+        if let Err(e) = writer
+          .write_message(
+            &LoginMessage::OnboardingToken(token.clone()).encode(),
           )
           .await
-        }
-        .instrument(span)
-        .await;
-        if let Err(e) = login {
-          // Try using onboarding key to fix public key issue.
-          let e = match handle_onboarding(socket, identifiers).await {
-            // Should work on next reconnect
-            Ok(true) => continue,
-            // No onboarding key available, use original error.
-            Ok(false) => e,
-            // Onboarding key available but failed.
-            Err(e) => e,
-          };
-          if !already_logged_login_error {
-            warn!("Failed to login | {e:#}");
-            already_logged_login_error = true;
-          }
+        {
+          warn!("Failed to send onboarding token | {e:#}");
           tokio::time::sleep(Duration::from_secs(
-            CONNECTION_RETRY_SECONDS,
+            periphery_client::CONNECTION_RETRY_SECONDS,
           ))
           .await;
           continue;
         }
-
-        already_logged_login_error = false;
-
-        super::handle_socket(
-          socket,
-          &core,
-          &channel.sender,
-          &mut receiver,
-        )
-        .await
+        if let Err(e) = writer
+          .write_message(
+            &LoginMessage::EndpointId(our_endpoint_id.clone())
+              .encode(),
+          )
+          .await
+        {
+          warn!("Failed to send EndpointId | {e:#}");
+          tokio::time::sleep(Duration::from_secs(
+            periphery_client::CONNECTION_RETRY_SECONDS,
+          ))
+          .await;
+          continue;
+        }
+      } else {
+        if let Err(e) = writer
+          .write_message(
+            &LoginMessage::EndpointId(our_endpoint_id.clone())
+              .encode(),
+          )
+          .await
+        {
+          warn!("Failed to send login message | {e:#}");
+          tokio::time::sleep(Duration::from_secs(
+            periphery_client::CONNECTION_RETRY_SECONDS,
+          ))
+          .await;
+          continue;
+        }
       }
+
+      // Wait for login success
+      let success = match reader.read_message().await {
+        Ok(msg) => match msg.decode() {
+          Ok(TransportMessage::Login(encoded)) => {
+            match encoded.decode() {
+              Ok(LoginMessage::Success) => true,
+              Ok(other) => {
+                warn!(
+                  "Received unexpected login response: {other:?}"
+                );
+                false
+              }
+              Err(e) => {
+                warn!("Failed to decode login response | {e:#}");
+                false
+              }
+            }
+          }
+          Ok(other) => {
+            warn!("Expected login response, got {other:?}");
+            false
+          }
+          Err(e) => {
+            warn!("Failed to decode transport message | {e:#}");
+            false
+          }
+        },
+        Err(e) => {
+          warn!("Failed to read login response | {e:#}");
+          // If connection was dropped and we were using onboarding,
+          // the onboarding might have failed. Retry.
+          false
+        }
+      };
+
+      if !success {
+        tokio::time::sleep(Duration::from_secs(
+          periphery_client::CONNECTION_RETRY_SECONDS,
+        ))
+        .await;
+        continue;
+      }
+
+      // Onboarding succeeded — mark it so we use EndpointId next time
+      if use_onboarding {
+        onboarded.store(true, Ordering::Relaxed);
+      }
+
+      info!("Login to Core successful");
+
+      // Handle the socket
+      let send = writer.into_inner();
+      let recv = reader.into_inner();
+      super::handle_socket(
+        send,
+        recv,
+        &core,
+        &channel.sender,
+        &mut receiver,
+      )
+      .await;
+
+      // When handle_socket returns, the connection was dropped.
+      // Retry the connection after a delay.
+      tokio::time::sleep(Duration::from_secs(
+        periphery_client::CONNECTION_RETRY_SECONDS,
+      ))
+      .await;
     }
   });
 
   Ok(handle)
 }
 
-#[instrument("OnboardingFlow", skip_all)]
-async fn handle_onboarding(
-  mut socket: TungsteniteWebsocket,
-  identifiers: ConnectionIdentifiers<'_>,
-) -> anyhow::Result<bool> {
-  let config = periphery_config();
-  let Some(onboarding_key) = config.onboarding_key.as_deref() else {
-    return Ok(false);
-  };
-
-  // .with_context(|| format!("Server '{}' does not exist or is misconfigured, and no PERIPHERY_ONBOARDING_KEY is provided.", config.connect_as))?;
-
-  ClientLoginFlow::login(LoginFlowArgs {
-    private_key: onboarding_key,
-    identifiers,
-    public_key_validator: core_public_keys(),
-    socket: &mut socket,
-    should_close: true,
-  })
-  .await
-  .context("Onboarding failed")?;
-
-  // Post onboarding login 1: Send public key
-  socket
-    .send_message(LoginMessage::PublicKey(
-      periphery_keys().load().public.clone(),
-    ))
+async fn connect_to_core(
+  endpoint: &Endpoint,
+  node_addr: &EndpointAddr,
+) -> anyhow::Result<Connection> {
+  endpoint
+    .connect(node_addr.clone(), ALPN)
     .await
-    .context("Failed to send public key bytes")?;
-
-  socket
-    .recv_login_success()
-    .await
-    .context("Failed to receive Server onboarding result")?;
-
-  info!(
-    "Server onboarding flow for '{}' successful ✅",
-    config.connect_as
-  );
-
-  Ok(true)
-}
-
-async fn connect_websocket(
-  url: &str,
-) -> anyhow::Result<(TungsteniteWebsocket, HeaderValue)> {
-  let config = periphery_config();
-  TungsteniteWebsocket::connect_maybe_tls_insecure(url, config.core_tls_insecure_skip_verify)
-    .await
-    .map_err(|e| match e.status {
-      StatusCode::NOT_FOUND => anyhow!("404 Not Found: Server '{}' does not exist.", config.connect_as),
-      StatusCode::BAD_REQUEST => anyhow!("400 Bad Request: Server '{}' is disabled or configured to make Core → Periphery connection", config.connect_as),
-      StatusCode::UNAUTHORIZED => anyhow!("401 Unauthorized: Only one Server connected as '{}' is allowed. Or the Core reverse proxy needs to forward host and websocket headers.", config.connect_as),
-      _ => e.error,
-    })
+    .context("Failed to connect to Core Iroh endpoint")
 }

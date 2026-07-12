@@ -13,7 +13,6 @@ repository.workspace = true
 # local
 komodo_client.workspace = true
 encoding.workspace = true
-mogh_pki.workspace = true
 # mogh
 mogh_resolver.workspace = true
 # external

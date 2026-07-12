@@ -1,14 +1,10 @@
 use komodo_client::entities::NoData;
-use mogh_pki::SpkiPublicKey;
 use mogh_resolver::Resolve;
 use periphery_client::api::keys::{
   RotateCorePublicKey, RotatePrivateKey, RotatePrivateKeyResponse,
 };
 
-use crate::{
-  config::periphery_config,
-  state::{core_public_keys, periphery_keys},
-};
+use crate::state::periphery_secret_key;
 
 //
 
@@ -25,12 +21,13 @@ impl Resolve<crate::api::Args> for RotatePrivateKey {
     self,
     args: &crate::api::Args,
   ) -> anyhow::Result<RotatePrivateKeyResponse> {
-    let public_key = periphery_keys()
-      .rotate(mogh_pki::PkiKind::Mutual)
-      .await?
-      .into_inner();
-    info!("New Public Key: {public_key}");
-    Ok(RotatePrivateKeyResponse { public_key })
+    // In Iroh transport mode, the secret key is at a fixed file path
+    // and does not support rotation via the old PKI mechanism.
+    let endpoint_id = periphery_secret_key().public().to_string();
+    info!("Iroh EndpointId: {endpoint_id}");
+    Ok(RotatePrivateKeyResponse {
+      public_key: endpoint_id,
+    })
   }
 }
 
@@ -50,32 +47,8 @@ impl Resolve<crate::api::Args> for RotateCorePublicKey {
     self,
     args: &crate::api::Args,
   ) -> anyhow::Result<NoData> {
-    let config = periphery_config();
-
-    let Some(core_public_keys_spec) =
-      config.core_public_keys.as_ref()
-    else {
-      return Ok(NoData {});
-    };
-
-    let Some(path) = core_public_keys_spec
-      .iter()
-      // Finds the first Core Public Key in spec with `file` prefix.
-      .find_map(|public_keys| public_keys.strip_prefix("file:"))
-    else {
-      return Ok(NoData {});
-    };
-
-    let public_key = SpkiPublicKey::from(self.public_key);
-
-    // Check equality at path before trying to rewrite.
-    match SpkiPublicKey::from_file(path) {
-      Ok(existing) if existing == public_key => {}
-      _ => public_key.write_pem_async(path).await?,
-    }
-
-    core_public_keys().refresh();
-
+    // In Iroh transport mode, there is no core public key to rotate.
+    // Core authentication is handled by the Iroh endpoint identity.
     Ok(NoData {})
   }
 }

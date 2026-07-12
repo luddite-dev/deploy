@@ -1,135 +1,83 @@
 use std::time::Duration;
 
-use anyhow::anyhow;
-use encoding::{
-  CastBytes as _, Decode as _, Encode as _, WithChannel,
-};
+use encoding::{Decode as _, Encode as _, WithChannel};
+use iroh::endpoint::{RecvStream, SendStream};
 use mogh_resolver::Resolve;
 use periphery_client::transport::{
   EncodedRequestMessage, EncodedTransportMessage, RequestMessage,
   TransportMessage,
 };
 use transport::{
-  auth::{
-    ConnectionIdentifiers, LoginFlow, LoginFlowArgs,
-    PublicKeyValidator,
-  },
   channel::{BufferedReceiver, Sender},
-  websocket::{
-    Websocket, WebsocketReceiverExt as _, WebsocketSender as _,
-  },
+  iroh::framing::{FramedReader, FramedWriter},
 };
 
 use crate::{
   api::{Args, PeripheryRequest},
   config::periphery_config,
-  state::{CorePublicKeys, core_public_keys, periphery_keys},
 };
 
 pub mod client;
-pub mod server;
 
-impl PublicKeyValidator for &CorePublicKeys {
-  type ValidationResult = ();
-  #[instrument("ValidateCorePublicKey", skip(self))]
-  async fn validate(&self, public_key: String) -> anyhow::Result<()> {
-    if self.is_valid(&public_key).await {
-      Ok(())
-    } else {
-      Err(
-        anyhow!("{public_key} is invalid")
-          .context("Ensure public key matches one of the 'core_public_keys' in periphery config (PERIPHERY_CORE_PUBLIC_KEYS)")
-          .context("Periphery failed to validate Core public key"),
-      )
-    }
-  }
-}
-
-#[instrument("StandardCoreLoginFlow", skip(socket, identifiers))]
-async fn handle_login<W: Websocket, L: LoginFlow>(
-  socket: &mut W,
-  identifiers: ConnectionIdentifiers<'_>,
-  should_close: bool,
-) -> anyhow::Result<()> {
-  L::login(LoginFlowArgs {
-    socket,
-    identifiers,
-    private_key: periphery_keys().load().private.as_str(),
-    public_key_validator: core_public_keys(),
-    should_close,
-  })
-  .await
-}
-
-async fn handle_socket<W: Websocket>(
-  socket: W,
+/// Handle an Iroh bidi stream (send, recv) for the lifetime of the connection
+/// to Core.
+async fn handle_socket(
+  send: SendStream,
+  recv: RecvStream,
   core: &str,
   sender: &Sender<EncodedTransportMessage>,
   receiver: &mut BufferedReceiver<EncodedTransportMessage>,
 ) {
   let config = periphery_config();
   info!(
-    "Logged in to Komodo Core {core} websocket{}",
-    if !config.core_addresses.is_empty()
-      && !config.connect_as.is_empty()
-    {
+    "Connected to Komodo Core {core}{}",
+    if !config.connect_as.is_empty() {
       format!(" as Server {}", config.connect_as)
     } else {
       String::new()
     }
   );
 
-  let (mut ws_write, mut ws_read) = socket.split();
+  let mut writer = FramedWriter::new(send);
+  let mut reader = FramedReader::new(recv);
 
   let forward_writes = async {
     loop {
-      let message = match tokio::time::timeout(
-        Duration::from_secs(5),
-        receiver.recv(),
-      )
-      .await
-      {
-        Ok(Ok(message)) => message,
-        Ok(Err(_)) => break,
-        // Handle sending Ping
-        Err(_) => {
-          if let Err(e) = ws_write.ping().await {
-            warn!("Failed to send ping | {e:?}");
-            break;
-          }
-          continue;
-        }
+      let message = match receiver.recv().await {
+        Ok(message) => message,
+        Err(_) => break,
       };
-      match ws_write.send(message.into_bytes()).await {
-        // Clears the stored message from receiver buffer.
-        Ok(_) => receiver.clear_buffer(),
-        Err(e) => {
-          warn!("Failed to send response | {e:?}");
-          break;
-        }
+      if let Err(e) = writer.write_message(&message).await {
+        warn!("Failed to send response | {e:?}");
+        break;
       }
+      receiver.clear_buffer();
     }
-    let _ = ws_write.close().await;
   };
 
   let handle_reads = async {
     loop {
-      let message = match ws_read.recv_message().await {
-        Ok(res) => res,
+      match reader.read_message().await {
+        Ok(message) => match message.decode() {
+          Ok(TransportMessage::Request(message)) => {
+            handle_request(core.to_string(), sender.clone(), message);
+          }
+          Ok(TransportMessage::Terminal(message)) => {
+            crate::terminal::handle_message(message).await;
+          }
+          Ok(other) => {
+            warn!(
+              "Received unexpected transport message | {other:?}"
+            );
+          }
+          Err(e) => {
+            warn!("Failed to decode transport message | {e:#}");
+          }
+        },
         Err(e) => {
           warn!("{e:#}");
           break;
         }
-      };
-      match message {
-        TransportMessage::Request(message) => {
-          handle_request(core.to_string(), sender.clone(), message)
-        }
-        TransportMessage::Terminal(message) => {
-          crate::terminal::handle_message(message).await
-        }
-        // Rest shouldn't be received by Periphery
-        _ => {}
       }
     }
   };

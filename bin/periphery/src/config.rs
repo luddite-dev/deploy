@@ -7,9 +7,7 @@ use komodo_client::entities::{
   logger::{LogConfig, LogLevel},
 };
 use mogh_config::ConfigLoader;
-use mogh_secret_file::{
-  maybe_read_item_from_file, maybe_read_list_from_file,
-};
+use mogh_secret_file::maybe_read_item_from_file;
 
 pub fn periphery_args() -> &'static CliArgs {
   static PERIPHERY_ARGS: OnceLock<CliArgs> = OnceLock::new();
@@ -70,38 +68,22 @@ pub fn periphery_config() -> &'static PeripheryConfig {
     };
 
     PeripheryConfig {
-      private_key: maybe_read_item_from_file(
-        env.periphery_private_key_file,
-        env.periphery_private_key,
+      iroh_secret_key: maybe_read_item_from_file(
+        env.periphery_iroh_secret_key_file,
+        env.periphery_iroh_secret_key,
       )
-      .or(config.private_key),
+      .or(config.iroh_secret_key),
       onboarding_key: maybe_read_item_from_file(
         env.periphery_onboarding_key_file,
         env.periphery_onboarding_key,
       )
       .or(config.onboarding_key),
-      core_public_keys: env
-        .periphery_core_public_keys
-        .or(config.core_public_keys),
-      passkeys: maybe_read_list_from_file(
-        env.periphery_passkeys_file,
-        env.periphery_passkeys,
-      )
-      .or(config.passkeys),
-      core_addresses: env
-        .periphery_core_addresses
-        .unwrap_or(config.core_addresses),
-      core_tls_insecure_skip_verify: env
-        .periphery_core_tls_insecure_skip_verify
-        .unwrap_or(config.core_tls_insecure_skip_verify),
+      core_endpoint_addrs: env
+        .periphery_core_endpoint_addrs
+        .unwrap_or(config.core_endpoint_addrs),
       connect_as: env
         .periphery_connect_as
         .unwrap_or(config.connect_as),
-      server_enabled: env
-        .periphery_server_enabled
-        .or(config.server_enabled),
-      port: env.periphery_port.unwrap_or(config.port),
-      bind_ip: env.periphery_bind_ip.unwrap_or(config.bind_ip),
       root_directory: env
         .periphery_root_directory
         .unwrap_or(config.root_directory),
@@ -160,24 +142,12 @@ pub fn periphery_config() -> &'static PeripheryConfig {
       pretty_startup_config: env
         .periphery_pretty_startup_config
         .unwrap_or(config.pretty_startup_config),
-      allowed_ips: env
-        .periphery_allowed_ips
-        .unwrap_or(config.allowed_ips),
       include_disk_mounts: env
         .periphery_include_disk_mounts
         .unwrap_or(config.include_disk_mounts),
       exclude_disk_mounts: env
         .periphery_exclude_disk_mounts
         .unwrap_or(config.exclude_disk_mounts),
-      ssl_enabled: env
-        .periphery_ssl_enabled
-        .unwrap_or(config.ssl_enabled),
-      ssl_key_file: env
-        .periphery_ssl_key_file
-        .or(config.ssl_key_file),
-      ssl_cert_file: env
-        .periphery_ssl_cert_file
-        .or(config.ssl_cert_file),
       secrets: config.secrets,
       git_providers: config.git_providers,
       docker_registries: config.docker_registries,

@@ -10,9 +10,7 @@ use transport::channel::channel;
 use uuid::Uuid;
 
 use crate::{
-  connection::{
-    PeripheryConnection, PeripheryConnectionArgs, ResponseChannels,
-  },
+  connection::{PeripheryConnection, PeripheryConnectionArgs},
   state::periphery_connections,
 };
 
@@ -22,26 +20,20 @@ pub mod terminal;
 pub struct PeripheryClient {
   /// Usually the server id
   pub id: String,
-  pub responses: Arc<ResponseChannels>,
+  pub responses: Arc<crate::connection::ResponseChannels>,
 }
 
 impl PeripheryClient {
   pub async fn new(
     args: PeripheryConnectionArgs<'_>,
-    insecure_tls: bool,
   ) -> anyhow::Result<PeripheryClient> {
     let connections = periphery_connections();
-
     let id = args.id.to_string();
 
-    // Spawn client side connection if one doesn't exist.
+    // Core no longer dials out — Periphery → Core only.
+    // Just look for an existing connection.
     let Some(connection) = connections.get(&id).await else {
-      if args.address.is_none() {
-        return Err(anyhow!("Server {id} is not connected"));
-      }
-      return args
-        .spawn_client_connection(id.clone(), insecure_tls)
-        .await;
+      return Err(anyhow!("Server {id} is not connected"));
     };
 
     // Ensure the connection args are unchanged.
@@ -52,24 +44,18 @@ impl PeripheryClient {
       });
     }
 
-    // The args have changed.
-    if args.address.is_none() {
-      // Periphery -> Core connection
-      // Remove this connection, wait and see if client reconnects
-      connections.remove(&id).await;
-      tokio::time::sleep(Duration::from_millis(500)).await;
-      let connection = connections
-        .get(&id)
-        .await
-        .with_context(|| format!("Server {id} is not connected"))?;
-      Ok(PeripheryClient {
-        id,
-        responses: connection.responses.clone(),
-      })
-    } else {
-      // Core -> Periphery connection
-      args.spawn_client_connection(id.clone(), insecure_tls).await
-    }
+    // The args have changed (e.g. endpoint_id mismatch).
+    // Remove this connection, wait and see if client reconnects
+    connections.remove(&id).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let connection = connections
+      .get(&id)
+      .await
+      .with_context(|| format!("Server {id} is not connected"))?;
+    Ok(PeripheryClient {
+      id,
+      responses: connection.responses.clone(),
+    })
   }
 
   pub async fn cleanup(self) -> Option<Arc<PeripheryConnection>> {
@@ -120,14 +106,12 @@ impl PeripheryClient {
     let res = async {
       // Poll for the associated response
       loop {
-        let message = response_receiever
-          .recv()
-          // Periphery request handler sends pings every 4s
-          // *on this channel specifically* so Core knows
-          // request is being processed. Hardcoded 11s
-          // allows for missed 5s ping due to network reconnect.
-          .with_timeout(Duration::from_secs(10))
-          .await?;
+        let message = tokio::time::timeout(
+          Duration::from_secs(10),
+          response_receiever.recv(),
+        )
+        .await
+        .context("Response timed out")??;
 
         let Some(message) = message.decode()? else {
           // Just a ping from periphery request handler

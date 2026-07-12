@@ -12,37 +12,22 @@ use encoding::{
   CastBytes as _, Decode as _, EncodedJsonMessage, EncodedResponse,
   WithChannel,
 };
-use komodo_client::entities::{
-  builder::{AwsBuilderConfig, UrlBuilderConfig},
-  optional_str,
-  server::Server,
-};
+use iroh::endpoint::{RecvStream, SendStream};
+use komodo_client::entities::{optional_str, server::Server};
 use mogh_cache::CloneCache;
-use mogh_error::serror_into_anyhow_error;
 use periphery_client::transport::{
   EncodedTransportMessage, ResponseMessage, TransportMessage,
 };
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use transport::{
-  auth::{
-    ConnectionIdentifiers, LoginFlow, LoginFlowArgs,
-    PublicKeyValidator,
-  },
   channel::{BufferedReceiver, Sender, buffered_channel},
-  websocket::{
-    Websocket, WebsocketReceiver as _, WebsocketReceiverExt,
-    WebsocketSender as _,
-  },
+  iroh::framing::{FramedReader, FramedWriter},
 };
 use uuid::Uuid;
 
-use crate::{
-  config::{core_keys, periphery_public_keys},
-  state::db_client,
-};
+use crate::state::db_client;
 
-pub mod client;
 pub mod server;
 
 #[derive(Default)]
@@ -52,8 +37,6 @@ pub struct PeripheryConnections(
 
 impl PeripheryConnections {
   /// Insert a recreated connection.
-  /// Ensures the fields which must be persisted between
-  /// connection recreation are carried over.
   pub async fn insert(
     &self,
     server_id: String,
@@ -96,109 +79,25 @@ impl PeripheryConnections {
 }
 
 /// The configurable args of a connection
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PeripheryConnectionArgs<'a> {
   /// Usually the server id
   pub id: &'a str,
-  pub address: Option<&'a str>,
-  periphery_public_key: Option<&'a str>,
-  /// V1 legacy support.
-  /// Only possible for Core -> Periphery.
-  passkey: Option<&'a str>,
-}
-
-impl PublicKeyValidator for PeripheryConnectionArgs<'_> {
-  type ValidationResult = String;
-  #[instrument("ValidatePeripheryPublicKey", skip(self))]
-  async fn validate(
-    &self,
-    public_key: String,
-  ) -> anyhow::Result<Self::ValidationResult> {
-    let invalid_error = || {
-      spawn_update_attempted_public_key(
-        self.id.to_string(),
-        Some(public_key.clone()),
-      );
-      anyhow!("{public_key} is invalid")
-        .context(
-          "Ensure public key matches configured Periphery Public Key",
-        )
-        .context("Core failed to validate Periphery public key")
-    };
-    let core_to_periphery = self.address.is_some();
-    match (self.periphery_public_key, core_to_periphery) {
-      // The key matches expected.
-      (Some(expected), _) if public_key == expected => Ok(public_key),
-      // Explicit auth failed.
-      (Some(_), _) => Err(invalid_error()),
-      // Core -> Periphery connections with no explicit
-      // Periphery public key are not validated.
-      (None, true) => Ok(public_key),
-      // Periphery -> Core connections with no explicit
-      // Periphery public key can fall back to Core config `periphery_public_keys` if defined.
-      (None, false) => {
-        let expected =
-          periphery_public_keys().ok_or_else(invalid_error)?;
-        if expected
-          .iter()
-          .any(|expected| public_key == expected.as_str())
-        {
-          Ok(public_key)
-        } else {
-          Err(invalid_error())
-        }
-      }
-    }
-  }
+  pub endpoint_id: Option<&'a str>,
 }
 
 impl<'a> PeripheryConnectionArgs<'a> {
   pub fn from_server(server: &'a Server) -> Self {
     Self {
       id: &server.id,
-      address: optional_str(&server.config.address),
-      periphery_public_key: optional_str(&server.info.public_key),
-      passkey: optional_str(&server.config.passkey),
-    }
-  }
-
-  pub fn from_url_builder(
-    id: &'a str,
-    config: &'a UrlBuilderConfig,
-  ) -> Self {
-    Self {
-      id,
-      address: optional_str(&config.address),
-      periphery_public_key: optional_str(
-        &config.periphery_public_key,
-      ),
-      passkey: optional_str(&config.passkey),
-    }
-  }
-
-  pub fn from_aws_builder(
-    id: &'a str,
-    address: &'a str,
-    config: &'a AwsBuilderConfig,
-  ) -> Self {
-    Self {
-      id,
-      address: Some(address),
-      periphery_public_key: optional_str(
-        &config.periphery_public_key,
-      ),
-      passkey: None,
+      endpoint_id: optional_str(&server.info.endpoint_id),
     }
   }
 
   pub fn to_owned(self) -> OwnedPeripheryConnectionArgs {
     OwnedPeripheryConnectionArgs {
       id: self.id.to_string(),
-      address: self.address.map(str::to_string),
-      periphery_public_key: self
-        .periphery_public_key
-        .map(str::to_string),
-      passkey: self.passkey.map(str::to_string),
+      endpoint_id: self.endpoint_id.map(str::to_string),
     }
   }
 
@@ -214,25 +113,15 @@ impl<'a> PeripheryConnectionArgs<'a> {
 pub struct OwnedPeripheryConnectionArgs {
   /// Usually the Server id.
   pub id: String,
-  /// Specify outbound connection address.
-  /// Inbound connections have this as None
-  pub address: Option<String>,
-  /// The public key to expect Periphery to have.
-  /// If None, must have 'periphery_public_keys' set
-  /// in Core config, or will error
-  pub periphery_public_key: Option<String>,
-  /// V1 legacy support.
-  /// Only possible for Core -> Periphery connection.
-  pub passkey: Option<String>,
+  /// The Iroh EndpointId expected from Periphery.
+  pub endpoint_id: Option<String>,
 }
 
 impl OwnedPeripheryConnectionArgs {
   pub fn borrow(&self) -> PeripheryConnectionArgs<'_> {
     PeripheryConnectionArgs {
       id: &self.id,
-      address: self.address.as_deref(),
-      periphery_public_key: self.periphery_public_key.as_deref(),
-      passkey: self.passkey.as_deref(),
+      endpoint_id: self.endpoint_id.as_deref(),
     }
   }
 }
@@ -328,33 +217,11 @@ impl PeripheryConnection {
     )
   }
 
-  #[instrument(
-    "StandardPeripheryLoginFlow",
-    skip(self, socket, identifiers),
-    fields(expected_public_key = self.args.periphery_public_key)
-  )]
-  pub async fn handle_login<W: Websocket, L: LoginFlow>(
+  /// Handle an Iroh bidi stream (send, recv) for the lifetime of the connection.
+  pub async fn handle_socket(
     &self,
-    socket: &mut W,
-    identifiers: ConnectionIdentifiers<'_>,
-    should_close: bool,
-  ) -> anyhow::Result<()> {
-    L::login(LoginFlowArgs {
-      socket,
-      identifiers,
-      private_key: core_keys().load().private.as_str(),
-      public_key_validator: self.args.borrow(),
-      should_close,
-    })
-    .await?;
-    // Clear attempted public key after successful login
-    spawn_update_attempted_public_key(self.args.id.clone(), None);
-    Ok(())
-  }
-
-  pub async fn handle_socket<W: Websocket>(
-    &self,
-    socket: W,
+    send: SendStream,
+    recv: RecvStream,
     receiver: &mut BufferedReceiver<EncodedTransportMessage>,
   ) {
     let cancel = self.cancel.child_token();
@@ -362,58 +229,58 @@ impl PeripheryConnection {
     self.set_connected(true);
     self.clear_error().await;
 
-    let (mut ws_write, mut ws_read) = socket.split();
+    let mut writer = FramedWriter::new(send);
+    let mut reader = FramedReader::new(recv);
 
-    ws_read.set_cancel(cancel.clone());
-    receiver.set_cancel(cancel.clone());
+    let _cancel_guard = cancel.clone();
 
     let forward_writes = async {
       loop {
-        let message = match tokio::time::timeout(
-          Duration::from_secs(5),
-          receiver.recv(),
-        )
-        .await
-        {
-          Ok(Ok(message)) => message,
-          Ok(Err(_)) => break,
-          // Handle sending Ping
-          Err(_) => {
-            if let Err(e) = ws_write.ping().await {
-              self.set_error(e).await;
-              break;
+        tokio::select! {
+          message = receiver.recv() => {
+            match message {
+              Ok(message) => {
+                if let Err(e) = writer.write_message(&message).await {
+                  self.set_error(e).await;
+                  break;
+                }
+                receiver.clear_buffer();
+              }
+              Err(_) => break,
             }
-            continue;
           }
-        };
-        match ws_write.send(message.into_bytes()).await {
-          Ok(_) => receiver.clear_buffer(),
-          Err(e) => {
-            self.set_error(e).await;
-            break;
-          }
+          _ = cancel.cancelled() => break,
         }
       }
-      // Cancel again if not already
-      let _ = ws_write.close().await;
-      cancel.cancel();
     };
 
     let handle_reads = async {
       loop {
-        match ws_read.recv_message().await {
-          Ok(message) => self.handle_incoming_message(message).await,
+        match reader.read_message().await {
+          Ok(message) => {
+            let encoded = message.into_vec();
+            let decoded = EncodedTransportMessage::from_vec(encoded);
+            match decoded.decode() {
+              Ok(transport_msg) => {
+                self.handle_incoming_message(transport_msg).await;
+              }
+              Err(e) => {
+                warn!("Failed to decode transport message | {e:#}");
+              }
+            }
+          }
           Err(e) => {
             self.set_error(e).await;
             break;
           }
         }
       }
-      // Cancel again if not already
-      cancel.cancel();
     };
 
-    tokio::join!(forward_writes, handle_reads);
+    tokio::select! {
+      _ = forward_writes => {},
+      _ = handle_reads => {},
+    }
 
     self.set_connected(false);
   }
@@ -494,7 +361,7 @@ impl PeripheryConnection {
       }
     }
     if let Some(e) = self.error().await {
-      Err(serror_into_anyhow_error(e))
+      Err(mogh_error::serror_into_anyhow_error(e))
     } else {
       Err(anyhow!("Server is not currently connected"))
     }
@@ -519,20 +386,20 @@ impl PeripheryConnection {
   }
 }
 
-/// Spawn task to set the 'attempted_public_key'
+/// Spawn task to set the 'attempted_endpoint_id'
 /// for easy manual connection acceptance later on.
-fn spawn_update_attempted_public_key(
+fn spawn_update_attempted_endpoint_id(
   id: String,
-  public_key: impl Into<Option<String>>,
+  endpoint_id: impl Into<Option<String>>,
 ) {
-  let public_key = public_key.into();
+  let endpoint_id = endpoint_id.into();
   tokio::spawn(async move {
     if let Err(e) = update_one_by_id(
       &db_client().servers,
       &id,
       doc! {
         "$set": {
-          "info.attempted_public_key": &public_key.as_deref().unwrap_or_default(),
+          "info.attempted_endpoint_id": &endpoint_id.as_deref().unwrap_or_default(),
         }
       },
       None,
@@ -540,7 +407,7 @@ fn spawn_update_attempted_public_key(
     .await
     {
       warn!(
-        "Failed to update attempted public_key for Server {id} | {e:?}"
+        "Failed to update attempted endpoint_id for Server {id} | {e:?}"
       );
     };
   });
