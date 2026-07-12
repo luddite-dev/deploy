@@ -202,7 +202,7 @@ async fn handle_existing_connection(
 
 async fn handle_onboarding_connection(
   mut writer: FramedWriter<iroh::endpoint::SendStream>,
-  mut reader: FramedReader<iroh::endpoint::RecvStream>,
+  reader: FramedReader<iroh::endpoint::RecvStream>,
   token: String,
 ) -> anyhow::Result<()> {
   // Validate the onboarding token against DB
@@ -226,6 +226,7 @@ async fn handle_onboarding_connection(
   // or we can use the onboarding key's associated data.
 
   // Read the endpoint_id from the next message
+  let mut reader = reader;
   let endpoint_msg = reader.read_message().await?;
   let endpoint_id: String = match endpoint_msg.decode() {
     Ok(TransportMessage::Login(encoded)) => {
@@ -268,6 +269,22 @@ async fn handle_onboarding_connection(
     )
     .await;
 
+  // Fetch the created/updated server for the connection
+  let server = db_client()
+    .servers
+    .find_one(id_or_name_filter(&server_id))
+    .await
+    .context("Failed to query database for Server by id")?
+    .context("Server not found after onboarding")?;
+
+  // Insert connection
+  let (connection, mut receiver) = periphery_connections()
+    .insert(
+      server.id.clone(),
+      PeripheryConnectionArgs::from_server(&server),
+    )
+    .await;
+
   // Send Success
   writer
     .write_message(&LoginMessage::Success.encode())
@@ -277,6 +294,18 @@ async fn handle_onboarding_connection(
   info!(
     "Server onboarded successfully | server_id: {server_id} | endpoint_id: {endpoint_id}"
   );
+
+  // Spawn cache refresh
+  let server_clone = server.clone();
+  tokio::spawn(async move {
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    refresh_server_cache(&server_clone, true).await;
+  });
+
+  // Handle the socket — enter the data exchange loop
+  let send = writer.into_inner();
+  let recv = reader.into_inner();
+  connection.handle_socket(send, recv, &mut receiver).await;
 
   Ok(())
 }
