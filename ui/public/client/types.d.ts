@@ -6571,6 +6571,8 @@ export interface GetCoreInfoResponse {
     timezone: string;
     /** Public key for Core / Periphery authentication. */
     public_key: string;
+    /** Default pagination limit for the UI to use. */
+    default_pagination_limit: U64;
     /** The base domain for ingress DNS, if configured. */
     ingress_base_domain?: string;
     /** Whether the ingress DNS layer is enabled (provider is set). */
@@ -7130,7 +7132,8 @@ export interface ListActions {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7150,7 +7153,8 @@ export interface ListAlerters {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7336,7 +7340,8 @@ export interface ListBuilders {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7356,7 +7361,8 @@ export interface ListBuilds {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7419,7 +7425,8 @@ export interface ListDeployments {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7503,7 +7510,8 @@ export interface ListFullActions {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7523,7 +7531,8 @@ export interface ListFullAlerters {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7542,7 +7551,8 @@ export interface ListFullBuilders {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7562,7 +7572,8 @@ export interface ListFullBuilds {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7585,7 +7596,8 @@ export interface ListFullDeployments {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7605,7 +7617,8 @@ export interface ListFullProcedures {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7625,7 +7638,8 @@ export interface ListFullRepos {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7645,7 +7659,8 @@ export interface ListFullResourceSyncs {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7665,7 +7680,8 @@ export interface ListFullServers {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7685,7 +7701,8 @@ export interface ListFullStacks {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7744,7 +7761,8 @@ export interface ListProcedures {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7764,7 +7782,8 @@ export interface ListRepos {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7784,7 +7803,8 @@ export interface ListResourceSyncs {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7824,7 +7844,8 @@ export interface ListSchedules {
     page?: U64;
     /**
      * Set the limit for number of schedules per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7862,7 +7883,8 @@ export interface ListServers {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7887,7 +7909,8 @@ export interface ListStacks {
     page?: U64;
     /**
      * Set the limit for number of resources per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *
@@ -7948,7 +7971,8 @@ export interface ListTerminals {
     page?: U64;
     /**
      * Set the limit for number of terminals per-page.
-     * `limit: 100` is default.
+     * If not provided, uses the Core config
+     * `default_pagination_limit` (default: 30).
      *
      * Passing `limit: 0` returns all results (unlimited).
      *

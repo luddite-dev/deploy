@@ -17,6 +17,7 @@ mod repo;
 mod schedule;
 mod server;
 mod stack;
+mod swarm;
 mod sync;
 mod tag;
 mod terminal;
@@ -41,6 +42,7 @@ pub use repo::*;
 pub use schedule::*;
 pub use server::*;
 pub use stack::*;
+pub use swarm::*;
 pub use sync::*;
 pub use tag::*;
 pub use terminal::*;
@@ -51,18 +53,14 @@ pub use user_group::*;
 pub use variable::*;
 
 use crate::entities::{
-  ResourceTarget, Timelength,
-  config::{DockerRegistry, GitProvider},
+  ResourceTarget, Timelength, U64,
+  config::{GitProvider, ImageRegistry},
 };
 
 #[cfg(feature = "utoipa")]
 pub mod openapi;
 
 pub trait KomodoReadRequest: HasResponse {}
-
-//
-
-pub const DEFAULT_LIST_LIMIT: u64 = 100;
 
 //
 
@@ -148,10 +146,8 @@ pub struct GetCoreInfoResponse {
   pub timezone: String,
   /// Public key for Core / Periphery authentication.
   pub public_key: String,
-  /// The base domain for ingress DNS, if configured.
-  pub ingress_base_domain: Option<String>,
-  /// Whether the ingress DNS layer is enabled (provider is set).
-  pub ingress_enabled: bool,
+  /// Default pagination limit for the UI to use.
+  pub default_pagination_limit: U64,
 }
 
 //
@@ -197,19 +193,19 @@ pub type ListGitProvidersFromConfigResponse = Vec<GitProvider>;
 #[cfg(feature = "utoipa")]
 #[utoipa::path(
   post,
-  path = "/ListDockerRegistriesFromConfig",
-  description = "List the docker registry providers available in Core / Periphery config files.",
-  request_body(content = ListDockerRegistriesFromConfig),
+  path = "/ListImageRegistriesFromConfig",
+  description = "List the image registry providers available in Core / Periphery config files.",
+  request_body(content = ListImageRegistriesFromConfig),
   responses(
-    (status = 200, description = "The available docker registries", body = ListDockerRegistriesFromConfigResponse),
+    (status = 200, description = "The available image registries", body = ListImageRegistriesFromConfigResponse),
     (status = 400, description = "Target must be `Server` or `Builder`", body = mogh_error::Serror),
     (status = 500, description = "Failed", body = mogh_error::Serror),
   ),
 )]
-pub fn list_docker_registries_from_config() {}
+pub fn list_image_registries_from_config() {}
 
-/// List the docker registry providers available in Core / Periphery config files.
-/// Response: [ListDockerRegistriesFromConfigResponse].
+/// List the image registry providers available in Core / Periphery config files.
+/// Response: [ListImageRegistriesFromConfigResponse].
 ///
 /// Includes:
 ///   - registries in core config
@@ -221,16 +217,16 @@ pub fn list_docker_registries_from_config() {}
 #[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[empty_traits(KomodoReadRequest)]
-#[response(ListDockerRegistriesFromConfigResponse)]
+#[response(ListImageRegistriesFromConfigResponse)]
 #[error(mogh_error::Error)]
-pub struct ListDockerRegistriesFromConfig {
+pub struct ListImageRegistriesFromConfig {
   /// Accepts an optional Server or Builder target to expand the core list with
   /// providers available on that specific resource.
   pub target: Option<ResourceTarget>,
 }
 
 #[typeshare]
-pub type ListDockerRegistriesFromConfigResponse = Vec<DockerRegistry>;
+pub type ListImageRegistriesFromConfigResponse = Vec<ImageRegistry>;
 
 //
 
