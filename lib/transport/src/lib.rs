@@ -5,6 +5,7 @@ use std::{
 
 pub mod auth;
 pub mod channel;
+pub mod iroh;
 pub mod timeout;
 pub mod websocket;
 

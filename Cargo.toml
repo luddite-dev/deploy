@@ -29,6 +29,9 @@ encoding = { path = "lib/encoding" }
 command = { path = "lib/command" }
 git = { path = "lib/git" }
 
+# IROH
+iroh = "1"
+
 # MOGH
 slack = { version = "2.0.0", package = "slack_client_rs", default-features = false, features = ["rustls"] }
 mogh_error = { version = "1.0.4", default-features = false }
