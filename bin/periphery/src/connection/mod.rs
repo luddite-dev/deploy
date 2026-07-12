@@ -1,8 +1,6 @@
 use std::time::Duration;
 
-use encoding::{
-  CastBytes as _, Decode as _, Encode as _, WithChannel,
-};
+use encoding::{Decode as _, Encode as _, WithChannel};
 use iroh::endpoint::{RecvStream, SendStream};
 use mogh_resolver::Resolve;
 use periphery_client::transport::{

@@ -6,7 +6,7 @@ use std::{
 use anyhow::Context;
 use command::{
   CommandOptions, KomodoCommandMode,
-  run_komodo_command_with_sanitization, run_standard_command,
+  run_komodo_command_with_sanitization,
 };
 use environment::write_env_file;
 use interpolate::Interpolator;

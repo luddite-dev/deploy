@@ -1,24 +1,17 @@
 use std::time::Duration;
 
-use anyhow::{Context, anyhow};
-use encoding::{CastBytes as _, Decode as _, Encode as _};
+use anyhow::Context;
+use encoding::{Decode as _, Encode as _};
 use iroh::{
   Endpoint, EndpointAddr, EndpointId, endpoint::Connection,
 };
 use periphery_client::transport::{LoginMessage, TransportMessage};
-use tracing::Instrument;
-use transport::{
-  channel::BufferedReceiver,
-  iroh::{
-    endpoint::ALPN,
-    framing::{FramedReader, FramedWriter},
-  },
+use transport::iroh::{
+  endpoint::ALPN,
+  framing::{FramedReader, FramedWriter},
 };
 
-use crate::{
-  config::periphery_config,
-  state::{core_connections, periphery_secret_key},
-};
+use crate::{config::periphery_config, state::core_connections};
 
 /// Initiate an outbound Iroh connection to Komodo Core.
 ///

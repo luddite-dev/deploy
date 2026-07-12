@@ -3678,15 +3678,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ipnetwork"
-version = "0.21.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf370abdafd54d13e54a620e8c3e1145f28e46cc9d704bc6d94414559df41763"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "iroh"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4049,7 +4040,6 @@ dependencies = [
  "envy",
  "futures-util",
  "indexmap 2.14.0",
- "ipnetwork",
  "mogh_auth_client",
  "mogh_error",
  "mogh_logger",
@@ -4144,8 +4134,6 @@ dependencies = [
  "tracing",
  "transport",
  "typeshare",
- "url",
- "urlencoding",
  "utoipa",
  "utoipa-scalar",
  "uuid",
@@ -5768,7 +5756,6 @@ dependencies = [
  "anyhow",
  "encoding",
  "komodo_client",
- "mogh_pki",
  "mogh_resolver",
  "serde",
  "strum 0.28.0",
@@ -8441,16 +8428,12 @@ name = "transport"
 version = "2.3.0-dev-11"
 dependencies = [
  "anyhow",
- "bytes",
  "encoding",
  "iroh",
- "mogh_error",
  "periphery_client",
- "rand 0.10.1",
  "serde",
  "tokio",
  "tokio-util",
- "tracing",
  "uuid",
 ]
 

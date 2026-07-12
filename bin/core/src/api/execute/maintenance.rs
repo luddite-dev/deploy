@@ -7,7 +7,7 @@ use database::{
   mungos::find::find_collect,
 };
 use formatting::{bold, format_serror};
-use futures_util::{StreamExt, stream::FuturesOrdered};
+use futures_util::StreamExt;
 use komodo_client::{
   api::execute::{
     BackupCoreDatabase, ClearRepoCache, GlobalAutoUpdate,
@@ -20,7 +20,6 @@ use komodo_client::{
 };
 use mogh_error::AddStatusCodeError;
 use mogh_resolver::Resolve;
-use periphery_client::api;
 use reqwest::StatusCode;
 use tokio::sync::Mutex;
 
@@ -32,10 +31,7 @@ use crate::{
     },
   },
   config::core_config,
-  helpers::{
-    periphery_client, query::get_server_for_command,
-    update::update_update,
-  },
+  helpers::{query::get_server_for_command, update::update_update},
   resource::rotate_server_keys,
   state::{
     db_client, deployment_status_cache, server_status_cache,

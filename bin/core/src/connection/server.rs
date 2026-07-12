@@ -1,8 +1,8 @@
-use std::{str::FromStr, time::Duration};
+use std::time::Duration;
 
 use anyhow::{Context, anyhow};
-use database::mungos::mongodb::bson::{doc, oid::ObjectId};
-use encoding::{CastBytes as _, Decode as _, Encode as _};
+use database::mungos::mongodb::bson::doc;
+use encoding::{Decode as _, Encode as _};
 use iroh::{Endpoint, endpoint::Connection};
 use komodo_client::{
   api::write::{
@@ -12,14 +12,12 @@ use komodo_client::{
     builder::{PartialBuilderConfig, PartialServerBuilderConfig},
     komodo_timestamp,
     onboarding_key::OnboardingKey,
-    server::{PartialServerConfig, Server},
+    server::PartialServerConfig,
     user::system_user,
   },
 };
 use mogh_resolver::Resolve;
-use partial_derive2::MaybeNone;
 use periphery_client::transport::{LoginMessage, TransportMessage};
-use tracing::Instrument;
 use transport::iroh::framing::{FramedReader, FramedWriter};
 
 use crate::{
@@ -72,7 +70,7 @@ async fn handle_connection(conn: Connection) -> anyhow::Result<()> {
     .await
     .context("Failed to accept bidi stream for login")?;
 
-  let mut writer = FramedWriter::new(send);
+  let writer = FramedWriter::new(send);
   let mut reader = FramedReader::new(recv);
 
   // Read the first login message
@@ -109,7 +107,7 @@ async fn handle_connection(conn: Connection) -> anyhow::Result<()> {
 
 async fn handle_existing_connection(
   mut writer: FramedWriter<iroh::endpoint::SendStream>,
-  mut reader: FramedReader<iroh::endpoint::RecvStream>,
+  reader: FramedReader<iroh::endpoint::RecvStream>,
   endpoint_id: String,
   remote_endpoint_id: String,
 ) -> anyhow::Result<()> {

@@ -18,7 +18,7 @@ schemars = ["dep:schemars"]
 logger = ["dep:mogh_logger"]
 cli = ["logger", "dep:mogh_pki",]
 core = ["mongo", "utoipa", "logger", "dep:mogh_server"]
-periphery = ["cli", "dep:ipnetwork", "dep:mogh_server"]
+periphery = ["cli", "dep:mogh_server"]
 
 [dependencies]
 # mogh
@@ -33,7 +33,6 @@ mogh_auth_client.workspace = true
 partial_derive2.workspace = true
 mogh_resolver.workspace = true
 # external
-ipnetwork = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 tokio-tungstenite.workspace = true

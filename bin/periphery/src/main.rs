@@ -5,10 +5,7 @@ use futures_util::{StreamExt, stream::FuturesUnordered};
 use komodo_client::entities::config::periphery::CliArgs;
 use tracing::Instrument;
 
-use crate::{
-  config::periphery_args,
-  state::{core_connections, periphery_secret_key},
-};
+use crate::{config::periphery_args, state::periphery_secret_key};
 
 #[macro_use]
 extern crate tracing;

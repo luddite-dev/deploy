@@ -17,10 +17,7 @@ use serde::Deserialize;
 use std::{collections::HashMap, path::PathBuf};
 
 use crate::{
-  deserializers::{
-    ForgivingVec, option_string_list_deserializer,
-    string_list_deserializer,
-  },
+  deserializers::{ForgivingVec, string_list_deserializer},
   entities::{
     Timelength,
     logger::{LogConfig, LogLevel, StdioLogMode},

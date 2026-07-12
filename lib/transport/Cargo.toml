@@ -11,14 +11,9 @@ homepage.workspace = true
 periphery_client.workspace = true
 encoding.workspace = true
 #
-mogh_error.workspace = true
-#
 iroh.workspace = true
 tokio-util.workspace = true
-tracing.workspace = true
 anyhow.workspace = true
-bytes.workspace = true
 tokio.workspace = true
 serde.workspace = true
-rand.workspace = true
 uuid.workspace = true
