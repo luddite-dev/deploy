@@ -33,6 +33,14 @@ adapt:
   deploy.
 - **Node draining** — mark a server `Drain`; Core walks its deployments and
   migrates them to other nodes with volume data intact.
+- **Iroh p2p transport** — replace Komodo's WebSocket + mutual Noise handshake
+  transport with [Iroh](https://iroh.computer) (QUIC + TLS 1.3 with raw public
+  keys). Core and Periphery are Iroh endpoints identified by Ed25519
+  `EndpointId`s. Periphery always dials Core (unified direction). Onboarding is
+  a bearer token over the first Iroh stream, validated against DB records.
+  Eliminates self-signed SSL cert generation, the Noise XX handshake, and the
+  bidirectional Core→Periphery / Periphery→Core duality (Iroh's NAT traversal
+  handles all topologies including Core behind NAT).
 
 ## Milestone 1 — adaptive placement (landed)
 
@@ -53,6 +61,36 @@ Implementation plan: [`docs/compose/plans/2026-06-25-adaptive-placement.md`](doc
 
 Out of scope for this milestone: Iroh transport swap, MongoDB replacement,
 Caddy reverse-proxy integration (only the data contract for assigned ports).
+
+## Milestone 3 — Iroh transport swap (landed)
+
+Replaced the WebSocket + mutual Noise XX handshake transport layer entirely
+with an Iroh-native transport. No adapter, no double-auth:
+
+- **Transport:** Iroh QUIC with built-in TLS 1.3 (RFC 7250 Raw Public Keys).
+  Mutual authentication is automatic on every connection; MITM prevention is
+  inherent. No X.509, no CA, no self-signed SSL cert generation.
+- **Identity:** Each Core/Periphery has an Iroh `EndpointId` (Ed25519 public
+  key, derived from a persisted `SecretKey`). Replaces `address`, `public_key`,
+  and `passkey` fields on `ServerConfig`/`ServerInfo`.
+- **Direction:** Unified Periphery→Core. Periphery always initiates. Eliminates
+  the `ServerConfig.address` direction flag and the bidirectional connection
+  model. Iroh NAT traversal (UDP hole-punching + relay fallback) handles all
+  topologies.
+- **Onboarding:** Bearer token over authenticated Iroh stream. Periphery sends
+  the token as the first stream message; Core validates against `onboarding_keys`
+  DB records and registers the Periphery's `EndpointId` on the `Server` entity.
+- **What survives unchanged:** `TransportMessage` wire protocol (Request/
+  Response/Terminal with UUID multiplexing), `PeripheryRequest` dispatch via
+  `#[derive(Resolve)]`, `PeripheryConnection` channel routing.
+
+What was deleted: `lib/transport/src/auth.rs` (Noise XX), `lib/transport/src/
+websocket/` (WS trait family), `lib/transport/src/timeout.rs`, SSL cert
+generation in `bin/periphery/src/helpers.rs`, Core's outbound dialer
+(`connection/client.rs`), Periphery's inbound server (`connection/server.rs`).
+
+Design spec: [`docs/compose/specs/2026-07-12-iroh-transport-design.md`](docs/compose/specs/2026-07-12-iroh-transport-design.md) ·
+Implementation plan: [`docs/compose/plans/2026-07-12-iroh-transport.md`](docs/compose/plans/2026-07-12-iroh-transport.md)
 
 <details>
 <summary>Original Komodo README</summary>

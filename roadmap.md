@@ -15,8 +15,10 @@ fulfilling any planned milestone are welcome.
 - **M2 — Upstream sync (Tiers 1–3)** ✅ — ZFS ARC memory stats, pagination
   backbone (`ListPermits`), builder cancel + multi-server distribution. See
   [`docs/forking.md`](docs/forking.md).
-- **M3 — Iroh transport swap** — replace WebSocket/mTLS Core↔Periphery
-  transport with Iroh p2p. Investigation done; implementation pending.
+- **M3 — Iroh transport swap** ✅ — replaced WebSocket/mutual Noise transport
+  with Iroh p2p (QUIC + TLS 1.3, raw public keys, unified Periphery→Core
+  direction, bearer token onboarding). See
+  [`docs/compose/specs/2026-07-12-iroh-transport-design.md`](docs/compose/specs/2026-07-12-iroh-transport-design.md).
 - **M4 — MongoDB replacement** — swap Mongo for an embedded store suited to
   small self-hosted deployments. Out of scope until M3 lands.
 - **M5 — Caddy reverse-proxy integration** — consume the assigned-port data
