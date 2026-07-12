@@ -75,23 +75,53 @@ pub async fn handler(
       let mut writer = FramedWriter::new(send);
       let mut reader = FramedReader::new(recv);
 
-      // Send login message.
-      // Try EndpointId first. If the server doesn't recognize us,
-      // the connection will be dropped and we'll retry with
-      // OnboardingToken if available.
-      let login = if let Some(token) = &onboarding_key {
-        LoginMessage::OnboardingToken(token.clone())
+      // Send login message(s).
+      // If we have an onboarding key, send OnboardingToken followed by
+      // our EndpointId so Core can register us. Otherwise, send EndpointId
+      // for normal reconnection.
+      if let Some(token) = &onboarding_key {
+        if let Err(e) = writer
+          .write_message(
+            &LoginMessage::OnboardingToken(token.clone()).encode(),
+          )
+          .await
+        {
+          warn!("Failed to send onboarding token | {e:#}");
+          tokio::time::sleep(Duration::from_secs(
+            periphery_client::CONNECTION_RETRY_SECONDS,
+          ))
+          .await;
+          continue;
+        }
+        if let Err(e) = writer
+          .write_message(
+            &LoginMessage::EndpointId(our_endpoint_id.clone())
+              .encode(),
+          )
+          .await
+        {
+          warn!("Failed to send EndpointId | {e:#}");
+          tokio::time::sleep(Duration::from_secs(
+            periphery_client::CONNECTION_RETRY_SECONDS,
+          ))
+          .await;
+          continue;
+        }
       } else {
-        LoginMessage::EndpointId(our_endpoint_id.clone())
-      };
-
-      if let Err(e) = writer.write_message(&login.encode()).await {
-        warn!("Failed to send login message | {e:#}");
-        tokio::time::sleep(Duration::from_secs(
-          periphery_client::CONNECTION_RETRY_SECONDS,
-        ))
-        .await;
-        continue;
+        if let Err(e) = writer
+          .write_message(
+            &LoginMessage::EndpointId(our_endpoint_id.clone())
+              .encode(),
+          )
+          .await
+        {
+          warn!("Failed to send login message | {e:#}");
+          tokio::time::sleep(Duration::from_secs(
+            periphery_client::CONNECTION_RETRY_SECONDS,
+          ))
+          .await;
+          continue;
+        }
       }
 
       // Wait for login success
@@ -139,11 +169,6 @@ pub async fn handler(
       }
 
       info!("Login to Core successful");
-
-      // If we used onboarding, now is the time to send our endpoint_id
-      // so the server can store it for future connections.
-      // (The core onboarding flow reads the EndpointId after token validation.)
-      // For EndpointId login, this is a no-op — already handled.
 
       // Handle the socket
       let send = writer.into_inner();

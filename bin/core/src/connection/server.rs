@@ -143,9 +143,8 @@ async fn handle_existing_connection(
         return Ok(());
       }
     }
-    writer
-      .write_message(&LoginMessage::Success.encode())
-      .await?;
+    // Don't send Success — the periphery should detect the dropped
+    // connection and retry (possibly with onboarding).
     return Err(anyhow!(
       "No server found with endpoint_id {endpoint_id}"
     ));
@@ -153,9 +152,6 @@ async fn handle_existing_connection(
 
   // Check server is enabled
   if !server.config.enabled {
-    writer
-      .write_message(&LoginMessage::Success.encode())
-      .await?;
     return Err(anyhow!("Server '{}' is disabled", server.name));
   }
 
@@ -250,8 +246,8 @@ async fn handle_onboarding_connection(
     }
   };
 
-  // Create the server
-  let server_id = match create_server_maybe_builder(
+  // Create or update the server
+  let server_id = match create_or_update_server(
     &onboarding_key,
     endpoint_id.clone(),
   )
@@ -259,9 +255,6 @@ async fn handle_onboarding_connection(
   {
     Ok(server_id) => server_id,
     Err(e) => {
-      writer
-        .write_message(&LoginMessage::Success.encode())
-        .await?;
       return Err(e);
     }
   };
@@ -286,6 +279,41 @@ async fn handle_onboarding_connection(
   );
 
   Ok(())
+}
+
+async fn create_or_update_server(
+  onboarding_key: &OnboardingKey,
+  endpoint_id: String,
+) -> anyhow::Result<String> {
+  // Check if a server with this name already exists (from a prior onboarding)
+  let existing = db_client()
+    .servers
+    .find_one(id_or_name_filter(&onboarding_key.public_key))
+    .await
+    .ok()
+    .flatten();
+
+  if let Some(server) = existing {
+    // Server already exists — just update its endpoint_id if needed
+    if server.info.endpoint_id != endpoint_id {
+      let args = WriteArgs {
+        user: system_user().to_owned(),
+      };
+      let _ = UpdateServer {
+        id: server.id.clone(),
+        config: PartialServerConfig {
+          enabled: Some(true),
+          ..Default::default()
+        },
+      }
+      .resolve(&args)
+      .await;
+    }
+    return Ok(server.id);
+  }
+
+  // Server doesn't exist — create it
+  create_server_maybe_builder(onboarding_key, endpoint_id).await
 }
 
 async fn create_server_maybe_builder(
