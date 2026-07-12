@@ -6,7 +6,7 @@ extern crate tracing;
 use mogh_server::axum_server::Handle;
 use tracing::Instrument;
 
-use crate::config::{core_config, core_keys};
+use crate::config::{core_config, core_secret_key};
 
 mod alert;
 mod api;
@@ -50,8 +50,14 @@ async fn app() -> anyhow::Result<()> {
       (false, false) => info!("{:?}", config.sanitized()),
     }
 
-    // Init + log public key. Will crash if invalid private key here.
-    info!("Public Key: {}", core_keys().load().public);
+    // Init Iroh secret key and start the accept loop
+    let secret_key = core_secret_key().clone();
+    info!("Iroh EndpointId: {}", secret_key.public().to_string());
+    let endpoint =
+      transport::iroh::endpoint::create_core_endpoint(secret_key)
+        .await
+        .expect("Failed to create Core Iroh endpoint");
+    tokio::spawn(connection::server::run_accept_loop(endpoint));
 
     rustls::crypto::aws_lc_rs::default_provider()
       .install_default()

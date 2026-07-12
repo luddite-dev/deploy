@@ -21,20 +21,6 @@ pub mod volume_backup;
 
 //
 
-#[derive(Deserialize, Debug, Clone)]
-pub struct CoreConnectionQuery {
-  /// Core host (eg demo.komo.do)
-  pub core: String,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct PeripheryConnectionQuery {
-  /// Server Id or name
-  pub server: String,
-}
-
-//
-
 #[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
 #[response(GetHealthResponse)]
 #[error(anyhow::Error)]

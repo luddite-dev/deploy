@@ -42,6 +42,8 @@ mogh_server.workspace = true
 toml_pretty.workspace = true
 slack.workspace = true
 svi.workspace = true
+# iroh
+iroh.workspace = true
 # external
 aws-credential-types.workspace = true
 english-to-cron.workspace = true

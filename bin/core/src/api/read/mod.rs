@@ -30,10 +30,8 @@ use typeshare::typeshare;
 use uuid::Uuid;
 
 use crate::{
-  auth::KomodoAuthImpl,
-  config::{core_config, core_keys},
-  helpers::periphery_client,
-  resource,
+  auth::KomodoAuthImpl, config::core_config,
+  helpers::periphery_client, resource,
 };
 
 use super::Variant;
@@ -330,7 +328,9 @@ impl Resolve<ReadArgs> for GetCoreInfo {
       disable_websocket_reconnect: config.disable_websocket_reconnect,
       enable_fancy_toml: config.enable_fancy_toml,
       timezone: config.timezone.clone(),
-      public_key: core_keys().load().public.to_string(),
+      public_key: crate::config::core_secret_key()
+        .public()
+        .to_string(),
     };
     Ok(info)
   }

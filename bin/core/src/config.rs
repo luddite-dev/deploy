@@ -2,6 +2,7 @@ use std::{path::PathBuf, sync::OnceLock};
 
 use anyhow::Context;
 use colored::Colorize;
+use iroh::SecretKey;
 use komodo_client::entities::{
   config::{
     DatabaseConfig,
@@ -11,83 +12,53 @@ use komodo_client::entities::{
 };
 use mogh_auth_client::config::NamedOauthConfig;
 use mogh_config::ConfigLoader;
-use mogh_pki::{PkiKind, RotatableKeyPair, SpkiPublicKey};
 use mogh_secret_file::{
   maybe_read_item_from_file, maybe_read_list_from_file,
 };
 
-/// Should call in startup to ensure Core errors without valid private key.
-pub fn core_keys() -> &'static RotatableKeyPair {
-  static CORE_KEYS: OnceLock<RotatableKeyPair> = OnceLock::new();
-  CORE_KEYS.get_or_init(|| {
-    RotatableKeyPair::from_private_key_spec(
-      PkiKind::Mutual,
-      &core_config().private_key,
-    )
-    .unwrap()
+/// Load the Iroh secret key for Core.
+/// Should call in startup. If the key file does not exist,
+/// generates and persists a new one.
+pub fn core_secret_key() -> &'static SecretKey {
+  static CORE_SECRET_KEY: OnceLock<SecretKey> = OnceLock::new();
+  CORE_SECRET_KEY.get_or_init(|| {
+    let spec = &core_config().iroh_secret_key;
+    let path = if let Some(stripped) = spec.strip_prefix("file:") {
+      stripped.to_string()
+    } else {
+      // If it's not a file: spec, write to a default path
+      "/config/keys/iroh.key".to_string()
+    };
+    load_secret_key(&path)
+      .expect("Failed to load Core Iroh secret key")
   })
 }
 
-pub fn core_connection_query() -> &'static String {
-  static CORE_HOSTNAME: OnceLock<String> = OnceLock::new();
-  CORE_HOSTNAME.get_or_init(|| {
-    let host = url::Url::parse(&core_config().host)
-      .context("Failed to parse config field 'host' as URL")
-      .unwrap()
-      .host()
-      .context(
-        "Failed to parse config field 'host' | missing host part",
-      )
-      .unwrap()
-      .to_string();
-    format!("core={}", urlencoding::encode(&host))
-  })
+fn load_secret_key(path: &str) -> anyhow::Result<SecretKey> {
+  let path = std::path::Path::new(path);
+  if path.exists() {
+    let bytes = std::fs::read(path).with_context(|| {
+      format!("Failed to read secret key at {path:?}")
+    })?;
+    let arr: [u8; 32] =
+      bytes.as_slice().try_into().map_err(|_| {
+        anyhow::anyhow!("Secret key file must be exactly 32 bytes")
+      })?;
+    Ok(SecretKey::from_bytes(&arr))
+  } else {
+    if let Some(parent) = path.parent() {
+      std::fs::create_dir_all(parent).ok();
+    }
+    let key = SecretKey::generate();
+    std::fs::write(path, key.to_bytes())?;
+    Ok(key)
+  }
 }
 
-pub fn periphery_public_keys() -> Option<&'static [SpkiPublicKey]> {
-  static PERIPHERY_PUBLIC_KEYS: OnceLock<Option<Vec<SpkiPublicKey>>> =
-    OnceLock::new();
-  PERIPHERY_PUBLIC_KEYS
-    .get_or_init(|| {
-      core_config().periphery_public_keys.as_ref().map(
-        |public_keys| {
-          public_keys
-            .iter()
-            .flat_map(|public_key| {
-              let (path, maybe_pem) = if let Some(path) =
-                public_key.strip_prefix("file:")
-              {
-                match std::fs::read_to_string(path).with_context(
-                  || format!("Failed to read periphery public key at {path:?}"),
-                ) {
-                  Ok(public_key) => (Some(path), public_key),
-                  Err(e) => {
-                    warn!("{e:#}");
-                    return None;
-                  }
-                }
-              } else {
-                (None, public_key.clone())
-              };
-              match SpkiPublicKey::from_maybe_pem(&maybe_pem) {
-                Ok(public_key) => Some(public_key),
-                Err(e) => {
-                  warn!(
-                    "Failed to read periphery public key{} | {e:#}",
-                    if let Some(path) = path {
-                      format!("at {path:?}")
-                    } else {
-                      String::new()
-                    }
-                  );
-                  None
-                }
-              }
-            })
-            .collect()
-        },
-      )
-    })
+pub fn iroh_periphery_endpoint_ids() -> Option<&'static [String]> {
+  static IDS: OnceLock<Option<Vec<String>>> = OnceLock::new();
+  IDS
+    .get_or_init(|| core_config().iroh_periphery_endpoint_ids.clone())
     .as_deref()
 }
 
@@ -152,16 +123,11 @@ pub fn core_config() -> &'static CoreConfig {
     // recreating CoreConfig here makes sure apply all env overrides applied.
     CoreConfig {
       // Secret things overridden with file
-      private_key: maybe_read_item_from_file(
-        env.komodo_private_key_file,
-        env.komodo_private_key,
+      iroh_secret_key: maybe_read_item_from_file(
+        env.komodo_iroh_secret_key_file,
+        env.komodo_iroh_secret_key,
       )
-      .unwrap_or(config.private_key),
-      passkey: maybe_read_item_from_file(
-        env.komodo_passkey_file,
-        env.komodo_passkey,
-      )
-      .or(config.passkey),
+      .unwrap_or(config.iroh_secret_key),
       jwt_secret: maybe_read_item_from_file(
         env.komodo_jwt_secret_file,
         env.komodo_jwt_secret,
@@ -287,12 +253,12 @@ pub fn core_config() -> &'static CoreConfig {
       port: env.komodo_port.unwrap_or(config.port),
       bind_ip: env.komodo_bind_ip.unwrap_or(config.bind_ip),
       timezone: env.komodo_timezone.unwrap_or(config.timezone),
-      periphery_public_keys: env
-        .komodo_periphery_public_keys
-        .or(config.periphery_public_keys),
-      first_server_address: env
-        .komodo_first_server_address
-        .or(config.first_server_address),
+      iroh_periphery_endpoint_ids: env
+        .komodo_iroh_periphery_endpoint_ids
+        .or(config.iroh_periphery_endpoint_ids),
+      first_server_endpoint_id: env
+        .komodo_first_server_endpoint_id
+        .or(config.first_server_endpoint_id),
       first_server_name: env
         .komodo_first_server_name
         .or(config.first_server_name),

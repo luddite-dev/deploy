@@ -41,8 +41,8 @@ impl Resolve<WriteArgs> for CreateServer {
     resource::create::<Server>(
       &self.name,
       self.config,
-      self.public_key.map(|public_key| ServerInfo {
-        public_key,
+      self.public_key.map(|endpoint_id| ServerInfo {
+        endpoint_id,
         ..Default::default()
       }),
       user,
@@ -75,8 +75,8 @@ impl Resolve<WriteArgs> for CopyServer {
     resource::create::<Server>(
       &self.name,
       config.into(),
-      self.public_key.map(|public_key| ServerInfo {
-        public_key,
+      self.public_key.map(|endpoint_id| ServerInfo {
+        endpoint_id,
         ..Default::default()
       }),
       user,

@@ -1,6 +1,5 @@
 use std::{
   collections::HashMap,
-  path::PathBuf,
   sync::{Arc, OnceLock},
 };
 
@@ -10,7 +9,6 @@ use komodo_client::entities::{
   docker::container::ContainerStats, terminal::TerminalStdinMessage,
 };
 use mogh_cache::{CloneCache, CloneVecCache};
-use mogh_pki::{PkiKind, RotatableKeyPair, SpkiPublicKey};
 use periphery_client::transport::EncodedTransportMessage;
 use tokio::sync::{Mutex, OnceCell, RwLock, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -23,139 +21,29 @@ use crate::{
   terminal::PeripheryTerminal,
 };
 
-/// Should call in startup to ensure Periphery errors without valid private key.
-pub fn periphery_keys() -> &'static RotatableKeyPair {
-  static PERIPHERY_KEYS: OnceLock<RotatableKeyPair> = OnceLock::new();
-  PERIPHERY_KEYS.get_or_init(|| {
+/// Load the Iroh secret key for Periphery.
+/// If the key file does not exist, generates and persists a new one.
+pub fn periphery_secret_key() -> &'static iroh::SecretKey {
+  static PERIPHERY_SECRET_KEY: OnceLock<iroh::SecretKey> =
+    OnceLock::new();
+  PERIPHERY_SECRET_KEY.get_or_init(|| {
     let config = periphery_config();
-    if let Some(private_key_spec) = config.private_key.as_deref() {
-      RotatableKeyPair::from_private_key_spec(
-        PkiKind::Mutual,
-        private_key_spec,
-      )
+    let spec = config.iroh_secret_key.as_deref();
+    let path = if let Some(stripped) =
+      spec.and_then(|s| s.strip_prefix("file:"))
+    {
+      stripped.to_string()
     } else {
-      RotatableKeyPair::from_private_key_spec(
-        PkiKind::Mutual,
-        &format!(
-          "file:{}",
-          config
-            .root_directory
-            .join("keys/periphery.key")
-            .to_str()
-            .expect("Invalid root directory")
-        ),
-      )
-    }
-    .unwrap()
+      config
+        .root_directory
+        .join("keys/iroh.key")
+        .to_str()
+        .expect("Invalid root directory")
+        .to_string()
+    };
+    transport::iroh::secret::load_secret_key(&path)
+      .expect("Failed to load Periphery Iroh secret key")
   })
-}
-
-pub fn core_public_keys() -> &'static CorePublicKeys {
-  static CORE_PUBLIC_KEYS: OnceLock<CorePublicKeys> = OnceLock::new();
-  CORE_PUBLIC_KEYS.get_or_init(CorePublicKeys::default)
-}
-
-pub struct CorePublicKeys {
-  keys: ArcSwap<Vec<SpkiPublicKey>>,
-  /// If any keys fail to write, store them here.
-  /// For Periphery -> Core connection, Periphery will
-  /// write the Core pub keys to these files as they connect.
-  to_write: ArcSwap<Vec<PathBuf>>,
-}
-
-impl Default for CorePublicKeys {
-  fn default() -> Self {
-    let keys = CorePublicKeys {
-      keys: Default::default(),
-      to_write: Default::default(),
-    };
-    keys.refresh();
-    keys
-  }
-}
-
-impl CorePublicKeys {
-  pub fn load(&self) -> arc_swap::Guard<Arc<Vec<SpkiPublicKey>>> {
-    self.keys.load()
-  }
-
-  pub async fn is_valid(&self, public_key: &str) -> bool {
-    // For Periphery -> Core connection, maybe init
-    // Core public key file if it doesn't exist.
-    self.maybe_write(public_key).await;
-    let keys = self.keys.load();
-    keys.is_empty() || keys.iter().any(|pk| pk.as_str() == public_key)
-  }
-
-  async fn maybe_write(&self, public_key: &str) {
-    let to_write = self.to_write.load();
-    let path = match to_write.as_slice() {
-      // Do nothing if empty
-      [] => return,
-      [path, _rest @ ..] => path,
-    };
-    let public_key = match SpkiPublicKey::from_maybe_pem(public_key) {
-      Ok(public_key) => public_key,
-      Err(e) => {
-        error!("Invalid incoming public key | {e:#}");
-        return;
-      }
-    };
-    // Check equality at path again before trying to rewrite.
-    match SpkiPublicKey::from_file(path) {
-      Ok(existing) if existing == public_key => {
-        self.refresh();
-        return;
-      }
-      _ => {}
-    }
-    if let Err(e) = public_key.write_pem_async(path).await {
-      warn!("Failed to pin incoming public key | {e:#}");
-    }
-    self.refresh();
-  }
-
-  pub fn refresh(&self) {
-    let config = periphery_config();
-    let Some(core_public_keys_spec) = config.core_public_keys_spec()
-    else {
-      return;
-    };
-    let mut to_write = Vec::new();
-    let core_public_keys = core_public_keys_spec
-      .iter()
-      .flat_map(|public_key| {
-        if let Some(path) = public_key.strip_prefix("file:")
-        {
-          match (SpkiPublicKey::from_file(path), config.server_enabled()) {
-            (Ok(public_key), _) => Some(public_key),
-            (Err(e), false) => {
-              // If only outbound connections, only warn.
-              // It will be written when Core public key received.
-              warn!("{e:#}");
-              to_write.push(path.into());
-              None
-            }
-            (Err(e), true) => {
-              // This is too dangerous to allow if server_enabled.
-              error!("{e:#}");
-              std::process::exit(1)
-            }
-          }
-        } else {
-          SpkiPublicKey::from_maybe_pem(public_key)
-            .context("Invalid hardcoded public key. If this is supposed to point to file, add 'file:' prefix.")
-            .inspect_err(|e| {
-              error!("{e:#}");
-              std::process::exit(1)
-            })
-            .ok()
-        }
-      })
-      .collect::<Vec<_>>();
-    self.keys.store(Arc::new(core_public_keys));
-    self.to_write.store(Arc::new(to_write));
-  }
 }
 
 /// Core Address / Host -> Channel

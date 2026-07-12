@@ -2,12 +2,12 @@
 
 use command::{CommandOptions, run_standard_command};
 use futures_util::{StreamExt, stream::FuturesUnordered};
-use komodo_client::entities::config::periphery::Command;
+use komodo_client::entities::config::periphery::CliArgs;
 use tracing::Instrument;
 
 use crate::{
   config::periphery_args,
-  state::{core_public_keys, periphery_keys},
+  state::{core_connections, periphery_secret_key},
 };
 
 #[macro_use]
@@ -32,6 +32,14 @@ async fn app() -> anyhow::Result<()> {
 
   check_podman_volume_export_import_support().await?;
 
+  // Init Iroh secret key and endpoint
+  let secret_key = periphery_secret_key().clone();
+  info!("Iroh EndpointId: {}", secret_key.public());
+
+  let endpoint =
+    transport::iroh::endpoint::create_periphery_endpoint(secret_key)
+      .await?;
+
   let mut handles = async {
     info!("Komodo Periphery version: v{}", env!("CARGO_PKG_VERSION"));
 
@@ -41,50 +49,33 @@ async fn app() -> anyhow::Result<()> {
       info!("{:?}", config.sanitized());
     }
 
-    // Init + log public key. Will crash if invalid private key here.
-    info!("Public Key: {}", periphery_keys().load().public);
-
-    // Init core public keys. Will crash if invalid core public keys here.
-    core_public_keys();
-
-    rustls::crypto::aws_lc_rs::default_provider()
-      .install_default()
-      .expect("Failed to install default crypto provider");
-
     stats::spawn_polling_thread();
     docker::stats::spawn_polling_thread();
 
     let handles = FuturesUnordered::new();
 
-    // Spawn client side connections
-    if !config.core_addresses.is_empty() && config.connect_as.is_empty()
-    {
+    // Spawn outbound connections to Core
+    if config.core_endpoint_addrs.is_empty() {
+      info!("No core_endpoint_addrs configured. Waiting for environment variable setup.");
+    } else if config.connect_as.is_empty() {
       warn!(
-        "'core_addresses' are defined for outbound connection, but missing 'connect_as' (PERIPHERY_CONNECT_AS)."
+        "'core_endpoint_addrs' are defined for outbound connection, but missing 'connect_as' (PERIPHERY_CONNECT_AS)."
       );
     } else {
-      for address in &config.core_addresses {
-        match connection::client::handler(address).await {
+      for addr in &config.core_endpoint_addrs {
+        match connection::client::handler(endpoint.clone(), addr).await {
           Ok(handle) => handles.push(handle),
           Err(e) => {
-            error!("Failed to start outbound connection to {address} | {e:#}");
+            error!("Failed to start outbound connection to {addr} | {e:#}");
           }
         }
       }
     }
 
-    // Spawn server connection handler.
-    if config.server_enabled() {
-      match connection::server::run().await {
-        Ok(handle) => handles.push(handle),
-        Err(e) => {
-          error!("Failed to run inbound connection server | {e:#}");
-        }
-      }
-    }
-
     handles
-  }.instrument(startup_span).await;
+  }
+  .instrument(startup_span)
+  .await;
 
   // Watch the threads
   while let Some(res) = handles.next().await {
@@ -122,11 +113,7 @@ async fn check_podman_volume_export_import_support()
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-  // Handle `periphery key gen` and `periphery key compute <private-key>`
-  if let Some(Command::Key { command }) = &periphery_args().command {
-    return mogh_pki::cli::handle(command, mogh_pki::PkiKind::Mutual)
-      .await;
-  }
+  let _args: &CliArgs = periphery_args();
 
   let mut term_signal = tokio::signal::unix::signal(
     tokio::signal::unix::SignalKind::terminate(),

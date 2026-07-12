@@ -31,7 +31,7 @@ use crate::{
       check_deployment_for_update_inner, check_stack_for_update_inner,
     },
   },
-  config::{core_config, core_keys},
+  config::core_config,
   helpers::{
     periphery_client, query::get_server_for_command,
     update::update_update,
@@ -515,108 +515,12 @@ impl Resolve<ExecuteArgs> for RotateCoreKeys {
       );
     }
 
-    let _lock = global_rotate_lock()
-      .try_lock()
-      .context("Key rotation already in progress...")?;
-
     let mut update = update.clone();
-
-    update_update(update.clone()).await?;
-
-    let core_keys = core_keys();
-
-    if !core_keys.rotatable() {
-      return Err(anyhow!("Core `private_key` must be pointing to file, for example 'file:/config/keys/core.key'").into());
-    };
-
-    let server_status_cache = server_status_cache();
-    let servers =
-      find_collect(&db_client().servers, Document::new(), None)
-        .await
-        .context("Failed to query servers from database")?
-        .into_iter()
-        .map(|server| async move {
-          let state = server_status_cache
-            .get(&server.id)
-            .await
-            .map(|s| s.state)
-            .unwrap_or(ServerState::NotOk);
-          (server, state)
-        })
-        .collect::<FuturesOrdered<_>>()
-        .collect::<Vec<_>>()
-        .await;
-
-    if !self.force
-      && let Some((server, _)) = servers
-        .iter()
-        .find(|(_, state)| matches!(state, ServerState::NotOk))
-    {
-      return Err(
-        anyhow!("Server {} is NotOk, stopping key rotation. Pass `force: true` to continue anyways.", server.name).into(),
-      );
-    }
-
-    let public_key = core_keys
-      .rotate(mogh_pki::PkiKind::Mutual)
-      .await?
-      .into_inner();
-
-    info!("New Public Key: {public_key}");
-
-    let mut log = format!("New Public Key: {public_key}\n");
-
-    for (server, state) in servers {
-      match state {
-        ServerState::Disabled => {
-          let _ = write!(
-            &mut log,
-            "\nSkipping {}: Server Disabled ⚙️",
-            bold(&server.name)
-          );
-          continue;
-        }
-        ServerState::NotOk => {
-          // Shouldn't be reached unless 'force: true'
-          let _ = write!(
-            &mut log,
-            "\nSkipping {}: Server Not Ok ⚠️",
-            bold(&server.name)
-          );
-          continue;
-        }
-        _ => {}
-      }
-      let periphery = periphery_client(&server).await?;
-      let res = periphery
-        .request(api::keys::RotateCorePublicKey {
-          public_key: public_key.clone(),
-        })
-        .await;
-      match res {
-        Ok(_) => {
-          let _ = write!(
-            &mut log,
-            "\nRotated key for {} ✅",
-            bold(&server.name)
-          );
-        }
-        Err(e) => {
-          update.push_error_log(
-            "Key Rotation Failure",
-            format_serror(
-              &e.context(format!(
-                "Failed to rotate for {}. The new Core public key will have to be added manually.",
-                bold(&server.name)
-              ))
-              .into(),
-            ),
-          );
-        }
-      }
-    }
-
-    update.push_simple_log("Rotate Core Keys", log);
+    update.push_error_log(
+      "Rotate Core Keys",
+      "Key rotation is not available in Iroh transport mode. \
+       The Iroh secret key does not support rotation.",
+    );
     update.finalize();
     update_update(update.clone()).await?;
 

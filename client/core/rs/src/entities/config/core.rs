@@ -75,25 +75,21 @@ pub struct Env {
   pub komodo_port: Option<u16>,
   /// Override `bind_ip`
   pub komodo_bind_ip: Option<String>,
-  /// Override `private_key`
-  pub komodo_private_key: Option<String>,
-  /// Override `private_key` with file
-  pub komodo_private_key_file: Option<PathBuf>,
-  /// Override `periphery_public_keys`
-  #[serde(alias = "komodo_periphery_public_key")]
-  pub komodo_periphery_public_keys: Option<Vec<String>>,
-  /// Override `passkey`
-  pub komodo_passkey: Option<String>,
-  /// Override `passkey` from file
-  pub komodo_passkey_file: Option<PathBuf>,
+  /// Override `iroh_secret_key`
+  pub komodo_iroh_secret_key: Option<String>,
+  /// Override `iroh_secret_key` with file
+  pub komodo_iroh_secret_key_file: Option<PathBuf>,
+  /// Override `iroh_periphery_endpoint_ids`
+  #[serde(alias = "komodo_periphery_endpoint_id")]
+  pub komodo_iroh_periphery_endpoint_ids: Option<Vec<String>>,
   /// Override `timezone`
   #[serde(alias = "tz")]
   pub komodo_timezone: Option<String>,
   /// Override `first_server_name`
   pub komodo_first_server_name: Option<String>,
-  /// Override `first_server_address`
+  /// Override `first_server_endpoint_id`
   #[serde(alias = "komodo_first_server")]
-  pub komodo_first_server_address: Option<String>,
+  pub komodo_first_server_endpoint_id: Option<String>,
   /// Override `jwt_secret`
   pub komodo_jwt_secret: Option<String>,
   /// Override `jwt_secret` from file
@@ -353,43 +349,30 @@ pub struct CoreConfig {
   #[serde(default)]
   pub internet_interface: String,
 
-  /// Private key to use with Noise handshake to authenticate with Periphery agents.
+  /// Path to the Iroh secret key file (32 raw bytes).
   ///
-  /// Supports openssl generated pem file, `openssl genpkey -algorithm X25519 -out private.key`.
-  /// To load from file, use `private_key = "file:/path/to/private.key"`.
+  /// If the file does not exist, will generate a new key and persist it
+  /// so that the endpoint's identity is stable across restarts.
   ///
-  /// If a file is specified and does not exist, will try to generate one at the path
-  /// and use it going forward.
-  ///
-  /// Note. The private key used can be overridden for individual Servers / Builders.
-  ///
-  /// Default: file:/config/keys/core.key
+  /// Default: file:/config/keys/iroh.key
   #[serde(default = "default_private_key")]
-  pub private_key: String,
+  pub iroh_secret_key: String,
 
-  /// Default accepted public keys to allow Periphery to connect.
-  /// Core gains knowledge of the Periphery public key through the noise handshake.
+  /// Default accepted Iroh EndpointIds to allow Periphery to connect.
+  /// Core gains knowledge of the Periphery EndpointId through the Iroh connection.
   /// If not provided, Periphery -> Core connected Servers must
-  /// configure accepted public key individually.
+  /// configure accepted EndpointId individually.
   ///
-  /// Supports multiple public keys seperated by commas or newlines.
+  /// Supports multiple EndpointIds separated by commas or newlines.
   ///
-  /// Supports openssl generated pem file, `openssl pkey -in private.key -pubout -out public.key`.
-  /// To load from file, include `file:/path/to/public.key` in the list.
-  ///
-  /// Note: If used, the accepted public key can still be overridden on individual Servers / Builders
+  /// Note: If used, the accepted EndpointId can still be overridden on individual Servers / Builders
   #[serde(
     default,
-    alias = "periphery_public_key",
+    alias = "periphery_endpoint_id",
     deserialize_with = "option_string_list_deserializer",
     skip_serializing_if = "Option::is_none"
   )]
-  pub periphery_public_keys: Option<Vec<String>>,
-
-  /// Deprecated. Legacy v1 compatibility.
-  /// Users should upgrade to private / public key authentication.
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub passkey: Option<String>,
+  pub iroh_periphery_endpoint_ids: Option<Vec<String>>,
 
   /// A TZ Identifier. If not provided, will use Core local timezone.
   /// https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.
@@ -425,14 +408,14 @@ pub struct CoreConfig {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub first_server_name: Option<String>,
 
-  /// If defined, ensure an enabled first server exists at this address.
-  /// Example: `wss://periphery:8120`.
-  /// In v1, was just 'first_server', maintains backward compatibility via alias.
+  /// If defined, ensure an enabled first server exists with this EndpointId.
+  /// Set this for Periphery → Core Server.
   #[serde(
     alias = "first_server",
+    alias = "first_server_address",
     skip_serializing_if = "Option::is_none"
   )]
-  pub first_server_address: Option<String>,
+  pub first_server_endpoint_id: Option<String>,
 
   /// Configure database connection
   #[serde(default, alias = "mongo")]
@@ -808,7 +791,7 @@ fn default_core_bind_ip() -> String {
 }
 
 fn default_private_key() -> String {
-  String::from("file:/config/keys/core.key")
+  String::from("file:/config/keys/iroh.key")
 }
 
 fn default_ui_path() -> String {
@@ -891,16 +874,15 @@ impl Default for CoreConfig {
       port: default_core_port(),
       bind_ip: default_core_bind_ip(),
       internet_interface: Default::default(),
-      private_key: Default::default(),
-      periphery_public_keys: Default::default(),
-      passkey: Default::default(),
+      iroh_secret_key: Default::default(),
+      iroh_periphery_endpoint_ids: Default::default(),
       timezone: Default::default(),
       ui_write_disabled: Default::default(),
       disable_confirm_dialog: Default::default(),
       disable_websocket_reconnect: Default::default(),
       disable_init_resources: Default::default(),
       enable_fancy_toml: Default::default(),
-      first_server_address: Default::default(),
+      first_server_endpoint_id: Default::default(),
       first_server_name: Default::default(),
       database: Default::default(),
       local_auth: Default::default(),
@@ -972,15 +954,14 @@ impl CoreConfig {
       host: config.host,
       port: config.port,
       bind_ip: config.bind_ip,
-      private_key: if self.private_key.starts_with("file:") {
-        self.private_key.clone()
+      iroh_secret_key: if self.iroh_secret_key.starts_with("file:") {
+        self.iroh_secret_key.clone()
       } else {
-        empty_or_redacted(&self.private_key)
+        empty_or_redacted(&self.iroh_secret_key)
       },
-      periphery_public_keys: config.periphery_public_keys,
-      passkey: config.passkey.as_deref().map(empty_or_redacted),
+      iroh_periphery_endpoint_ids: config.iroh_periphery_endpoint_ids,
       timezone: config.timezone,
-      first_server_address: config.first_server_address,
+      first_server_endpoint_id: config.first_server_endpoint_id,
       first_server_name: config.first_server_name,
       jwt_secret: empty_or_redacted(&config.jwt_secret),
       jwt_ttl: config.jwt_ttl,

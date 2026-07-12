@@ -70,7 +70,7 @@ impl super::KomodoResource for Server {
     let status = server_status_cache().get(&server.id).await;
     let (
       version,
-      public_key,
+      endpoint_id,
       public_ip,
       terminals_disabled,
       container_terminals_disabled,
@@ -78,7 +78,7 @@ impl super::KomodoResource for Server {
     {
       Some(info) => (
         Some(info.version.clone()),
-        Some(info.public_key.clone()),
+        Some(info.endpoint_id.clone()),
         info.public_ip.clone(),
         info.terminals_disabled,
         info.container_terminals_disabled,
@@ -95,7 +95,7 @@ impl super::KomodoResource for Server {
         state: status.as_ref().map(|s| s.state).unwrap_or_default(),
         err: status.as_ref().and_then(|s| s.err.clone()),
         region: server.config.region,
-        address: optional_string(server.config.address),
+        address: None,
         external_address: optional_string(
           server.config.external_address,
         ),
@@ -109,9 +109,9 @@ impl super::KomodoResource for Server {
           .config
           .send_version_mismatch_alerts,
         version,
-        public_key,
-        attempted_public_key: optional_string(
-          server.info.attempted_public_key,
+        endpoint_id,
+        attempted_endpoint_id: optional_string(
+          server.info.attempted_endpoint_id,
         ),
         public_ip,
         terminals_disabled,

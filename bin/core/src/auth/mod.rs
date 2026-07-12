@@ -27,11 +27,10 @@ use mogh_auth_server::{
   user::{AuthUserImpl, BoxAuthUser},
 };
 use mogh_error::{AddStatusCode, AddStatusCodeError, StatusCode};
-use mogh_pki::RotatableKeyPair;
 use mogh_rate_limit::RateLimiter;
 
 use crate::{
-  config::{core_config, core_keys},
+  config::core_config,
   helpers::{
     query::{
       find_github_user, find_google_user, find_oidc_user, get_user,
@@ -822,7 +821,9 @@ impl AuthImpl for KomodoAuthImpl {
     })
   }
 
-  fn server_private_key(&self) -> Option<&RotatableKeyPair> {
-    Some(core_keys())
+  fn server_private_key(
+    &self,
+  ) -> Option<&mogh_pki::RotatableKeyPair> {
+    None
   }
 }

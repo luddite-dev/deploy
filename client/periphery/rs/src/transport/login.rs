@@ -34,7 +34,7 @@ impl_cast_bytes_vec!(InnerEncodedLoginMessage, Vec);
 /// - `EndpointId` for known nodes reconnecting (validated against Server allowlist).
 ///
 /// Core responds with `Success` to accept the connection.
-#[derive(Clone, EnumDiscriminants)]
+#[derive(Clone, Debug, EnumDiscriminants)]
 #[strum_discriminants(name(LoginMessageVariant))]
 pub enum LoginMessage {
   /// Bearer token for onboarding a new Periphery node.
