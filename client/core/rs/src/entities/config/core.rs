@@ -1061,7 +1061,18 @@ impl CoreConfig {
         .into_iter()
         .map(|(id, secret)| (id, empty_or_redacted(&secret)))
         .collect(),
-      ingress: config.ingress,
+      ingress: {
+        let mut ingress = config.ingress;
+        ingress.dns.cloudflare_api_token =
+          ingress.dns.cloudflare_api_token.map(|token| {
+            if token.starts_with("file:") {
+              token
+            } else {
+              empty_or_redacted(&token)
+            }
+          });
+        ingress
+      },
       git_providers: config
         .git_providers
         .into_iter()

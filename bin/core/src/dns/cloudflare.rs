@@ -56,6 +56,29 @@ impl CloudflareDnsProvider {
       anyhow::bail!("Cloudflare {context} failed: {detail}")
     }
   }
+
+  /// Send a request, then verify the HTTP status before
+  /// attempting to deserialize the JSON body. Non-2xx responses
+  /// (e.g. 502 HTML) would otherwise produce confusing
+  /// deserialization errors from `.json()`.
+  async fn send_and_check(
+    &self,
+    request: reqwest::RequestBuilder,
+    context: &str,
+  ) -> Result<reqwest::Response> {
+    let resp = request
+      .send()
+      .await
+      .with_context(|| format!("Failed to send {context}"))?;
+    if !resp.status().is_success() {
+      let status = resp.status();
+      let body = resp.text().await.unwrap_or_default();
+      anyhow::bail!(
+        "Cloudflare API error ({context}): {status} - {body}"
+      );
+    }
+    Ok(resp)
+  }
 }
 
 #[async_trait]
@@ -68,15 +91,16 @@ impl DnsProvider for CloudflareDnsProvider {
 
     let url = format!("{CLOUDFLARE_API_BASE}/zones");
     let resp = self
-      .client
-      .get(&url)
-      .header("Authorization", self.auth_bearer())
-      .query(&[("name", domain)])
-      .send()
-      .await
-      .with_context(|| {
-        format!("Failed to send zone resolve request for {domain}")
-      })?
+      .send_and_check(
+        self
+          .client
+          .get(&url)
+          .header("Authorization", self.auth_bearer())
+          .query(&[("name", domain)]),
+        &format!("zone resolve request for {domain}"),
+      )
+      .await?;
+    let resp = resp
       .json::<CloudflareResponse<Vec<ZoneResult>>>()
       .await
       .with_context(|| {
@@ -116,15 +140,16 @@ impl DnsProvider for CloudflareDnsProvider {
       proxied: false,
     };
     let resp = self
-      .client
-      .post(&url)
-      .header("Authorization", self.auth_bearer())
-      .json(&body)
-      .send()
-      .await
-      .with_context(|| {
-        format!("Failed to send create record request for {name}")
-      })?
+      .send_and_check(
+        self
+          .client
+          .post(&url)
+          .header("Authorization", self.auth_bearer())
+          .json(&body),
+        &format!("create record request for {name}"),
+      )
+      .await?;
+    let resp = resp
       .json::<CloudflareResponse<RecordResult>>()
       .await
       .with_context(|| {
@@ -148,17 +173,16 @@ impl DnsProvider for CloudflareDnsProvider {
       content: content.to_string(),
     };
     let resp = self
-      .client
-      .patch(&url)
-      .header("Authorization", self.auth_bearer())
-      .json(&body)
-      .send()
-      .await
-      .with_context(|| {
-        format!(
-          "Failed to send update record request for {record_id}"
-        )
-      })?
+      .send_and_check(
+        self
+          .client
+          .patch(&url)
+          .header("Authorization", self.auth_bearer())
+          .json(&body),
+        &format!("update record request for {record_id}"),
+      )
+      .await?;
+    let resp = resp
       .json::<CloudflareResponse<RecordResult>>()
       .await
       .with_context(|| {
@@ -180,16 +204,15 @@ impl DnsProvider for CloudflareDnsProvider {
       "{CLOUDFLARE_API_BASE}/zones/{zone_id}/dns_records/{record_id}"
     );
     let resp = self
-      .client
-      .delete(&url)
-      .header("Authorization", self.auth_bearer())
-      .send()
-      .await
-      .with_context(|| {
-        format!(
-          "Failed to send delete record request for {record_id}"
-        )
-      })?
+      .send_and_check(
+        self
+          .client
+          .delete(&url)
+          .header("Authorization", self.auth_bearer()),
+        &format!("delete record request for {record_id}"),
+      )
+      .await?;
+    let resp = resp
       .json::<CloudflareResponse<RecordResult>>()
       .await
       .with_context(|| {
