@@ -19,9 +19,7 @@ fulfilling any planned milestone are welcome.
   with Iroh p2p (QUIC + TLS 1.3, raw public keys, unified Periphery→Core
   direction, bearer token onboarding). See
   [`docs/compose/specs/2026-07-12-iroh-transport-design.md`](docs/compose/specs/2026-07-12-iroh-transport-design.md).
-- **M4 — MongoDB replacement** — swap Mongo for an embedded store suited to
-  small self-hosted deployments. Out of scope until M3 lands.
-- **M5 — Caddy reverse-proxy integration** — consume the assigned-port data
+- **M4 — Caddy reverse-proxy integration** — consume the assigned-port data
   contract to auto-configure Caddy for HTTP-proxied services.
 
 ## Upstream release history (Komodo, inherited)
