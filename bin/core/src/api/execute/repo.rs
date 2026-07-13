@@ -103,7 +103,7 @@ impl Resolve<ExecuteArgs> for CloneRepo {
 
     // This will set action state back to default when dropped.
     // Will also check to ensure repo not already busy before updating.
-    let _action_guard =
+    let action_guard =
       action_state.update(|state| state.cloning = true)?;
 
     let mut update = update.clone();
@@ -174,6 +174,10 @@ impl Resolve<ExecuteArgs> for CloneRepo {
       );
     };
 
+    // Drop action guard before updating
+    // clients to requery action state
+    drop(action_guard);
+
     handle_repo_update_return(update).await
   }
 }
@@ -238,7 +242,7 @@ impl Resolve<ExecuteArgs> for PullRepo {
 
     // This will set action state back to default when dropped.
     // Will also check to ensure repo not already busy before updating.
-    let _action_guard =
+    let action_guard =
       action_state.update(|state| state.pulling = true)?;
 
     let mut update = update.clone();
@@ -312,6 +316,10 @@ impl Resolve<ExecuteArgs> for PullRepo {
         format_serror(&e.into()),
       );
     };
+
+    // Drop action guard before updating
+    // clients to requery action state
+    drop(action_guard);
 
     handle_repo_update_return(update).await
   }
@@ -423,7 +431,7 @@ impl Resolve<ExecuteArgs> for BuildRepo {
 
     // This will set action state back to default when dropped.
     // Will also check to ensure repo not already busy before updating.
-    let _action_guard =
+    let action_guard =
       action_state.update(|state| state.building = true)?;
 
     let mut update = update.clone();
@@ -501,6 +509,9 @@ impl Resolve<ExecuteArgs> for BuildRepo {
           "get builder",
           format_serror(&e.context("failed to get builder").into()),
         ));
+        // Drop action guard before updating
+        // clients to requery action state
+        drop(action_guard);
         return handle_builder_early_return(
           update, repo.id, repo.name, false,
         )
@@ -533,6 +544,9 @@ impl Resolve<ExecuteArgs> for BuildRepo {
         cleanup_builder_instance(periphery, cleanup_data, &mut update)
           .await;
         info!("builder cleaned up");
+        // Drop action guard before updating
+        // clients to requery action state
+        drop(action_guard);
         return handle_builder_early_return(update, repo.id, repo.name, true).await
       },
     };
@@ -579,6 +593,10 @@ impl Resolve<ExecuteArgs> for BuildRepo {
     // this will terminate the server.
     cleanup_builder_instance(periphery, cleanup_data, &mut update)
       .await;
+
+    // Drop action guard before updating
+    // clients to requery action state
+    drop(action_guard);
 
     // Need to manually update the update before cache refresh,
     // and before broadcast with add_update.

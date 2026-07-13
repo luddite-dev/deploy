@@ -104,7 +104,7 @@ impl Resolve<ExecuteArgs> for Deploy {
 
     // Will check to ensure deployment not already busy before updating, and return Err if so.
     // The returned guard will set the action state back to default when dropped.
-    let _action_guard =
+    let action_guard =
       action_state.update(|state| state.deploying = true)?;
 
     let mut update = update.clone();
@@ -285,6 +285,11 @@ impl Resolve<ExecuteArgs> for Deploy {
     }
 
     update.finalize();
+
+    // Drop action guard before updating
+    // clients to requery action state
+    drop(action_guard);
+
     update_update(update.clone()).await?;
 
     Ok(update)
@@ -458,7 +463,7 @@ impl Resolve<ExecuteArgs> for PullDeployment {
 
     // Will check to ensure deployment not already busy before updating, and return Err if so.
     // The returned guard will set the action state back to default when dropped.
-    let _action_guard =
+    let action_guard =
       action_state.update(|state| state.pulling = true)?;
 
     let mut update = update.clone();
@@ -469,6 +474,10 @@ impl Resolve<ExecuteArgs> for PullDeployment {
 
     update.logs.push(log);
     update.finalize();
+
+    // Drop action guard before updating
+    // clients to requery action state
+    drop(action_guard);
     update_update(update.clone()).await?;
 
     Ok(update)
@@ -509,7 +518,7 @@ impl Resolve<ExecuteArgs> for StartDeployment {
 
     // Will check to ensure deployment not already busy before updating, and return Err if so.
     // The returned guard will set the action state back to default when dropped.
-    let _action_guard =
+    let action_guard =
       action_state.update(|state| state.starting = true)?;
 
     let mut update = update.clone();
@@ -534,6 +543,10 @@ impl Resolve<ExecuteArgs> for StartDeployment {
     update.logs.push(log);
     refresh_server_cache(&server, true).await;
     update.finalize();
+
+    // Drop action guard before updating
+    // clients to requery action state
+    drop(action_guard);
     update_update(update.clone()).await?;
 
     Ok(update)
@@ -574,7 +587,7 @@ impl Resolve<ExecuteArgs> for RestartDeployment {
 
     // Will check to ensure deployment not already busy before updating, and return Err if so.
     // The returned guard will set the action state back to default when dropped.
-    let _action_guard =
+    let action_guard =
       action_state.update(|state| state.restarting = true)?;
 
     let mut update = update.clone();
@@ -601,6 +614,10 @@ impl Resolve<ExecuteArgs> for RestartDeployment {
     update.logs.push(log);
     refresh_server_cache(&server, true).await;
     update.finalize();
+
+    // Drop action guard before updating
+    // clients to requery action state
+    drop(action_guard);
     update_update(update.clone()).await?;
 
     Ok(update)
@@ -641,7 +658,7 @@ impl Resolve<ExecuteArgs> for PauseDeployment {
 
     // Will check to ensure deployment not already busy before updating, and return Err if so.
     // The returned guard will set the action state back to default when dropped.
-    let _action_guard =
+    let action_guard =
       action_state.update(|state| state.pausing = true)?;
 
     let mut update = update.clone();
@@ -666,6 +683,10 @@ impl Resolve<ExecuteArgs> for PauseDeployment {
     update.logs.push(log);
     refresh_server_cache(&server, true).await;
     update.finalize();
+
+    // Drop action guard before updating
+    // clients to requery action state
+    drop(action_guard);
     update_update(update.clone()).await?;
 
     Ok(update)
@@ -706,7 +727,7 @@ impl Resolve<ExecuteArgs> for UnpauseDeployment {
 
     // Will check to ensure deployment not already busy before updating, and return Err if so.
     // The returned guard will set the action state back to default when dropped.
-    let _action_guard =
+    let action_guard =
       action_state.update(|state| state.unpausing = true)?;
 
     let mut update = update.clone();
@@ -733,6 +754,10 @@ impl Resolve<ExecuteArgs> for UnpauseDeployment {
     update.logs.push(log);
     refresh_server_cache(&server, true).await;
     update.finalize();
+
+    // Drop action guard before updating
+    // clients to requery action state
+    drop(action_guard);
     update_update(update.clone()).await?;
 
     Ok(update)
@@ -775,7 +800,7 @@ impl Resolve<ExecuteArgs> for StopDeployment {
 
     // Will check to ensure deployment not already busy before updating, and return Err if so.
     // The returned guard will set the action state back to default when dropped.
-    let _action_guard =
+    let action_guard =
       action_state.update(|state| state.stopping = true)?;
 
     let mut update = update.clone();
@@ -808,6 +833,10 @@ impl Resolve<ExecuteArgs> for StopDeployment {
     update.logs.push(log);
     refresh_server_cache(&server, true).await;
     update.finalize();
+
+    // Drop action guard before updating
+    // clients to requery action state
+    drop(action_guard);
     update_update(update.clone()).await?;
 
     Ok(update)
@@ -885,7 +914,7 @@ impl Resolve<ExecuteArgs> for DestroyDeployment {
 
     // Will check to ensure deployment not already busy before updating, and return Err if so.
     // The returned guard will set the action state back to default when dropped.
-    let _action_guard =
+    let action_guard =
       action_state.update(|state| state.destroying = true)?;
 
     let mut update = update.clone();
@@ -923,6 +952,9 @@ impl Resolve<ExecuteArgs> for DestroyDeployment {
     update.logs.push(log);
     update.finalize();
 
+    // Drop action guard before updating
+    // clients to requery action state
+    drop(action_guard);
     update_update(update.clone()).await?;
 
     Ok(update)

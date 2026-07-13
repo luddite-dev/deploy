@@ -199,6 +199,7 @@ function onUpdate(
     if (["Server", "Deployment", "Stack"].includes(update.target.type)) {
       invalidate(
         ["ListDockerContainers"],
+        ["ListAllDockerContainers"],
         ["InspectDockerContainer"],
         ["ListDockerNetworks"],
         ["InspectDockerNetwork"],
@@ -242,6 +243,7 @@ function onUpdate(
     if (update.target.type === "Deployment") {
       invalidate(
         ["ListDeployments"],
+        ["ListFullDeployments"],
         ["GetDeploymentsSummary"],
         ["ListDockerContainers"],
         ["ListDockerNetworks"],

@@ -97,7 +97,7 @@ impl Resolve<ExecuteArgs> for RunSync {
 
     // This will set action state back to default when dropped.
     // Will also check to ensure sync not already busy before updating.
-    let _action_guard =
+    let action_guard =
       action_state.update(|state| state.syncing = true)?;
 
     let mut update = update.clone();
@@ -307,6 +307,10 @@ impl Resolve<ExecuteArgs> for RunSync {
         ),
       );
       update.finalize();
+
+      // Drop action guard before updating
+      // clients to requery action state
+      drop(action_guard);
       update_update(update.clone()).await?;
       return Ok(update);
     }
@@ -433,6 +437,10 @@ impl Resolve<ExecuteArgs> for RunSync {
     }
 
     update.finalize();
+
+    // Drop action guard before updating
+    // clients to requery action state
+    drop(action_guard);
     update_update(update.clone()).await?;
 
     Ok(update)
