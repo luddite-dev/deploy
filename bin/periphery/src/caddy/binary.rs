@@ -66,7 +66,7 @@ pub async fn ensure_caddy_binary(
     );
   }
 
-  let arch = current_arch();
+  let arch = current_arch()?;
   let url = artifact.download_url.replace("{{arch}}", arch);
 
   let expected_checksum = artifact
@@ -178,13 +178,16 @@ fn sha256(data: &[u8]) -> String {
 }
 
 /// Map the compile-time target architecture to the manifest arch slug.
-fn current_arch() -> &'static str {
+fn current_arch() -> Result<&'static str> {
   if cfg!(target_arch = "x86_64") {
-    "linux-amd64"
+    Ok("linux-amd64")
   } else if cfg!(target_arch = "aarch64") {
-    "linux-arm64"
+    Ok("linux-arm64")
   } else {
-    "linux-amd64"
+    bail!(
+      "unsupported target architecture: {}",
+      std::env::consts::ARCH
+    );
   }
 }
 
