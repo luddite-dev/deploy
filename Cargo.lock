@@ -4072,6 +4072,7 @@ version = "2.3.0-dev-11"
 dependencies = [
  "anyhow",
  "arc-swap",
+ "async-trait",
  "async_timing_util",
  "aws-config",
  "aws-credential-types",

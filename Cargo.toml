@@ -55,6 +55,7 @@ mungos = "3.7.0"
 svi = "1.2.0"
 
 # ASYNC
+async-trait = "0.1"
 reqwest = { version = "0.13.4", default-features = false, features = ["json", "stream", "form", "query", "rustls"] }
 tokio = { version = "1.52.3", features = ["full"] }
 tokio-util = { version = "0.7.18", features = ["io", "codec"] }

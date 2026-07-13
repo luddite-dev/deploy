@@ -15,6 +15,7 @@ mod backup;
 mod cloud;
 mod config;
 mod connection;
+mod dns;
 mod helpers;
 mod monitor;
 mod network;

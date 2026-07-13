@@ -414,6 +414,7 @@ pub fn core_config() -> &'static CoreConfig {
       secrets: config.secrets,
       git_providers: config.git_providers,
       docker_registries: config.docker_registries,
+      ingress: config.ingress,
     }
   })
 }

@@ -19,6 +19,7 @@ use crate::{
   entities::{
     Timelength,
     config::DatabaseConfig,
+    dns::IngressConfig,
     logger::{LogConfig, LogLevel, StdioLogMode},
   },
 };
@@ -727,6 +728,14 @@ pub struct CoreConfig {
   #[serde(default, skip_serializing_if = "HashMap::is_empty")]
   pub secrets: HashMap<String, String>,
 
+  // ===============
+  // = Ingress/DNS =
+  // ===============
+  /// Ingress / DNS management configuration.
+  /// Empty `provider` (default) disables the DNS ingress layer.
+  #[serde(default)]
+  pub ingress: IngressConfig,
+
   // =======
   // = SSL =
   // =======
@@ -934,6 +943,7 @@ impl Default for CoreConfig {
       git_providers: Default::default(),
       docker_registries: Default::default(),
       secrets: Default::default(),
+      ingress: Default::default(),
       ssl_enabled: Default::default(),
       ssl_key_file: default_ssl_key_file(),
       ssl_cert_file: default_ssl_cert_file(),
@@ -1051,6 +1061,7 @@ impl CoreConfig {
         .into_iter()
         .map(|(id, secret)| (id, empty_or_redacted(&secret)))
         .collect(),
+      ingress: config.ingress,
       git_providers: config
         .git_providers
         .into_iter()
