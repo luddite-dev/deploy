@@ -325,6 +325,25 @@ pub struct PeripheryConfig {
   /// Supports any docker image repository.
   #[serde(default, alias = "docker_registry")]
   pub docker_registries: ForgivingVec<DockerRegistry>,
+
+  // ===============
+  // = HTTP BRIDGE =
+  // ===============
+  /// Port for the Iroh HTTP bridge listener (ingress nodes only).
+  /// Caddy reverse_proxies to this localhost port.
+  /// Default: 8443
+  #[serde(default = "default_http_bridge_port")]
+  pub http_bridge_port: u16,
+
+  /// Path to the vendored Caddy binary (ingress nodes only).
+  /// Default: ~/.local/share/luddite/bin/caddy-luddite
+  #[serde(default = "default_caddy_binary_path")]
+  pub caddy_binary_path: String,
+
+  /// URL to the vendored manifest.json for version checks.
+  /// Default: https://raw.githubusercontent.com/luddite-dev/vendored/main/manifest.json
+  #[serde(default = "default_vendored_manifest_url")]
+  pub vendored_manifest_url: String,
 }
 
 fn default_root_directory() -> PathBuf {
@@ -341,6 +360,21 @@ fn default_stats_polling_rate() -> Timelength {
 
 fn default_container_stats_polling_rate() -> Timelength {
   Timelength::ThirtySeconds
+}
+
+fn default_http_bridge_port() -> u16 {
+  8443
+}
+
+fn default_caddy_binary_path() -> String {
+  let home =
+    std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+  format!("{home}/.local/share/luddite/bin/caddy-luddite")
+}
+
+fn default_vendored_manifest_url() -> String {
+  "https://raw.githubusercontent.com/luddite-dev/vendored/main/manifest.json"
+    .to_string()
 }
 
 impl Default for PeripheryConfig {
@@ -368,6 +402,9 @@ impl Default for PeripheryConfig {
       secrets: Default::default(),
       git_providers: Default::default(),
       docker_registries: Default::default(),
+      http_bridge_port: default_http_bridge_port(),
+      caddy_binary_path: default_caddy_binary_path(),
+      vendored_manifest_url: default_vendored_manifest_url(),
     }
   }
 }
@@ -441,6 +478,9 @@ impl PeripheryConfig {
             .collect(),
         })
         .collect(),
+      http_bridge_port: self.http_bridge_port,
+      caddy_binary_path: self.caddy_binary_path.clone(),
+      vendored_manifest_url: self.vendored_manifest_url.clone(),
     }
   }
 

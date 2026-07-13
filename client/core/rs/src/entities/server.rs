@@ -253,6 +253,26 @@ pub struct ServerConfig {
   #[serde(default)]
   #[builder(default)]
   pub maintenance_windows: Vec<MaintenanceWindow>,
+
+  // =============
+  // = Ingress =
+  // =============
+  /// Whether this node is an ingress node (runs Caddy on 80/443).
+  /// Default: false
+  #[serde(default)]
+  #[builder(default)]
+  pub ingress_enabled: bool,
+
+  /// Public IPv4 address for ingress traffic.
+  /// Required if ingress_enabled is true.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[builder(default)]
+  pub public_ipv4: Option<String>,
+
+  /// Public IPv6 address for ingress traffic. Optional, additional.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[builder(default)]
+  pub public_ipv6: Option<String>,
 }
 
 impl ServerConfig {
@@ -334,6 +354,9 @@ impl Default for ServerConfig {
       disk_warning: default_disk_warning(),
       disk_critical: default_disk_critical(),
       maintenance_windows: Default::default(),
+      ingress_enabled: false,
+      public_ipv4: None,
+      public_ipv6: None,
     }
   }
 }
