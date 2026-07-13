@@ -11,6 +11,8 @@
 //! 6. Sends the response back over the Iroh send stream
 //! 7. Half-closes (finish) to signal response complete
 
+use std::time::Duration;
+
 use anyhow::Result;
 use iroh::Endpoint;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -112,20 +114,38 @@ async fn handle_stream(
     request_bytes.len()
   );
 
-  // Connect to the container's host port
-  let mut tcp = match tokio::net::TcpStream::connect(format!(
-    "127.0.0.1:{target_port}"
-  ))
+  // Connect to the container's host port (with a 30s timeout so a
+  // slow/unresponsive container can't stall the stream handler)
+  let mut tcp = match tokio::time::timeout(
+    Duration::from_secs(30),
+    tokio::net::TcpStream::connect(format!(
+      "127.0.0.1:{target_port}"
+    )),
+  )
   .await
   {
-    Ok(stream) => stream,
-    Err(e) => {
+    Ok(Ok(stream)) => stream,
+    Ok(Err(e)) => {
       error!(
         "HTTP forward [{endpoint_id}]: failed to connect to 127.0.0.1:{target_port} | {e:#}"
       );
       // Send a minimal 502 Bad Gateway response back
       let response = format!(
         "HTTP/1.1 502 Bad Gateway\r\n\
+         Content-Length: 0\r\n\
+         Connection: close\r\n\
+         \r\n"
+      );
+      let _ = send.write_all(response.as_bytes()).await;
+      let _ = send.finish();
+      return;
+    }
+    Err(_) => {
+      error!(
+        "HTTP forward [{endpoint_id}]: timed out connecting to 127.0.0.1:{target_port} after 30s"
+      );
+      let response = format!(
+        "HTTP/1.1 504 Gateway Timeout\r\n\
          Content-Length: 0\r\n\
          Connection: close\r\n\
          \r\n"
@@ -149,7 +169,32 @@ async fn handle_stream(
 
   // Read the full response from the container and pipe it back.
   // We use a read loop since we don't know the response size ahead of time.
-  let response = read_response(&mut tcp).await;
+  // A 5-minute timeout prevents a hung container from stalling the
+  // Iroh stream handler indefinitely.
+  let response = match tokio::time::timeout(
+    Duration::from_secs(300),
+    read_response(&mut tcp),
+  )
+  .await
+  {
+    Ok(resp) => resp,
+    Err(_) => {
+      warn!(
+        "HTTP forward [{endpoint_id}]: timed out reading response from 127.0.0.1:{target_port} after 300s"
+      );
+      // Send a 504 back so the ingress side gets a response instead of
+      // hanging forever.
+      let timeout_resp = format!(
+        "HTTP/1.1 504 Gateway Timeout\r\n\
+         Content-Length: 0\r\n\
+         Connection: close\r\n\
+         \r\n"
+      );
+      let _ = send.write_all(timeout_resp.as_bytes()).await;
+      let _ = send.finish();
+      return;
+    }
+  };
 
   info!(
     "HTTP forward [{endpoint_id}]: {} bytes response <- 127.0.0.1:{target_port}",

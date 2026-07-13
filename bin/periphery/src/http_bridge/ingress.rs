@@ -251,13 +251,43 @@ async fn reconstruct_http_request(
     format!("{method} {path} HTTP/1.1\r\n").as_bytes(),
   );
 
-  // Write headers
+  // Write headers, skipping hop-by-hop and routing-metadata headers
+  // that must not be forwarded to the container:
+  //   - connection: replaced with `Connection: close` below
+  //   - transfer-encoding: body is de-chunked by to_bytes, so the
+  //     header would lie; replaced with Content-Length
+  //   - x-target-endpoint / x-target-port: internal routing metadata
+  const SKIP_HEADERS: &[&str] = &[
+    "connection",
+    "transfer-encoding",
+    "x-target-endpoint",
+    "x-target-port",
+  ];
   for (name, value) in headers.iter() {
+    let lower = name.as_str().to_lowercase();
+    if SKIP_HEADERS.contains(&lower.as_str()) {
+      continue;
+    }
     buf.extend_from_slice(name.as_str().as_bytes());
     buf.extend_from_slice(b": ");
     buf.extend_from_slice(value.as_bytes());
     buf.extend_from_slice(b"\r\n");
   }
+
+  // Inject Connection: close so the container closes the TCP
+  // connection after sending the response. Without this HTTP/1.1
+  // defaults to keep-alive and read_response hangs waiting for EOF.
+  buf.extend_from_slice(b"Connection: close\r\n");
+
+  // If there is a body, set Content-Length from the actual byte
+  // length (the body has already been de-chunked by to_bytes).
+  if !body_bytes.is_empty() {
+    buf.extend_from_slice(
+      format!("Content-Length: {}\r\n", body_bytes.len()).as_bytes(),
+    );
+  }
+
+  // Blank line to end headers
   buf.extend_from_slice(b"\r\n");
 
   // Write body
