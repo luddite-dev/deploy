@@ -60,9 +60,6 @@ Design spec:
 · Implementation plan:
 [`docs/compose/plans/2026-06-25-adaptive-placement.md`](docs/compose/plans/2026-06-25-adaptive-placement.md)
 
-Out of scope for this milestone: Iroh transport swap, Caddy
-reverse-proxy integration (only the data contract for assigned ports).
-
 ## Milestone 3 — Iroh transport swap (landed)
 
 Replaced the WebSocket + mutual Noise XX handshake transport layer entirely with
