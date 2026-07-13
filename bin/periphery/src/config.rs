@@ -154,6 +154,7 @@ pub fn periphery_config() -> &'static PeripheryConfig {
       http_bridge_port: config.http_bridge_port,
       caddy_binary_path: config.caddy_binary_path,
       vendored_manifest_url: config.vendored_manifest_url,
+      ingress_enabled: config.ingress_enabled,
     }
   })
 }

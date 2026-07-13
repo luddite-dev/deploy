@@ -344,6 +344,11 @@ pub struct PeripheryConfig {
   /// Default: https://raw.githubusercontent.com/luddite-dev/vendored/main/manifest.json
   #[serde(default = "default_vendored_manifest_url")]
   pub vendored_manifest_url: String,
+
+  /// Whether this node is an ingress node (runs Caddy + HTTP bridge listener).
+  /// Default: false
+  #[serde(default)]
+  pub ingress_enabled: bool,
 }
 
 fn default_root_directory() -> PathBuf {
@@ -405,6 +410,7 @@ impl Default for PeripheryConfig {
       http_bridge_port: default_http_bridge_port(),
       caddy_binary_path: default_caddy_binary_path(),
       vendored_manifest_url: default_vendored_manifest_url(),
+      ingress_enabled: false,
     }
   }
 }
@@ -481,6 +487,7 @@ impl PeripheryConfig {
       http_bridge_port: self.http_bridge_port,
       caddy_binary_path: self.caddy_binary_path.clone(),
       vendored_manifest_url: self.vendored_manifest_url.clone(),
+      ingress_enabled: self.ingress_enabled,
     }
   }
 
