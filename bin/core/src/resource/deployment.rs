@@ -9,7 +9,7 @@ use komodo_client::entities::{
     Deployment, DeploymentConfig, DeploymentConfigDiff,
     DeploymentImage, DeploymentInfo, DeploymentListItem,
     DeploymentListItemInfo, DeploymentQuerySpecifics,
-    DeploymentState, PartialDeploymentConfig,
+    DeploymentState, HttpProxyConfig, PartialDeploymentConfig,
   },
   environment_vars_from_str,
   permission::{
@@ -31,6 +31,7 @@ use crate::{
     empty_or_only_spaces, periphery_client,
     query::{get_deployment_state, get_server_for_command},
   },
+  ingress::config::{CaddyRoute, build_caddy_config},
   monitor::refresh_server_cache,
   state::{
     action_states, all_resources_cache, db_client,
@@ -235,6 +236,17 @@ impl super::KomodoResource for Deployment {
     // discover them. Best-effort: a failure here is logged, not fatal — the
     // deployment has been created successfully regardless.
     read_back_host_ports(&server, &created.name, &created.id).await;
+
+    // If http_proxy is configured, create DNS record + push Caddy
+    // config. Best-effort: failures are logged, not fatal.
+    if let Some(http_proxy) = &created.config.http_proxy {
+      if let Err(e) = try_setup_ingress(created, http_proxy).await {
+        warn!(
+          "Failed to set up ingress for deployment {}: {e:#}",
+          created.name
+        );
+      }
+    }
     Ok(())
   }
 
@@ -353,6 +365,16 @@ impl super::KomodoResource for Deployment {
     _update: &mut Update,
   ) -> anyhow::Result<()> {
     deployment_status_cache().remove(&resource.id).await;
+
+    // Best-effort: delete DNS records + push updated Caddy config.
+    if resource.config.http_proxy.is_some() {
+      if let Err(e) = try_teardown_ingress(&resource.id).await {
+        warn!(
+          "Failed to tear down ingress for deployment {}: {e:#}",
+          resource.id
+        );
+      }
+    }
     Ok(())
   }
 }
@@ -502,4 +524,228 @@ pub async fn setup_deployment_execution(
     get_server_for_command(&deployment.config.server_id).await?;
 
   Ok((deployment, server))
+}
+
+/// Default HTTP bridge port for ingress periphery nodes. Each
+/// periphery listens on `127.0.0.1:{bridge_port}` for Iroh-routed
+/// traffic; Caddy reverse_proxies to it. The actual port is a
+/// periphery config value not exposed on the Core-side `Server`
+/// entity, so the default (8443) is used.
+const DEFAULT_BRIDGE_PORT: u16 = 8443;
+
+/// Best-effort: set up DNS + Caddy ingress for a deployment with
+/// `http_proxy`.
+///
+/// 1. Select a healthy ingress-enabled node.
+/// 2. Create a DNS A/AAAA record pointing the deployment subdomain
+///    at the ingress node's public IPs.
+/// 3. Build the complete Caddy JSON config (all http_proxy routes)
+///    and push it to the ingress Periphery via `ReloadCaddyConfig`.
+async fn try_setup_ingress(
+  deployment: &Deployment,
+  http_proxy: &HttpProxyConfig,
+) -> anyhow::Result<()> {
+  use crate::ingress::{
+    failover::select_new_ingress_node,
+    management::create_deployment_dns_record,
+  };
+
+  let core_cfg = core_config().ingress.clone();
+  let base_domain = core_cfg
+    .dns
+    .base_domain
+    .as_deref()
+    .filter(|d| !d.is_empty())
+    .ok_or_else(|| {
+      anyhow::anyhow!(
+        "ingress.dns.base_domain not configured — cannot set up ingress"
+      )
+    })?;
+  let fqdn = format!("{}.{}", http_proxy.subdomain, base_domain);
+
+  // Find the deployment's server for the Iroh endpoint_id.
+  let server =
+    get_server_for_command(&deployment.config.server_id).await?;
+  let target_endpoint_id = server.info.endpoint_id.clone();
+  if target_endpoint_id.is_empty() {
+    anyhow::bail!(
+      "Server {} has no endpoint_id — cannot route ingress traffic",
+      server.id
+    );
+  }
+
+  // Find the target host port matching http_proxy.container_port.
+  let host_port = deployment
+    .info
+    .host_ports
+    .iter()
+    .find(|p| p.container == http_proxy.container_port)
+    .map(|p| p.host)
+    .ok_or_else(|| {
+      anyhow::anyhow!(
+        "No host port found for container port {} on deployment {}. \
+         ReadContainerPorts readback may not have completed.",
+        http_proxy.container_port,
+        deployment.name
+      )
+    })?;
+
+  // Select a healthy ingress node.
+  let ingress_node = select_new_ingress_node("").await?;
+
+  // Create DNS record(s) pointing to the ingress node.
+  create_deployment_dns_record(
+    &deployment.id,
+    &http_proxy.subdomain,
+    &ingress_node.id,
+    ingress_node.config.public_ipv4.as_deref(),
+    ingress_node.config.public_ipv6.as_deref(),
+    &core_cfg,
+    60,
+  )
+  .await?;
+
+  // Build + push Caddy config (all routes, including this one).
+  let routes = build_ingress_routes(
+    base_domain,
+    &core_cfg.dns.cloudflare_api_token,
+  )
+  .await?;
+  let caddy_config = build_caddy_config(
+    &routes,
+    &core_cfg
+      .dns
+      .cloudflare_api_token
+      .clone()
+      .unwrap_or_default(),
+    DEFAULT_BRIDGE_PORT,
+  );
+
+  let periphery = periphery_client(&ingress_node).await?;
+  periphery
+    .request(periphery_client::api::ReloadCaddyConfig {
+      config: caddy_config,
+    })
+    .await?;
+
+  info!(
+    "Set up ingress for deployment {}: {} -> endpoint {}:{}",
+    deployment.name, fqdn, target_endpoint_id, host_port
+  );
+  Ok(())
+}
+
+/// Best-effort: delete DNS records + push updated Caddy config
+/// (without the deleted route).
+async fn try_teardown_ingress(
+  deployment_id: &str,
+) -> anyhow::Result<()> {
+  use crate::ingress::management::delete_deployment_dns_records;
+
+  let core_cfg = core_config().ingress.clone();
+
+  // Delete DNS records at the provider + in the database.
+  delete_deployment_dns_records(deployment_id, &core_cfg).await?;
+
+  // Push updated Caddy config (without the deleted route).
+  let base_domain = core_cfg
+    .dns
+    .base_domain
+    .as_deref()
+    .filter(|d| !d.is_empty())
+    .ok_or_else(|| {
+      anyhow::anyhow!(
+        "ingress.dns.base_domain not configured — cannot rebuild Caddy config"
+      )
+    })?;
+  let routes = build_ingress_routes(
+    base_domain,
+    &core_cfg.dns.cloudflare_api_token,
+  )
+  .await?;
+  let caddy_config = build_caddy_config(
+    &routes,
+    &core_cfg
+      .dns
+      .cloudflare_api_token
+      .clone()
+      .unwrap_or_default(),
+    DEFAULT_BRIDGE_PORT,
+  );
+
+  // Find the ingress node and push.
+  let ingress_node =
+    crate::ingress::failover::select_new_ingress_node("").await?;
+  let periphery = periphery_client(&ingress_node).await?;
+  periphery
+    .request(periphery_client::api::ReloadCaddyConfig {
+      config: caddy_config,
+    })
+    .await?;
+
+  info!("Tore down ingress for deployment {}", deployment_id);
+  Ok(())
+}
+
+/// Build Caddy routes for **all** deployments that have `http_proxy`
+/// configured. Each route maps the deployment's FQDN to the target
+/// server's Iroh endpoint_id + host port.
+///
+/// This is called on every create/delete so the pushed config always
+/// reflects the current set of proxied deployments.
+async fn build_ingress_routes(
+  base_domain: &str,
+  _cloudflare_api_token: &Option<String>,
+) -> anyhow::Result<Vec<CaddyRoute>> {
+  use database::mungos::{find::find_collect, mongodb::bson::doc};
+
+  // Query all deployments that have http_proxy set.
+  let deployments: Vec<Deployment> = find_collect(
+    &db_client().deployments,
+    doc! { "config.http_proxy": { "$ne": null } },
+    None,
+  )
+  .await
+  .context("failed to query deployments with http_proxy")?;
+
+  let mut routes = Vec::new();
+  for dep in deployments {
+    let Some(http_proxy) = &dep.config.http_proxy else {
+      continue;
+    };
+    // Get the server for this deployment to find endpoint_id.
+    let server =
+      get_server_for_command(&dep.config.server_id).await.ok();
+    let Some(server) = server else {
+      warn!(
+        "build_ingress_routes: could not get server for deployment {} (server_id={}), skipping",
+        dep.name, dep.config.server_id
+      );
+      continue;
+    };
+    let endpoint_id = server.info.endpoint_id.clone();
+    if endpoint_id.is_empty() {
+      continue;
+    }
+    // Find the host port matching the container_port.
+    let host_port = dep
+      .info
+      .host_ports
+      .iter()
+      .find(|p| p.container == http_proxy.container_port)
+      .map(|p| p.host);
+    let Some(host_port) = host_port else {
+      warn!(
+        "build_ingress_routes: no host port for container port {} on deployment {}, skipping",
+        http_proxy.container_port, dep.name
+      );
+      continue;
+    };
+    routes.push(CaddyRoute {
+      hostname: format!("{}.{}", http_proxy.subdomain, base_domain),
+      target_endpoint_id: endpoint_id,
+      target_port: host_port,
+    });
+  }
+  Ok(routes)
 }

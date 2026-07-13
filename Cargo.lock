@@ -5763,6 +5763,7 @@ dependencies = [
  "komodo_client",
  "mogh_resolver",
  "serde",
+ "serde_json",
  "strum 0.28.0",
  "uuid",
 ]

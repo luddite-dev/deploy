@@ -73,6 +73,20 @@ pub struct ListSecrets {}
 #[error(anyhow::Error)]
 pub struct PruneSystem {}
 
+//
+
+#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
+#[response(ReloadCaddyConfigResponse)]
+#[error(anyhow::Error)]
+pub struct ReloadCaddyConfig {
+  pub config: serde_json::Value,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct ReloadCaddyConfigResponse {
+  pub success: bool,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DeployStackResponse {
   /// If any of the required files are missing, they will be here.

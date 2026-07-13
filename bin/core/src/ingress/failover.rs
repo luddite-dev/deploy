@@ -72,7 +72,7 @@ pub async fn handle_ingress_failover(
 /// the failed node. Exclusion is done in Rust rather than via Mongo
 /// `$ne` on `_id` so that non-ObjectId id strings do not cause a
 /// parse failure.
-async fn select_new_ingress_node(
+pub async fn select_new_ingress_node(
   failed_node_id: &str,
 ) -> Result<Server> {
   let candidates: Vec<Server> = find_collect(
