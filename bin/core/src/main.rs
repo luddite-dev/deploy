@@ -17,6 +17,7 @@ mod config;
 mod connection;
 mod dns;
 mod helpers;
+mod ingress;
 mod monitor;
 mod network;
 mod periphery;
