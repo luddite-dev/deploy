@@ -11,6 +11,7 @@ use crate::{config::periphery_args, state::periphery_secret_key};
 extern crate tracing;
 
 mod api;
+mod caddy;
 mod config;
 mod connection;
 mod docker;
@@ -98,6 +99,30 @@ async fn app() -> anyhow::Result<()> {
       {
         error!("HTTP ingress bridge error: {e:#}");
       }
+    });
+  }
+
+  // Start Caddy supervisor (ingress nodes only)
+  if config.ingress_enabled {
+    let binary_path = config.caddy_binary_path.clone();
+    let manifest_url = config.vendored_manifest_url.clone();
+    tokio::spawn(async move {
+      if let Err(e) = caddy::binary::ensure_caddy_binary(
+        &binary_path,
+        &manifest_url,
+      )
+      .await
+      {
+        error!("Failed to ensure Caddy binary: {e:#}");
+        return;
+      }
+      if let Err(e) =
+        caddy::supervisor::start_caddy(&binary_path).await
+      {
+        error!("Failed to start Caddy: {e:#}");
+        return;
+      }
+      info!("Caddy supervisor running");
     });
   }
 
