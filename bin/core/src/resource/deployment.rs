@@ -21,7 +21,9 @@ use komodo_client::entities::{
   update::Update,
   user::User,
 };
-use periphery_client::api::container::RemoveContainer;
+use periphery_client::api::{
+  container::RemoveContainer, placement::ReadContainerPorts,
+};
 
 use crate::{
   config::core_config,
@@ -213,7 +215,6 @@ impl super::KomodoResource for Deployment {
       .await
       .context("Failed to set info.assigned_server")?;
     }
-    // TODO(Task 8): ReadContainerPorts readback to populate info.host_ports.
     if created.config.server_id.is_empty() {
       return Ok(());
     }
@@ -230,6 +231,10 @@ impl super::KomodoResource for Deployment {
       return Ok(());
     };
     refresh_server_cache(&server, true).await;
+    // Read back container host ports so the Caddy ingress controller can
+    // discover them. Best-effort: a failure here is logged, not fatal — the
+    // deployment has been created successfully regardless.
+    read_back_host_ports(&server, &created.name, &created.id).await;
     Ok(())
   }
 
@@ -413,6 +418,72 @@ async fn validate_config(
     extra_args.retain(|v| !empty_or_only_spaces(v))
   }
   Ok(())
+}
+
+/// Queries the periphery for the container's host port bindings and writes
+/// them into `info.host_ports` in the database. Best-effort: failures are
+/// logged at warn-level and do not propagate, so a transient periphery error
+/// never fails an otherwise-successful create/update.
+///
+/// This mirrors the readback performed by the drain migration path
+/// (`bin/core/src/server/drain.rs:324`).
+async fn read_back_host_ports(
+  server: &Server,
+  container_name: &str,
+  deployment_id: &str,
+) {
+  let periphery = match periphery_client(server).await {
+    Ok(p) => p,
+    Err(e) => {
+      warn!(
+        "ReadContainerPorts: failed to connect to periphery for Deployment {container_name} | {e:#}"
+      );
+      return;
+    }
+  };
+  let response = match periphery
+    .request(ReadContainerPorts {
+      container_name: container_name.to_string(),
+    })
+    .await
+  {
+    Ok(r) => r,
+    Err(e) => {
+      warn!(
+        "ReadContainerPorts: query failed for Deployment {container_name} | {e:#}"
+      );
+      return;
+    }
+  };
+  let arr: Vec<_> = response
+    .ports
+    .into_iter()
+    .map(|p| {
+      database::mungos::mongodb::bson::doc! {
+        "container": p.container as i32,
+        "host": p.host as i32
+      }
+    })
+    .collect();
+  let host_ports_bson =
+    database::mungos::mongodb::bson::to_bson(&arr)
+      .unwrap_or(database::mungos::mongodb::bson::Bson::Null);
+  if let Err(e) = database::mungos::by_id::update_one_by_id(
+    &db_client().deployments,
+    deployment_id,
+    database::mungos::update::Update::Set(
+      database::mungos::mongodb::bson::doc! {
+        "info.host_ports": host_ports_bson
+      },
+    ),
+    None,
+  )
+  .await
+  {
+    warn!(
+      "ReadContainerPorts: failed to persist host_ports for Deployment {container_name} | {e:#}"
+    );
+  }
 }
 
 pub async fn setup_deployment_execution(

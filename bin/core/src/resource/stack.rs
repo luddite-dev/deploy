@@ -284,6 +284,19 @@ impl super::KomodoResource for Stack {
       .context("Failed to set info.assigned_server")?;
     }
     // TODO(Task 8): ReadContainerPorts readback to populate info.host_ports.
+    //
+    // DEFERRED: The stack host_ports field is a HashMap<String,
+    // Vec<AssignedPort>> keyed by compose service name. Unlike deployments
+    // (where the container name == stack.name), stack service containers use
+    // a compose project naming convention that is not trivially available
+    // at post_create time — the services list is populated by the
+    // RefreshStackCache call above, but resolving per-service container
+    // names and iterating ReadContainerPorts for each is a larger change.
+    //
+    // The drain migration path (`bin/core/src/server/drain.rs:553`) also
+    // skips host_ports for stacks, confirming there is no existing pattern
+    // to mirror. Stack HTTP proxying (via Caddy) can be added in a future
+    // task once service-name discovery is implemented.
     if let Err(e) = (RefreshStackCache {
       stack: created.name.clone(),
     })
