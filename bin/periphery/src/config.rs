@@ -151,6 +151,9 @@ pub fn periphery_config() -> &'static PeripheryConfig {
       secrets: config.secrets,
       git_providers: config.git_providers,
       docker_registries: config.docker_registries,
+      http_bridge_port: config.http_bridge_port,
+      caddy_binary_path: config.caddy_binary_path,
+      vendored_manifest_url: config.vendored_manifest_url,
     }
   })
 }
