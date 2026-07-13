@@ -262,6 +262,13 @@ pub struct DeploymentConfig {
   #[partial_attr(serde(default))]
   #[builder(default)]
   pub backup: Option<BackupConfig>,
+
+  /// HTTP ingress configuration for this deployment.
+  /// When set, creates DNS record + Caddy route for automatic HTTPS.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[partial_attr(serde(default))]
+  #[builder(default)]
+  pub http_proxy: Option<HttpProxyConfig>,
 }
 
 impl DeploymentConfig {
@@ -316,6 +323,7 @@ impl Default for DeploymentConfig {
       environment: Default::default(),
       labels: Default::default(),
       backup: Default::default(),
+      http_proxy: Default::default(),
     }
   }
 }
@@ -625,6 +633,19 @@ pub struct PortMapping {
   pub container: u16,
   /// The host port to bind. None = container-only, Podman assigns random high port.
   pub host: Option<u16>,
+}
+
+#[typeshare]
+#[derive(
+  Debug, Clone, Default, PartialEq, Serialize, Deserialize,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct HttpProxyConfig {
+  /// Subdomain for this app (e.g. "myapp" → "myapp.example.com")
+  pub subdomain: String,
+  /// Which container port to proxy HTTP traffic to
+  pub container_port: u16,
 }
 
 #[typeshare]
