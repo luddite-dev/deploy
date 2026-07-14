@@ -11,19 +11,12 @@
 
 use anyhow::{Context, Result};
 use database::mungos::{find::find_collect, mongodb::bson::doc};
-use komodo_client::entities::{dns::IngressConfig, server::Server};
+use komodo_client::entities::{
+  dns::IngressConfig, server::Server, server::ServerState,
+};
 use tracing::info;
 
-use crate::state::db_client;
-
-/// The DB string form of [ServerState::Ok].
-///
-/// [ServerState] derives `strum::Display` with
-/// `serialize_all = "kebab-case"`, but the value persisted to Mongo
-/// is driven by serde (the rust variant name, eg `"Ok"`), as the
-/// codebase writes literals like `"info.state": "Draining"` directly
-/// (see `server/drain.rs`). We use the literal here to match.
-const SERVER_STATE_OK: &str = "Ok";
+use crate::state::{db_client, server_status_cache};
 
 /// Handle failover when an ingress node goes down.
 ///
@@ -67,11 +60,13 @@ pub async fn handle_ingress_failover(
 /// Select a new ingress node: `ingress_enabled=true`, state `Ok`,
 /// excluding `failed_node_id`.
 ///
-/// Query servers by `config.ingress_enabled = true` and
-/// `info.state = "Ok"`, then pick the first one whose `id` is not
-/// the failed node. Exclusion is done in Rust rather than via Mongo
-/// `$ne` on `_id` so that non-ObjectId id strings do not cause a
-/// parse failure.
+/// Queries MongoDB for `config.ingress_enabled = true` (a relatively
+/// static config field), then checks the in-memory
+/// `server_status_cache()` for `ServerState::Ok`. The cache is the
+/// authoritative runtime state — the monitor loop
+/// (`refresh_server_cache`) updates the cache every 15s but does NOT
+/// write `info.state` back to MongoDB, so querying the DB for state
+/// would return stale data.
 pub async fn select_new_ingress_node(
   failed_node_id: &str,
 ) -> Result<Server> {
@@ -85,13 +80,27 @@ pub async fn select_new_ingress_node(
   .await
   .context("failed to query ingress-enabled servers")?;
 
-  candidates
-    .into_iter()
-    .find(|s| s.id != failed_node_id)
-    .ok_or_else(|| {
-      anyhow::anyhow!(
-        "no healthy ingress-enabled server available for failover \
-         (excluding failed node {failed_node_id})"
-      )
-    })
+  let cache = server_status_cache();
+
+  for server in candidates {
+    if server.id == failed_node_id {
+      continue;
+    }
+    // Check the in-memory cache for live server state.
+    // If the server is not in the cache yet (e.g. Core just
+    // started), fall back to accepting it — the monitor loop
+    // will correct the state on the next cycle.
+    let healthy = match cache.get(&server.id).await {
+      Some(status) => matches!(status.state, ServerState::Ok),
+      None => true,
+    };
+    if healthy {
+      return Ok(server);
+    }
+  }
+
+  anyhow::bail!(
+    "no healthy ingress-enabled server available for failover \
+     (excluding failed node {failed_node_id})"
+  )
 }
