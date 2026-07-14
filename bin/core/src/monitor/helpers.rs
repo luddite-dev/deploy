@@ -1,3 +1,6 @@
+use database::mungos::{
+  by_id::update_one_by_id, mongodb::bson::doc, update::Update,
+};
 use komodo_client::entities::{
   alert::SeverityLevel,
   deployment::{Deployment, DeploymentState},
@@ -11,10 +14,11 @@ use komodo_client::entities::{
   stats::{SingleDiskUsage, SystemInformation, SystemStats},
 };
 use mogh_error::Serror;
+use tracing::warn;
 
 use crate::state::{
   CachedDeploymentStatus, CachedRepoStatus, CachedServerStatus,
-  CachedStackStatus, History, deployment_status_cache,
+  CachedStackStatus, History, db_client, deployment_status_cache,
   repo_status_cache, server_status_cache, stack_status_cache,
 };
 
@@ -29,6 +33,35 @@ pub async fn insert_server_status(
 ) {
   let health =
     system_stats.as_ref().map(|s| get_server_health(server, s));
+
+  // If the state in the DB differs from the newly computed state,
+  // persist the change so the DB field stays accurate. Skip writes
+  // for Draining/Drained — those are owned by the drain lifecycle
+  // (drain.rs) and must not be clobbered by the health poller.
+  let db_state = server.info.state;
+  let should_persist = state != db_state
+    && !matches!(state, ServerState::Draining | ServerState::Drained)
+    && !matches!(
+      db_state,
+      ServerState::Draining | ServerState::Drained
+    );
+
+  if should_persist {
+    if let Err(e) = update_one_by_id(
+      &db_client().servers,
+      &server.id,
+      Update::Set(doc! { "info.state": format!("{state:?}") }),
+      None,
+    )
+    .await
+    {
+      warn!(
+        "Failed to persist server {} state to DB | {e:#}",
+        server.name
+      );
+    }
+  }
+
   server_status_cache()
     .insert(
       server.id.clone(),

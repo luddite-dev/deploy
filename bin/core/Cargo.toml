@@ -16,6 +16,7 @@ path = "src/main.rs"
 [dependencies]
 # local
 komodo_client = { workspace = true, features = ["core"] }
+async-trait.workspace = true
 periphery_client.workspace = true
 mogh_validations.workspace = true
 interpolate.workspace = true

@@ -147,6 +147,9 @@ pub enum PeripheryRequest {
   // All in one (Write)
   PruneSystem(PruneSystem),
 
+  // Ingress (Write)
+  ReloadCaddyConfig(ReloadCaddyConfig),
+
   // Terminal
   ListTerminals(ListTerminals),
   CreateServerTerminal(CreateServerTerminal),
@@ -251,5 +254,15 @@ impl Resolve<Args> for PruneSystem {
       )
       .await,
     )
+  }
+}
+
+impl Resolve<Args> for ReloadCaddyConfig {
+  async fn resolve(
+    self,
+    _: &Args,
+  ) -> anyhow::Result<ReloadCaddyConfigResponse> {
+    crate::caddy::supervisor::reload_config(&self.config).await?;
+    Ok(ReloadCaddyConfigResponse { success: true })
   }
 }

@@ -8,6 +8,7 @@ use komodo_client::entities::{
     DatabaseConfig,
     core::{AwsCredentials, CoreConfig, Env},
   },
+  dns::{DnsProviderConfig, IngressConfig},
   logger::LogConfig,
 };
 use mogh_auth_client::config::NamedOauthConfig;
@@ -414,6 +415,29 @@ pub fn core_config() -> &'static CoreConfig {
       secrets: config.secrets,
       git_providers: config.git_providers,
       docker_registries: config.docker_registries,
+      ingress: IngressConfig {
+        dns: DnsProviderConfig {
+          provider: env
+            .komodo_ingress_dns_provider
+            .unwrap_or(config.ingress.dns.provider),
+          cloudflare_api_token: env
+            .komodo_ingress_dns_cloudflare_api_token
+            .or(config.ingress.dns.cloudflare_api_token)
+            .map(|spec| {
+              if let Some(stripped) = spec.strip_prefix("file:") {
+                std::fs::read_to_string(stripped)
+                  .ok()
+                  .map(|s| s.trim().to_string())
+                  .unwrap_or(spec)
+              } else {
+                spec
+              }
+            }),
+          base_domain: env
+            .komodo_ingress_dns_base_domain
+            .or(config.ingress.dns.base_domain),
+        },
+      },
     }
   })
 }

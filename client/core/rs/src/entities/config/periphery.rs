@@ -188,6 +188,15 @@ pub struct Env {
   pub periphery_include_disk_mounts: Option<ForgivingVec<PathBuf>>,
   /// Override `exclude_disk_mounts`
   pub periphery_exclude_disk_mounts: Option<ForgivingVec<PathBuf>>,
+
+  /// Override `ingress_enabled`
+  pub periphery_ingress_enabled: Option<bool>,
+  /// Override `http_bridge_port`
+  pub periphery_http_bridge_port: Option<u16>,
+  /// Override `caddy_binary_path`
+  pub periphery_caddy_binary_path: Option<String>,
+  /// Override `vendored_manifest_url`
+  pub periphery_vendored_manifest_url: Option<String>,
 }
 
 /// # Periphery Configuration File
@@ -325,6 +334,30 @@ pub struct PeripheryConfig {
   /// Supports any docker image repository.
   #[serde(default, alias = "docker_registry")]
   pub docker_registries: ForgivingVec<DockerRegistry>,
+
+  // ===============
+  // = HTTP BRIDGE =
+  // ===============
+  /// Port for the Iroh HTTP bridge listener (ingress nodes only).
+  /// Caddy reverse_proxies to this localhost port.
+  /// Default: 8443
+  #[serde(default = "default_http_bridge_port")]
+  pub http_bridge_port: u16,
+
+  /// Path to the vendored Caddy binary (ingress nodes only).
+  /// Default: ~/.local/share/luddite/bin/caddy-luddite
+  #[serde(default = "default_caddy_binary_path")]
+  pub caddy_binary_path: String,
+
+  /// URL to the vendored manifest.json for version checks.
+  /// Default: https://raw.githubusercontent.com/luddite-dev/vendored/main/manifest.json
+  #[serde(default = "default_vendored_manifest_url")]
+  pub vendored_manifest_url: String,
+
+  /// Whether this node is an ingress node (runs Caddy + HTTP bridge listener).
+  /// Default: false
+  #[serde(default)]
+  pub ingress_enabled: bool,
 }
 
 fn default_root_directory() -> PathBuf {
@@ -341,6 +374,21 @@ fn default_stats_polling_rate() -> Timelength {
 
 fn default_container_stats_polling_rate() -> Timelength {
   Timelength::ThirtySeconds
+}
+
+fn default_http_bridge_port() -> u16 {
+  8443
+}
+
+fn default_caddy_binary_path() -> String {
+  let home =
+    std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+  format!("{home}/.local/share/luddite/bin/caddy-luddite")
+}
+
+fn default_vendored_manifest_url() -> String {
+  "https://raw.githubusercontent.com/luddite-dev/vendored/main/manifest.json"
+    .to_string()
 }
 
 impl Default for PeripheryConfig {
@@ -368,6 +416,10 @@ impl Default for PeripheryConfig {
       secrets: Default::default(),
       git_providers: Default::default(),
       docker_registries: Default::default(),
+      http_bridge_port: default_http_bridge_port(),
+      caddy_binary_path: default_caddy_binary_path(),
+      vendored_manifest_url: default_vendored_manifest_url(),
+      ingress_enabled: false,
     }
   }
 }
@@ -441,6 +493,10 @@ impl PeripheryConfig {
             .collect(),
         })
         .collect(),
+      http_bridge_port: self.http_bridge_port,
+      caddy_binary_path: self.caddy_binary_path.clone(),
+      vendored_manifest_url: self.vendored_manifest_url.clone(),
+      ingress_enabled: self.ingress_enabled,
     }
   }
 

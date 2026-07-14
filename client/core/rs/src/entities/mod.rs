@@ -36,6 +36,8 @@ pub mod builder;
 pub mod config;
 /// Subtypes of [Deployment][deployment::Deployment].
 pub mod deployment;
+/// DNS entity types: [DnsRecord], [DnsProviderConfig], [IngressConfig].
+pub mod dns;
 /// Networks, Images, Containers.
 pub mod docker;
 /// Subtypes of [LogConfig][logger::LogConfig].

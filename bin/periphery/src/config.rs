@@ -151,6 +151,18 @@ pub fn periphery_config() -> &'static PeripheryConfig {
       secrets: config.secrets,
       git_providers: config.git_providers,
       docker_registries: config.docker_registries,
+      http_bridge_port: env
+        .periphery_http_bridge_port
+        .unwrap_or(config.http_bridge_port),
+      caddy_binary_path: env
+        .periphery_caddy_binary_path
+        .unwrap_or(config.caddy_binary_path),
+      vendored_manifest_url: env
+        .periphery_vendored_manifest_url
+        .unwrap_or(config.vendored_manifest_url),
+      ingress_enabled: env
+        .periphery_ingress_enabled
+        .unwrap_or(config.ingress_enabled),
     }
   })
 }

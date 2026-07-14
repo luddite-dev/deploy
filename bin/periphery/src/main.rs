@@ -11,10 +11,12 @@ use crate::{config::periphery_args, state::periphery_secret_key};
 extern crate tracing;
 
 mod api;
+mod caddy;
 mod config;
 mod connection;
 mod docker;
 mod helpers;
+mod http_bridge;
 mod stack;
 mod state;
 mod stats;
@@ -73,6 +75,56 @@ async fn app() -> anyhow::Result<()> {
   }
   .instrument(startup_span)
   .await;
+
+  // Start HTTP forward handler (all nodes)
+  {
+    let endpoint = endpoint.clone();
+    tokio::spawn(async move {
+      if let Err(e) =
+        http_bridge::forward::start_forward_handler(endpoint).await
+      {
+        error!("HTTP forward handler error: {e:#}");
+      }
+    });
+  }
+
+  // Start HTTP ingress bridge (ingress nodes only)
+  if config.ingress_enabled {
+    let endpoint = endpoint.clone();
+    let port = config.http_bridge_port;
+    tokio::spawn(async move {
+      if let Err(e) =
+        http_bridge::ingress::start_ingress_bridge(endpoint, port)
+          .await
+      {
+        error!("HTTP ingress bridge error: {e:#}");
+      }
+    });
+  }
+
+  // Start Caddy supervisor (ingress nodes only)
+  if config.ingress_enabled {
+    let binary_path = config.caddy_binary_path.clone();
+    let manifest_url = config.vendored_manifest_url.clone();
+    tokio::spawn(async move {
+      if let Err(e) = caddy::binary::ensure_caddy_binary(
+        &binary_path,
+        &manifest_url,
+      )
+      .await
+      {
+        error!("Failed to ensure Caddy binary: {e:#}");
+        return;
+      }
+      if let Err(e) =
+        caddy::supervisor::start_caddy(&binary_path).await
+      {
+        error!("Failed to start Caddy: {e:#}");
+        return;
+      }
+      info!("Caddy supervisor running");
+    });
+  }
 
   // Watch the threads
   while let Some(res) = handles.next().await {

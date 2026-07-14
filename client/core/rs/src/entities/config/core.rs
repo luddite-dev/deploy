@@ -19,6 +19,7 @@ use crate::{
   entities::{
     Timelength,
     config::DatabaseConfig,
+    dns::IngressConfig,
     logger::{LogConfig, LogLevel, StdioLogMode},
   },
 };
@@ -300,6 +301,13 @@ pub struct Env {
   pub komodo_repo_directory: Option<PathBuf>,
   /// Override `action_directory`
   pub komodo_action_directory: Option<PathBuf>,
+
+  /// Override `ingress.dns.provider`
+  pub komodo_ingress_dns_provider: Option<String>,
+  /// Override `ingress.dns.cloudflare_api_token`
+  pub komodo_ingress_dns_cloudflare_api_token: Option<String>,
+  /// Override `ingress.dns.base_domain`
+  pub komodo_ingress_dns_base_domain: Option<String>,
 }
 
 fn default_core_config_paths() -> Vec<PathBuf> {
@@ -727,6 +735,14 @@ pub struct CoreConfig {
   #[serde(default, skip_serializing_if = "HashMap::is_empty")]
   pub secrets: HashMap<String, String>,
 
+  // ===============
+  // = Ingress/DNS =
+  // ===============
+  /// Ingress / DNS management configuration.
+  /// Empty `provider` (default) disables the DNS ingress layer.
+  #[serde(default)]
+  pub ingress: IngressConfig,
+
   // =======
   // = SSL =
   // =======
@@ -934,6 +950,7 @@ impl Default for CoreConfig {
       git_providers: Default::default(),
       docker_registries: Default::default(),
       secrets: Default::default(),
+      ingress: Default::default(),
       ssl_enabled: Default::default(),
       ssl_key_file: default_ssl_key_file(),
       ssl_cert_file: default_ssl_cert_file(),
@@ -1051,6 +1068,18 @@ impl CoreConfig {
         .into_iter()
         .map(|(id, secret)| (id, empty_or_redacted(&secret)))
         .collect(),
+      ingress: {
+        let mut ingress = config.ingress;
+        ingress.dns.cloudflare_api_token =
+          ingress.dns.cloudflare_api_token.map(|token| {
+            if token.starts_with("file:") {
+              token
+            } else {
+              empty_or_redacted(&token)
+            }
+          });
+        ingress
+      },
       git_providers: config
         .git_providers
         .into_iter()
