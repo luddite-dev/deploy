@@ -1,5 +1,7 @@
 # Caddy + DNS Ingress Implementation Plan
 
+**Status:** ✅ All 11 tasks complete + e2e tested. PR: https://github.com/luddite-dev/deploy/pull/18
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use compose:subagent (recommended) or compose:execute to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement automatic HTTPS ingress for user-deployed Docker web apps using Caddy reverse proxy, Cloudflare DNS management, and an Iroh-based HTTP bridge from ingress nodes to worker nodes.

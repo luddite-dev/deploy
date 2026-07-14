@@ -2,8 +2,8 @@
 
 **Date:** 2026-07-12
 **Milestone:** M4
-**Status:** User-approved, pre-implementation
-**PR:** (pending)
+**Status:** Implemented + e2e tested
+**PR:** https://github.com/luddite-dev/deploy/pull/18
 
 ## [S1] Problem
 
@@ -83,7 +83,7 @@ First implementation: `CloudflareDnsProvider` in `bin/core/src/dns/cloudflare.rs
 
 | Event | DNS Action |
 |--------|-----------|
-| App deployed with HTTP proxy enabled | Create A record: `app-name.example.com → ingress_node_IP`. Store in `dns_records` table. |
+| App deployed with HTTP proxy enabled | Create A record: `app-name.example.com → ingress_node_IP`. Store in `dns_records` table. Idempotent — if record already exists in Cloudflare (e.g. re-deploy after DB reset), returns existing record ID. |
 | App undeployed/deleted | Delete A record from provider. Remove from `dns_records` table. |
 | App redeployed to different worker node | No DNS change (DNS points to ingress, not worker). |
 | Ingress node fails | Update all affected records to new ingress node IP. |
@@ -127,7 +127,7 @@ DnsRecord {
 ### Failover Sequence
 
 1. Core detects ingress node N1 is down (`ServerState → NotOk`)
-2. Core selects new ingress node N2 (`ingress_enabled: true`, `ServerState::Ok`)
+2. Core selects new ingress node N2 (`ingress_enabled: true`, `ServerState::Ok` in the in-memory `server_status_cache()`)
 3. If no other ingress node available → Core logs alert, traffic fails until ingress returns or is manually added
 4. For each `DnsRecord` where `target_node_id = N1`:
    a. Update DNS record: IP changes from `N1.public_ipv4` → `N2.public_ipv4` (via `DnsProvider::update_record`)
@@ -213,8 +213,9 @@ Key decisions:
 
 ### Caddyfile Reload Mechanism
 
-- Caddy admin endpoint on `127.0.0.1:2019` (localhost only, for security)
+- Caddy admin endpoint on `[::1]:2019` (IPv6 localhost on Linux — Caddy's `localhost` resolves to `::1` on Linux, so the admin API binds to `[::1]:2019` only; connecting to `127.0.0.1:2019` (IPv4) fails with "connection refused")
 - Periphery writes new JSON config, POSTs to `/load` (hot reload, zero downtime)
+- Caddy is started bare (`caddy run` with no `--config` or `--adapter` args); config is pushed entirely via admin API
 - `admin off` must NOT be set — it disables hot reload
 
 ## [S7] Iroh HTTP Bridge (Data Plane)
@@ -273,7 +274,7 @@ From existing `host_ports` data contract (M1 placement design):
 
 Mapping: `hostname → deployment_id → assigned_server (worker) → worker_endpoint_id + container_HTTP_port`
 
-**Prerequisite:** The `TODO(Task 8)` at `bin/core/src/resource/deployment.rs:216` and `bin/core/src/resource/stack.rs:286` must be implemented — `ReadContainerPorts` readback to populate `info.host_ports` on normal create/update (not just migration).
+**Prerequisite:** Implemented — `read_back_host_ports` is called from the Deploy handler after `update_info()` resets `host_ports` to empty. Fields needed for ingress are extracted (cloned) before the `deployment` value is moved into `RunContainer` (borrow checker E0382).
 
 ## [S8] Vendored Binary Pipeline
 
@@ -308,7 +309,7 @@ luddite-dev/vendored/
         "linux-amd64": "sha256:abc123...",
         "linux-arm64": "sha256:def456..."
       },
-      "download_url": "https://github.com/luddite-dev/vendored/releases/download/caddy-2.9.1/caddy-luddite-2.9.1-linux-{{arch}}"
+      "download_url": "https://github.com/luddite-dev/vendored/releases/download/caddy-2.9.1/caddy-luddite-2.9.1-{{arch}}"
     }
   }
 }
@@ -340,7 +341,8 @@ Default: `~/.local/share/luddite/bin/caddy-luddite` (NOT `/usr/local/bin` — th
 ### Process Supervision
 
 - Periphery spawns Caddy as child process: `caddy run --config <path> --adapter json`
-- Caddy admin endpoint (`127.0.0.1:2019`) used for config pushes
+- Caddy admin endpoint (`[::1]:2019`) used for config pushes
+- Caddy started bare (`caddy run`), config pushed via `POST /load` — NOT `caddy run --config <path> --adapter json` (that fails with "cannot adapt config without config file")
 - Periphery monitors Caddy health; restarts on crash
 - On Periphery shutdown: graceful Caddy stop
 
@@ -484,20 +486,20 @@ Cloudflare managed records: TTL = 60s for fast failover propagation.
 - `cargo test -p transport --lib` — existing tests still pass
 - `cargo fmt -- --check` — pass
 
-### Integration Verification
-- Deploy a test container with HTTP proxy on a worker node
-- Verify DNS A record created in Cloudflare
-- Verify TLS cert obtained (DNS-01 challenge succeeds)
-- Verify HTTP request to `myapp.example.com` reaches the container
-- Verify HTTPS redirect works (HTTP→HTTPS)
-- Verify Caddy admin API hot reload works (add/remove app without downtime)
+### Integration Verification (E2E Tested ✅)
+- ✅ Deployed a test container (nginx:alpine) with HTTP proxy on the ingress node
+- ✅ DNS A record created in Cloudflare (`lud-test1.duti.dev → 45.86.125.236`)
+- ✅ TLS cert obtained via Cloudflare DNS-01 challenge
+- ✅ `curl https://lud-test1.duti.dev` returns nginx welcome page (full traffic flow: Caddy → HTTP bridge → local container)
+- ✅ Caddy admin API hot reload works (config pushed via Iroh RPC `ReloadCaddyConfig`)
+- ✅ Subdomain modify: changed `lud-test1` → `lud-test2`, redeployed, new record created + working
+- ✅ Deployment delete: DNS records deleted from Cloudflare automatically
+- ✅ Idempotent DNS create: re-deploy does not fail when record already exists in Cloudflare
 
 ### Failover Verification
-- Stop Caddy/Periphery on ingress node N1
-- Verify Core detects `ServerState → NotOk`
-- Verify DNS records updated to new ingress node N2
-- Verify Caddy on N2 reloaded with migrated routes
-- Verify traffic flows through N2
+- Not yet tested in live environment
+- `select_new_ingress_node` reads server state from `server_status_cache()` (in-memory), not the stale DB field
+- Monitor loop now persists `info.state` transitions to DB (Ok/NotOk/Disabled), excluding drain states (Draining/Drained)
 
 ### Vendoring Verification
 - Verify `manifest.json` fetch + checksum validation
@@ -513,3 +515,21 @@ Cloudflare managed records: TTL = 60s for fast failover propagation.
 - **WebSocket proxying through the bridge** — needs testing. Raw byte piping should work for WebSocket upgrades, but needs explicit verification.
 - **Multi-ingress load balancing** — single ingress node per deployment. No DNS-level load balancing across multiple ingress IPs.
 - **Core's own HTTP API behind Caddy** — separate from this design. Core's API (:9120 axum server) remains behind operator-managed proxy or direct port exposure.
+
+## [S13] E2E Bugs Found and Resolved
+
+Seven bugs discovered during live end-to-end testing of the full ingress pipeline:
+
+1. **Deploy handler missing ingress wiring** — `Deploy::resolve()` resets `host_ports` to empty via `update_info()` but never called `read_back_host_ports()` or `try_setup_ingress()`. Fix: added both calls after `update_info()`, extracting `deployment_name` + `http_proxy` before the `deployment` value is moved into `RunContainer` (borrow checker E0382).
+
+2. **`resolve_zone_id` passed FQDN instead of zone name** — was called with `lud-test1.duti.dev` but Cloudflare's zones API expects the registered domain (`duti.dev`). Fix: pass `base_domain` to `resolve_zone_id`, the FQDN to `create_record`.
+
+3. **Caddy admin API IPv4/IPv6 mismatch** — Caddy on Linux binds admin API to `[::1]:2019` (IPv6 localhost), but Periphery's `supervisor.rs` used `127.0.0.1:2019` (IPv4). POST to IPv4 was refused — nothing listens there. Fix: changed `ADMIN_API` to `http://[::1]:2019`.
+
+4. **Cloudflare API token `file:` prefix not resolved** — the config env override passed the raw `file:/path` string to Caddy's JSON config instead of reading the file. Fix: added file resolution logic in `core_config()` — strips `file:` prefix, reads the file contents, trims whitespace.
+
+5. **Duplicate DNS record on re-deploy** — Cloudflare returns 400 "An identical record already exists" (error 81058) when re-deploying after the DB's `DnsRecord` entity was lost. Fix: made `create_record` idempotent — pre-flight `GET /zones/{zone_id}/dns_records?name={name}&type={type}`, return existing record ID if found.
+
+6. **Iroh self-connection** — when the ingress node IS the worker node (common in single-node setups), Iroh cannot connect to its own endpoint. Fix: added `proxy_to_local()` shortcut in `http_bridge/ingress.rs` — if target endpoint matches local endpoint ID, proxy directly via TCP to `127.0.0.1:port`, bypassing Iroh entirely.
+
+7. **Server state stuck at "NotOk" in DB** — the monitor loop (`refresh_server_cache`) only wrote server state to the in-memory `server_status_cache()`, never to MongoDB. The DB `info.state` field was permanently stuck at `"NotOk"` (the default from server creation). Fix: (a) `select_new_ingress_node()` now reads from `server_status_cache()` instead of querying the DB; (b) `insert_server_status()` now persists state transitions to the DB (excluding drain states Draining/Drained, which are owned by `drain.rs`).
