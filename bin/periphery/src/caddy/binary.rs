@@ -71,9 +71,11 @@ pub async fn ensure_caddy_binary(
 
   let expected_checksum = artifact
     .checksums
-    .get("sha256")
+    .get(arch)
     .ok_or_else(|| {
-      anyhow::anyhow!("manifest missing sha256 checksum for caddy")
+      anyhow::anyhow!(
+        "manifest missing sha256 checksum for caddy on {arch}"
+      )
     })?
     .trim_start_matches("sha256:");
 

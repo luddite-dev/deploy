@@ -79,7 +79,6 @@ pub async fn select_new_ingress_node(
     &db_client().servers,
     doc! {
       "config.ingress_enabled": true,
-      "info.state": SERVER_STATE_OK,
     },
     None,
   )

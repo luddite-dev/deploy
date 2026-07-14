@@ -76,9 +76,9 @@ pub async fn create_deployment_dns_record(
     })?;
   let fqdn = format!("{hostname}.{base_domain}");
   let zone_id = provider
-    .resolve_zone_id(&fqdn)
+    .resolve_zone_id(base_domain)
     .await
-    .with_context(|| format!("resolve zone id for {fqdn}"))?;
+    .with_context(|| format!("resolve zone id for {base_domain}"))?;
   let now = komodo_timestamp();
 
   // Create A record if IPv4 provided.

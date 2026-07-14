@@ -130,6 +130,35 @@ impl DnsProvider for CloudflareDnsProvider {
     content: &str,
     ttl: u32,
   ) -> Result<String> {
+    // Check if an identical record already exists (idempotent create).
+    // This handles re-deploys where the DNS record was created on a
+    // previous run but the local DB record was lost.
+    let list_url =
+      format!("{CLOUDFLARE_API_BASE}/zones/{zone_id}/dns_records");
+    let resp = self
+      .send_and_check(
+        self
+          .client
+          .get(&list_url)
+          .header("Authorization", self.auth_bearer())
+          .query(&[("name", name), ("type", record_type.as_str())]),
+        &format!("list records request for {name}"),
+      )
+      .await?;
+    let resp = resp
+      .json::<CloudflareResponse<Vec<RecordResult>>>()
+      .await
+      .with_context(|| {
+        format!("Failed to parse list records response for {name}")
+      })?;
+
+    if let Some(existing) =
+      resp.result.as_ref().and_then(|r| r.first())
+    {
+      // Record already exists — return its ID.
+      return Ok(existing.id.clone());
+    }
+
     let url =
       format!("{CLOUDFLARE_API_BASE}/zones/{zone_id}/dns_records");
     let body = CreateRecordBody {

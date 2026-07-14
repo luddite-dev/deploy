@@ -12,7 +12,9 @@ use tokio::process::Command;
 use tracing::{error, info};
 
 /// The Caddy admin API base URL.
-const ADMIN_API: &str = "http://127.0.0.1:2019";
+/// Caddy binds to `localhost:2019` which on Linux resolves to `[::1]`
+/// (IPv6). Using `[::1]` explicitly avoids IPv4-only connect failures.
+const ADMIN_API: &str = "http://[::1]:2019";
 
 /// Spawn the Caddy process and supervise it.
 ///
@@ -30,8 +32,6 @@ pub async fn start_caddy(binary_path: &str) -> Result<()> {
     loop {
       let mut child = match Command::new(&binary_path)
         .arg("run")
-        .arg("--adapter")
-        .arg("json")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

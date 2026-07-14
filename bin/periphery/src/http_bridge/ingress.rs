@@ -13,7 +13,7 @@
 //! 6. Read the raw HTTP response from the stream
 //! 7. Parse it into status + headers + body and return as an axum Response
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use axum::{
@@ -41,6 +41,10 @@ struct BridgeState {
   endpoint: Endpoint,
   /// Connection pool — one QUIC connection per worker endpoint.
   pool: ConnPool,
+  /// Local EndpointId string — used to short-circuit when
+  /// the target is the local Periphery itself (Iroh cannot
+  /// connect to its own endpoint).
+  local_endpoint_id: String,
 }
 
 /// Start the ingress HTTP bridge listener.
@@ -60,6 +64,7 @@ pub async fn start_ingress_bridge(
   let state = BridgeState {
     endpoint,
     pool: Arc::new(RwLock::new(HashMap::new())),
+    local_endpoint_id: local_id.to_string(),
   };
 
   let app = Router::new()
@@ -119,6 +124,13 @@ async fn handle_request(
       ));
     }
   };
+
+  // Short-circuit: if the target is the local Periphery itself,
+  // connect directly via TCP (Iroh cannot connect to its own
+  // endpoint).
+  if target_endpoint == state.local_endpoint_id {
+    return proxy_to_local(target_port, &raw_request).await;
+  }
 
   // Get or create a pooled Iroh connection to the worker
   let conn = match get_or_create_connection(&state, &target_endpoint)
@@ -184,6 +196,73 @@ async fn handle_request(
   };
 
   // Parse the raw HTTP response into an axum Response
+  parse_http_response(&response_bytes)
+}
+
+/// Proxy a raw HTTP/1.1 request directly to `127.0.0.1:port`,
+/// bypassing Iroh entirely (used when the target is the local
+/// Periphery itself).
+async fn proxy_to_local(
+  port: u16,
+  raw_request: &[u8],
+) -> Result<Response<Body>, (StatusCode, String)> {
+  use tokio::io::{AsyncReadExt, AsyncWriteExt};
+  use tokio::net::TcpStream;
+  use tokio::time::timeout;
+
+  let addr = format!("127.0.0.1:{port}");
+  let mut stream =
+    match timeout(Duration::from_secs(30), TcpStream::connect(&addr))
+      .await
+    {
+      Ok(Ok(stream)) => stream,
+      Ok(Err(e)) => {
+        warn!("Local proxy: failed to connect to {addr} | {e:#}");
+        return Err((
+          StatusCode::BAD_GATEWAY,
+          format!("Failed to connect to local port {port}: {e}"),
+        ));
+      }
+      Err(_) => {
+        return Err((
+          StatusCode::GATEWAY_TIMEOUT,
+          format!("Timed out connecting to local port {port}"),
+        ));
+      }
+    };
+
+  // Write the raw HTTP request
+  if let Err(e) = stream.write_all(raw_request).await {
+    return Err((
+      StatusCode::BAD_GATEWAY,
+      format!("Failed to write request to container: {e}"),
+    ));
+  }
+  stream.shutdown().await.ok();
+
+  // Read the full HTTP response
+  let mut response_bytes = Vec::new();
+  match timeout(
+    Duration::from_secs(300),
+    stream.read_to_end(&mut response_bytes),
+  )
+  .await
+  {
+    Ok(Ok(_)) => {}
+    Ok(Err(e)) => {
+      return Err((
+        StatusCode::BAD_GATEWAY,
+        format!("Failed to read response from container: {e}"),
+      ));
+    }
+    Err(_) => {
+      return Err((
+        StatusCode::GATEWAY_TIMEOUT,
+        "Timed out reading response from container".to_string(),
+      ));
+    }
+  }
+
   parse_http_response(&response_bytes)
 }
 

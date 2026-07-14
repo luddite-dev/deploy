@@ -57,7 +57,7 @@ mod action;
 mod alerter;
 mod build;
 mod builder;
-mod deployment;
+pub mod deployment;
 mod procedure;
 mod refresh;
 mod repo;

@@ -449,7 +449,7 @@ async fn validate_config(
 ///
 /// This mirrors the readback performed by the drain migration path
 /// (`bin/core/src/server/drain.rs:324`).
-async fn read_back_host_ports(
+pub async fn read_back_host_ports(
   server: &Server,
   container_name: &str,
   deployment_id: &str,
@@ -541,7 +541,7 @@ const DEFAULT_BRIDGE_PORT: u16 = 8443;
 ///    at the ingress node's public IPs.
 /// 3. Build the complete Caddy JSON config (all http_proxy routes)
 ///    and push it to the ingress Periphery via `ReloadCaddyConfig`.
-async fn try_setup_ingress(
+pub async fn try_setup_ingress(
   deployment: &Deployment,
   http_proxy: &HttpProxyConfig,
 ) -> anyhow::Result<()> {

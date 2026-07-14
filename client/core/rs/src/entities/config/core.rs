@@ -301,6 +301,13 @@ pub struct Env {
   pub komodo_repo_directory: Option<PathBuf>,
   /// Override `action_directory`
   pub komodo_action_directory: Option<PathBuf>,
+
+  /// Override `ingress.dns.provider`
+  pub komodo_ingress_dns_provider: Option<String>,
+  /// Override `ingress.dns.cloudflare_api_token`
+  pub komodo_ingress_dns_cloudflare_api_token: Option<String>,
+  /// Override `ingress.dns.base_domain`
+  pub komodo_ingress_dns_base_domain: Option<String>,
 }
 
 fn default_core_config_paths() -> Vec<PathBuf> {

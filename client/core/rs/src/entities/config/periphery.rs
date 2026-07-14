@@ -188,6 +188,15 @@ pub struct Env {
   pub periphery_include_disk_mounts: Option<ForgivingVec<PathBuf>>,
   /// Override `exclude_disk_mounts`
   pub periphery_exclude_disk_mounts: Option<ForgivingVec<PathBuf>>,
+
+  /// Override `ingress_enabled`
+  pub periphery_ingress_enabled: Option<bool>,
+  /// Override `http_bridge_port`
+  pub periphery_http_bridge_port: Option<u16>,
+  /// Override `caddy_binary_path`
+  pub periphery_caddy_binary_path: Option<String>,
+  /// Override `vendored_manifest_url`
+  pub periphery_vendored_manifest_url: Option<String>,
 }
 
 /// # Periphery Configuration File

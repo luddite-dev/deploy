@@ -205,6 +205,8 @@ impl Resolve<ExecuteArgs> for Deploy {
     update_update(update.clone()).await?;
 
     let deployment_id = deployment.id.clone();
+    let deployment_name = deployment.name.clone();
+    let http_proxy = deployment.config.http_proxy.clone();
     let preserved_last_backup = deployment.info.last_backup.clone();
 
     match periphery_client(&server)
@@ -246,6 +248,40 @@ impl Resolve<ExecuteArgs> for Deploy {
         "Failed to update deployment {} info after deploy | {e:#}",
         deployment_id
       );
+    }
+
+    // Read back container host ports so the ingress controller can
+    // discover them. Best-effort: a failure here is logged, not fatal.
+    resource::deployment::read_back_host_ports(
+      &server,
+      &deployment_name,
+      &deployment_id,
+    )
+    .await;
+
+    // Re-fetch the deployment to get the updated host_ports.
+    if let Some(http_proxy) = http_proxy {
+      match resource::get::<Deployment>(&deployment_id).await {
+        Ok(refreshed) => {
+          if let Err(e) = resource::deployment::try_setup_ingress(
+            &refreshed,
+            &http_proxy,
+          )
+          .await
+          {
+            warn!(
+              "Failed to set up ingress for deployment {}: {e:#}",
+              deployment_name
+            );
+          }
+        }
+        Err(e) => {
+          warn!(
+            "Failed to re-fetch deployment {} for ingress setup | {e:#}",
+            deployment_name
+          );
+        }
+      }
     }
 
     update.finalize();
