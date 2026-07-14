@@ -19,8 +19,12 @@ fulfilling any planned milestone are welcome.
   with Iroh p2p (QUIC + TLS 1.3, raw public keys, unified Periphery→Core
   direction, bearer token onboarding). See
   [`docs/compose/specs/2026-07-12-iroh-transport-design.md`](docs/compose/specs/2026-07-12-iroh-transport-design.md).
-- **M4 — Caddy reverse-proxy integration** — consume the assigned-port data
-  contract to auto-configure Caddy for HTTP-proxied services.
+- **M4 — Caddy + DNS ingress** ✅ — automatic HTTPS for deployed web apps.
+  Vendored Caddy binary with Cloudflare DNS plugin, JSON config via admin API
+  hot reload, trait-abstracted DNS provider (Cloudflare first), Iroh HTTP
+  bridge data plane with local shortcut, ACME DNS-01 TLS, ingress failover,
+  and a vendored binary CI pipeline. See
+  [`docs/compose/specs/2026-07-12-caddy-dns-ingress-design.md`](docs/compose/specs/2026-07-12-caddy-dns-ingress-design.md).
 
 ## Upstream release history (Komodo, inherited)
 
