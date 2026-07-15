@@ -9,42 +9,26 @@ I currently have most of my infrastructure self-hosted on Kubernetes. It was a
 lot of effort to set up, there are lots of footguns, and the way storage is
 dealt with has caused more downtime than it has saved.
 
-Kubernetes is just a tad too complicated, podman itself a bit too limited.
+The goal of this project is to distill down my Kubernetes workflow & simplify it
+for small self-hosted deployments with built-in support for persistent storage,
+backups, DNS management, HTTPS, and port allocation. We also aim to use podman
+instead of docker for rootless and out of general preference.
 
-The goal of this project is to simplify small self-hosted deployments with
-built-in support for persistent storage, backups, DNS, HTTPS, and port-based
-allocation. It is a wrapper around Podman, striving to use existing standards
-where possible rather than creating things from scratch (e.g. compose for
-multi-service deployments).
+The overall vibe should be "podman compose, but with everything else around it
+taken care of".
 
-## Why fork Komodo?
+This is a fork of [Komodo](https://komo.do/), chosen as it provides a solid
+open-source foundation for what I need: Core/Periphery architecture, GitOps
+sync, and working with containers. With Komodo, we:
 
-Komodo provides the closest existing open-source foundation for what luddite
-needs: a Core/Periphery desired-state control plane, GitOps sync, mTLS auth, and
-a REST API with OpenAPI. Rather than rebuild from scratch, we fork and adapt:
-
-- **Drop Swarm mode** — small self-hosted deployments don't need a second
-  orchestration model. This removes `swarm_id`, the `docker stack` executor, and
-  Swarm-only entity types.
-- **Typed port and volume config** — replace Komodo's free-text `String` fields
-  with structured `Vec<PortMapping>` and `Vec<VolumeMount>`. Bind mounts are
-  unrepresentable by typing; only named volumes are allowed.
-- **Placement scheduler** — auto-assign deployments to Periphery nodes based on
-  host-port availability, instead of requiring operators to manually pin each
-  deployment to a server. `server_id` becomes an optional hint.
-- **S3-backed volume lifecycle** — export/import named volumes to S3-compatible
-  storage via `podman volume export`/`import`. Enables node draining with data
-  migration: backup volumes on the source, restore on the target, then deploy.
-- **Node draining** — mark a server `Drain`; Core walks its deployments and
-  migrates them to other nodes with volume data intact.
-- **Iroh p2p transport** — replace Komodo's WebSocket + mutual Noise handshake
-  transport with [Iroh](https://iroh.computer) (QUIC + TLS 1.3 with raw public
-  keys). Core and Periphery are Iroh endpoints identified by Ed25519
-  `EndpointId`s. Periphery always dials Core (unified direction). Onboarding is
-  a bearer token over the first Iroh stream, validated against DB records.
-  Eliminates self-signed SSL cert generation, the Noise XX handshake, and the
-  bidirectional Core→Periphery / Periphery→Core duality (Iroh's NAT traversal
-  handles all topologies including Core behind NAT).
+- Drop swarm mode. We handle orchestration rather than relying on docker.
+- Take control of the placement scheduler. We auto-assign deployments to nodes
+  by default, so that we can seamlessly move to another node when one is
+  decommissioned.
+- S3-backed volume store allows exporting/importing named volumes so that we can
+  automate backups and restore data onto other nodes when necessary
+- Iroh p2p transport replaces the original websocket + Noise handshake protocol.
+  Both because Iroh is cool and I often have nodes without public IP addresses.
 
 <details>
 
