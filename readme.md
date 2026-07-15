@@ -1,8 +1,13 @@
 # Luddite Deploy
 
-> [!NOTE] This project is a hard fork of
-> [Komodo](https://github.com/moghtech/komodo) (GPL-V3). The original Komodo
-> README is preserved in the details block below.
+> [!NOTE]
+>
+> This project is a hard fork of [Komodo](https://github.com/moghtech/komodo)
+> (GPL-V3). The original Komodo README is preserved in the details block below.
+
+I currently have most of my infrastructure self-hosted on Kubernetes. It was a
+lot of effort to set up, there are lots of footguns, and the way storage is
+dealt with has caused more downtime than it has saved.
 
 Kubernetes is just a tad too complicated, podman itself a bit too limited.
 
@@ -40,6 +45,14 @@ a REST API with OpenAPI. Rather than rebuild from scratch, we fork and adapt:
   Eliminates self-signed SSL cert generation, the Noise XX handshake, and the
   bidirectional Core→Periphery / Periphery→Core duality (Iroh's NAT traversal
   handles all topologies including Core behind NAT).
+
+<details>
+
+<summary>
+
+# Milestones
+
+</summary>
 
 ## Milestone 1 — adaptive placement (landed)
 
@@ -96,43 +109,45 @@ Design spec:
 
 ## Milestone 4 — Caddy + DNS ingress (landed)
 
-Automatic HTTPS for user-deployed web apps — no manual reverse proxy, no
-manual TLS certs, no manual DNS. Deploy a container with an HTTP proxy config
-and get a routable `https://<subdomain>.<base_domain>` URL automatically:
+Automatic HTTPS for user-deployed web apps — no manual reverse proxy, no manual
+TLS certs, no manual DNS. Deploy a container with an HTTP proxy config and get a
+routable `https://<subdomain>.<base_domain>` URL automatically:
 
 - **Caddy reverse proxy** — vendored static binary (xcaddy-built with the
-  Cloudflare DNS plugin) running as a host process on designated ingress
-  nodes. Configured entirely via JSON through Caddy's admin API (`POST /load`),
-  no Caddyfile. Hot reload on every deployment change — zero downtime.
-- **Cloudflare DNS management** — trait-abstracted `DnsProvider` interface
-  with Cloudflare as the first implementation. Core creates/updates/deletes A
-  records for app subdomains automatically. Idempotent — re-deploys detect
-  existing records instead of failing.
+  Cloudflare DNS plugin) running as a host process on designated ingress nodes.
+  Configured entirely via JSON through Caddy's admin API (`POST /load`), no
+  Caddyfile. Hot reload on every deployment change — zero downtime.
+- **Cloudflare DNS management** — trait-abstracted `DnsProvider` interface with
+  Cloudflare as the first implementation. Core creates/updates/deletes A records
+  for app subdomains automatically. Idempotent — re-deploys detect existing
+  records instead of failing.
 - **Iroh HTTP bridge (data plane)** — in-process axum HTTP listener on the
-  ingress Periphery opens Iroh QUIC streams to worker Periphery nodes. When
-  the ingress node is also the worker (single-node setup), traffic
-  short-circuits directly to `127.0.0.1:<port>` without going through Iroh.
+  ingress Periphery opens Iroh QUIC streams to worker Periphery nodes. When the
+  ingress node is also the worker (single-node setup), traffic short-circuits
+  directly to `127.0.0.1:<port>` without going through Iroh.
 - **TLS via ACME DNS-01** — Caddy obtains certificates using Cloudflare DNS-01
-  challenges (no port 80 needed for ACME). The same Cloudflare API token is
-  used for both record management and certificate issuance.
+  challenges (no port 80 needed for ACME). The same Cloudflare API token is used
+  for both record management and certificate issuance.
 - **Ingress failover** — when an ingress node goes down, Core migrates DNS
   records to a healthy ingress node. Server state is tracked in an in-memory
   cache (refreshed every 15s via `PollStatus` health checks) and persisted to
   the DB on state transitions.
 - **Vendored binary pipeline** — separate
   [`luddite-dev/vendored`](https://github.com/luddite-dev/vendored) repo with
-  daily CI that checks for new Caddy releases, builds with xcaddy, and
-  publishes release assets with SHA256 checksums + a manifest.json version
-  manifest. Periphery auto-detects and downloads binary updates.
+  daily CI that checks for new Caddy releases, builds with xcaddy, and publishes
+  release assets with SHA256 checksums + a manifest.json version manifest.
+  Periphery auto-detects and downloads binary updates.
 
-End-to-end verified: deploy → DNS A record created → Caddy config pushed →
-HTTPS reverse proxy working → subdomain modify → deployment delete → DNS
-records cleaned up.
+End-to-end verified: deploy → DNS A record created → Caddy config pushed → HTTPS
+reverse proxy working → subdomain modify → deployment delete → DNS records
+cleaned up.
 
 Design spec:
 [`docs/compose/specs/2026-07-12-caddy-dns-ingress-design.md`](docs/compose/specs/2026-07-12-caddy-dns-ingress-design.md)
 · Implementation plan:
 [`docs/compose/plans/2026-07-12-caddy-dns-ingress.md`](docs/compose/plans/2026-07-12-caddy-dns-ingress.md)
+
+</details>
 
 <details>
 <summary>Original Komodo README</summary>

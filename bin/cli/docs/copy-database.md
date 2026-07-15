@@ -1,11 +1,11 @@
 # Copy Database Utility
 
 Copy the Komodo database contents between running, mongo-compatible databases.
-Can be used to move between MongoDB / FerretDB, or upgrade from FerretDB v1 to v2.
+Can be used to move between MongoDB / FerretDB, or upgrade from FerretDB v1 to
+v2.
 
 ```yaml
 services:
-
   copy_database:
     image: ghcr.io/moghtech/komodo-cli
     command: km database copy -y
@@ -14,24 +14,26 @@ services:
       KOMODO_DATABASE_DB_NAME: ${KOMODO_DATABASE_DB_NAME:-komodo}
       KOMODO_CLI_DATABASE_TARGET_URI: mongodb://${KOMODO_DB_USERNAME}:${KOMODO_DB_PASSWORD}@target:27017
       KOMODO_CLI_DATABASE_TARGET_DB_NAME: ${KOMODO_DATABASE_DB_NAME:-komodo}
-
 ```
 
 ## FerretDB v2 Update Guide
 
-Up to Komodo 1.17.5, users who wanted to use Postgres / Sqlite were instructed to deploy FerretDB v1.
-Now that v2 is out however, v1 will go largely unsupported. Users are recommended to migrate to v2 for
-the best performance and ongoing support / updates, however the internal data structures
-have changed and this cannot be done in-place. 
+Up to Komodo 1.17.5, users who wanted to use Postgres / Sqlite were instructed
+to deploy FerretDB v1. Now that v2 is out however, v1 will go largely
+unsupported. Users are recommended to migrate to v2 for the best performance and
+ongoing support / updates, however the internal data structures have changed and
+this cannot be done in-place.
 
-Also note that FerretDB v2 no longer supports Sqlite, and only supports 
-a [customized Postgres distribution](https://docs.ferretdb.io/installation/documentdb/docker/).
-Nonetheless, it remains a solid option for hosts which [do not support mongo](https://github.com/moghtech/komodo/issues/59).
+Also note that FerretDB v2 no longer supports Sqlite, and only supports a
+[customized Postgres distribution](https://docs.ferretdb.io/installation/documentdb/docker/).
+Nonetheless, it remains a solid option for hosts which
+[do not support mongo](https://github.com/moghtech/komodo/issues/59).
 
-Also note, the same basic process outlined below can also be used to move between MongoDB and FerretDB, just replace FerretDB v2
-with the database you wish to move to.
+Also note, the same basic process outlined below can also be used to move
+between MongoDB and FerretDB, just replace FerretDB v2 with the database you
+wish to move to.
 
-### **Step 1**: *Add* the new database to the top of your existing Komodo compose file.
+### **Step 1**: _Add_ the new database to the top of your existing Komodo compose file
 
 **Don't forget to also add the new volumes.**
 
@@ -78,11 +80,12 @@ volumes:
   ferretdb-state:
 ```
 
-### **Step 2**: *Add* the database copy utility to Komodo compose file.
+### **Step 2**: _Add_ the database copy utility to Komodo compose file
 
-The SOURCE_URI points to the existing database, ie the old FerretDB v1, and it depends
-on whether it was deployed using Postgres or Sqlite. The example below uses the Postgres one,
-but if you use Sqlite it should just be something like `mongodb://ferretdb:27017`.
+The SOURCE_URI points to the existing database, ie the old FerretDB v1, and it
+depends on whether it was deployed using Postgres or Sqlite. The example below
+uses the Postgres one, but if you use Sqlite it should just be something like
+`mongodb://ferretdb:27017`.
 
 ```yaml
 ## In Komodo compose.yaml
@@ -101,18 +104,22 @@ services:
   ...(unchanged)
 ```
 
-### **Step 3**: *Compose Up* the new additions
+### **Step 3**: _Compose Up_ the new additions
 
-Run `docker compose -p komodo --env-file compose.env -f xxxxx.compose.yaml up -d`, filling in the name of your compose.yaml.
-This will start up both the old and new database, and copy the data to the new one.
+Run
+`docker compose -p komodo --env-file compose.env -f xxxxx.compose.yaml up -d`,
+filling in the name of your compose.yaml. This will start up both the old and
+new database, and copy the data to the new one.
 
 Wait a few moments for the `copy_database` service to finish. When it exits,
-confirm the logs show the data was moved successfully, and move on to the next step.
+confirm the logs show the data was moved successfully, and move on to the next
+step.
 
 ### **Step 4**: Point Komodo Core to the new database
 
-In your Komodo compose.yaml, first *comment out* the `copy_database` service and old ferretdb v1 service/s.
-Then update the `core` service environment to point to `ferretdb2`.
+In your Komodo compose.yaml, first _comment out_ the `copy_database` service and
+old ferretdb v1 service/s. Then update the `core` service environment to point
+to `ferretdb2`.
 
 ```yaml
 services:
@@ -126,10 +133,12 @@ services:
       KOMODO_DATABASE_PASSWORD: ${KOMODO_DB_PASSWORD}
 ```
 
-### **Step 5**: Final *Compose Up*
+### **Step 5**: Final _Compose Up_
 
-Repeat the same `docker compose` command as before to apply the changes, and then try navigating to your Komodo web page.
-If it works, congrats, **you are done**. You can clean up the compose file if you would like, removing the old volumes etc.
+Repeat the same `docker compose` command as before to apply the changes, and
+then try navigating to your Komodo web page. If it works, congrats, **you are
+done**. You can clean up the compose file if you would like, removing the old
+volumes etc.
 
-If it does not work, check the logs for any obvious issues, and if necessary you can undo the previous steps
-to go back to using the previous database.
+If it does not work, check the logs for any obvious issues, and if necessary you
+can undo the previous steps to go back to using the previous database.

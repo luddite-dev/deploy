@@ -21,9 +21,9 @@ fulfilling any planned milestone are welcome.
   [`docs/compose/specs/2026-07-12-iroh-transport-design.md`](docs/compose/specs/2026-07-12-iroh-transport-design.md).
 - **M4 — Caddy + DNS ingress** ✅ — automatic HTTPS for deployed web apps.
   Vendored Caddy binary with Cloudflare DNS plugin, JSON config via admin API
-  hot reload, trait-abstracted DNS provider (Cloudflare first), Iroh HTTP
-  bridge data plane with local shortcut, ACME DNS-01 TLS, ingress failover,
-  and a vendored binary CI pipeline. See
+  hot reload, trait-abstracted DNS provider (Cloudflare first), Iroh HTTP bridge
+  data plane with local shortcut, ACME DNS-01 TLS, ingress failover, and a
+  vendored binary CI pipeline. See
   [`docs/compose/specs/2026-07-12-caddy-dns-ingress-design.md`](docs/compose/specs/2026-07-12-caddy-dns-ingress-design.md).
 
 ## Upstream release history (Komodo, inherited)

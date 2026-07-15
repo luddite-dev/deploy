@@ -1,26 +1,57 @@
 # Adaptive Placement Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use compose:subagent (recommended) or compose:execute to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use compose:subagent
+> (recommended) or compose:execute to implement this plan task-by-task. Steps
+> use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add placement scheduling, S3-backed volume lifecycle, and node draining to the Komodo fork so operators no longer manually choose which server runs each deployment.
+**Goal:** Add placement scheduling, S3-backed volume lifecycle, and node
+draining to the Komodo fork so operators no longer manually choose which server
+runs each deployment.
 
-**Architecture:** Three Core-side subsystems — `placement/` (pick target by port availability), `backup/` (cron + on-demand volume export/import via S3), `server/drain.rs` (orchestrate migrations). Periphery gains 5 new RPCs (`CheckHostPorts`, `ReadContainerPorts`, `BackupVolume`, `RestoreVolume`, `ListVolumeBackups`). Entity types in `client/core/rs/src/entities/` are restructured: typed `Vec<PortMapping>`/`Vec<VolumeMount>` replace free-text strings, Swarm mode is dropped entirely.
+**Architecture:** Three Core-side subsystems — `placement/` (pick target by port
+availability), `backup/` (cron + on-demand volume export/import via S3),
+`server/drain.rs` (orchestrate migrations). Periphery gains 5 new RPCs
+(`CheckHostPorts`, `ReadContainerPorts`, `BackupVolume`, `RestoreVolume`,
+`ListVolumeBackups`). Entity types in `client/core/rs/src/entities/` are
+restructured: typed `Vec<PortMapping>`/`Vec<VolumeMount>` replace free-text
+strings, Swarm mode is dropped entirely.
 
-**Tech Stack:** Rust (Komodo workspace), `netstat2` crate (port probing), `rust-s3` crate (S3 client), `cron` crate (schedule parsing), `serde_yaml` (compose validation, already a dep), `podman volume export`/`import` CLI (volume data transfer).
+**Tech Stack:** Rust (Komodo workspace), `netstat2` crate (port probing),
+`rust-s3` crate (S3 client), `cron` crate (schedule parsing), `serde_yaml`
+(compose validation, already a dep), `podman volume export`/`import` CLI (volume
+data transfer).
 
 ## Global Constraints
 
-- **Hard fork — no backward compatibility.** Break types freely; do not add migration shims.
-- **Module path:** `github.com/luddite-dev/deploy` is irrelevant here — this is the Komodo Rust workspace. Cargo workspace at repo root.
-- **Podman version floor:** `podman volume export` and `podman volume import` must exist. Periphery refuses to start if they don't.
-- **Periphery runs on host** (not containerized) — `netstat2` reads `/proc/net/tcp` directly.
-- **S3 destination config is global**, lives in Core config, forwarded per-operation to Periphery. Periphery is stateless about backup targets.
-- **No test infrastructure exists** in the Komodo workspace. Each task that adds tests must add `[dev-dependencies]` to the relevant `Cargo.toml` and create `tests/` directories.
-- **Swarm mode is dropped entirely.** Delete `bin/periphery/src/api/swarm/`, `client/periphery/rs/src/api/swarm.rs`, `client/core/rs/src/entities/swarm.rs`, and `bin/core/src/resource/swarm.rs`. Remove all `swarm_id` fields and `get_swarm_or_server` dual-resolution logic.
-- **Entity types live in** `client/core/rs/src/entities/` — typeshare-annotated, shared between Core, Periphery, and the TypeScript UI.
-- **Periphery API pattern:** request types in `client/periphery/rs/src/api/<topic>.rs` (derive `Resolve`), enum variants in `bin/periphery/src/api/mod.rs:47` (`PeripheryRequest` enum), handler impls in `bin/periphery/src/api/<topic>.rs` (`impl Resolve<Args> for Type`).
-- **Core → Periphery dispatch:** `periphery.request(RequestType { ... }).await` via `bin/core/src/periphery/mod.rs:84`.
-- **KomodoResource trait:** `bin/core/src/resource/mod.rs:90`. Each resource type implements it with associated `Config`/`Info`/`PartialConfig` types and hook methods (`validate_create_config`, `post_create`, `validate_update_config`, `post_update`, `pre_delete`, `post_delete`).
+- **Hard fork — no backward compatibility.** Break types freely; do not add
+  migration shims.
+- **Module path:** `github.com/luddite-dev/deploy` is irrelevant here — this is
+  the Komodo Rust workspace. Cargo workspace at repo root.
+- **Podman version floor:** `podman volume export` and `podman volume import`
+  must exist. Periphery refuses to start if they don't.
+- **Periphery runs on host** (not containerized) — `netstat2` reads
+  `/proc/net/tcp` directly.
+- **S3 destination config is global**, lives in Core config, forwarded
+  per-operation to Periphery. Periphery is stateless about backup targets.
+- **No test infrastructure exists** in the Komodo workspace. Each task that adds
+  tests must add `[dev-dependencies]` to the relevant `Cargo.toml` and create
+  `tests/` directories.
+- **Swarm mode is dropped entirely.** Delete `bin/periphery/src/api/swarm/`,
+  `client/periphery/rs/src/api/swarm.rs`,
+  `client/core/rs/src/entities/swarm.rs`, and `bin/core/src/resource/swarm.rs`.
+  Remove all `swarm_id` fields and `get_swarm_or_server` dual-resolution logic.
+- **Entity types live in** `client/core/rs/src/entities/` — typeshare-annotated,
+  shared between Core, Periphery, and the TypeScript UI.
+- **Periphery API pattern:** request types in
+  `client/periphery/rs/src/api/<topic>.rs` (derive `Resolve`), enum variants in
+  `bin/periphery/src/api/mod.rs:47` (`PeripheryRequest` enum), handler impls in
+  `bin/periphery/src/api/<topic>.rs` (`impl Resolve<Args> for Type`).
+- **Core → Periphery dispatch:** `periphery.request(RequestType { ... }).await`
+  via `bin/core/src/periphery/mod.rs:84`.
+- **KomodoResource trait:** `bin/core/src/resource/mod.rs:90`. Each resource
+  type implements it with associated `Config`/`Info`/`PartialConfig` types and
+  hook methods (`validate_create_config`, `post_create`,
+  `validate_update_config`, `post_update`, `pre_delete`, `post_delete`).
 
 ---
 
@@ -28,77 +59,77 @@
 
 ### New files (Core)
 
-| File | Responsibility |
-|------|---------------|
-| `bin/core/src/placement/mod.rs` | `pick_target()` — candidate filtering, port probe, spread heuristic |
-| `bin/core/src/backup/mod.rs` | `BackupDeploymentVolumes` / `BackupStackVolumes` operations + retention enforcement |
-| `bin/core/src/backup/scheduler.rs` | Cron-driven periodic backup background task |
-| `bin/core/src/server/drain.rs` | Drain controller — state machine + migration orchestration |
+| File                               | Responsibility                                                                      |
+| ---------------------------------- | ----------------------------------------------------------------------------------- |
+| `bin/core/src/placement/mod.rs`    | `pick_target()` — candidate filtering, port probe, spread heuristic                 |
+| `bin/core/src/backup/mod.rs`       | `BackupDeploymentVolumes` / `BackupStackVolumes` operations + retention enforcement |
+| `bin/core/src/backup/scheduler.rs` | Cron-driven periodic backup background task                                         |
+| `bin/core/src/server/drain.rs`     | Drain controller — state machine + migration orchestration                          |
 
 ### New files (Periphery client API types)
 
-| File | Responsibility |
-|------|---------------|
-| `client/periphery/rs/src/api/placement.rs` | `CheckHostPorts`, `ReadContainerPorts` request/response types |
+| File                                           | Responsibility                                                              |
+| ---------------------------------------------- | --------------------------------------------------------------------------- |
+| `client/periphery/rs/src/api/placement.rs`     | `CheckHostPorts`, `ReadContainerPorts` request/response types               |
 | `client/periphery/rs/src/api/volume_backup.rs` | `BackupVolume`, `RestoreVolume`, `ListVolumeBackups` request/response types |
 
 ### New files (Periphery API handlers)
 
-| File | Responsibility |
-|------|---------------|
-| `bin/periphery/src/api/placement.rs` | `impl Resolve<Args>` for `CheckHostPorts`, `ReadContainerPorts` |
+| File                                     | Responsibility                                                                |
+| ---------------------------------------- | ----------------------------------------------------------------------------- |
+| `bin/periphery/src/api/placement.rs`     | `impl Resolve<Args>` for `CheckHostPorts`, `ReadContainerPorts`               |
 | `bin/periphery/src/api/volume_backup.rs` | `impl Resolve<Args>` for `BackupVolume`, `RestoreVolume`, `ListVolumeBackups` |
 
 ### New test files
 
-| File | Responsibility |
-|------|---------------|
-| `bin/core/src/placement/tests.rs` or `bin/core/tests/placement.rs` | Unit tests for `pick_target` |
-| `bin/core/tests/volume_validation.rs` | Stack compose YAML bind-mount rejection tests |
-| `bin/periphery/tests/volume_backup.rs` | Integration test for export/import round-trip |
+| File                                                               | Responsibility                                |
+| ------------------------------------------------------------------ | --------------------------------------------- |
+| `bin/core/src/placement/tests.rs` or `bin/core/tests/placement.rs` | Unit tests for `pick_target`                  |
+| `bin/core/tests/volume_validation.rs`                              | Stack compose YAML bind-mount rejection tests |
+| `bin/periphery/tests/volume_backup.rs`                             | Integration test for export/import round-trip |
 
 ### Modified files (entities)
 
-| File | Changes |
-|------|---------|
+| File                                        | Changes                                                                                                                                                                                                          |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `client/core/rs/src/entities/deployment.rs` | Drop `swarm_id`; retype `ports`/`volumes`; add `backup`; add `PortMapping`/`VolumeMount`/`BackupConfig`/`AssignedPort`/`VolumeBackupRecord`/`VolumeBackupInfo`/`MigrationState` structs; extend `DeploymentInfo` |
-| `client/core/rs/src/entities/stack.rs` | Drop `swarm_id`; add `backup`; extend `StackInfo` |
-| `client/core/rs/src/entities/server.rs` | Add `Draining`/`Drained` to `ServerState`; add `desired_state`/`drain_timeout_seconds` to `ServerConfig`; add `ServerDesiredState` enum |
-| `client/core/rs/src/entities/mod.rs` | Remove `pub mod swarm;` |
+| `client/core/rs/src/entities/stack.rs`      | Drop `swarm_id`; add `backup`; extend `StackInfo`                                                                                                                                                                |
+| `client/core/rs/src/entities/server.rs`     | Add `Draining`/`Drained` to `ServerState`; add `desired_state`/`drain_timeout_seconds` to `ServerConfig`; add `ServerDesiredState` enum                                                                          |
+| `client/core/rs/src/entities/mod.rs`        | Remove `pub mod swarm;`                                                                                                                                                                                          |
 
 ### Modified files (Core resource handlers)
 
-| File | Changes |
-|------|---------|
+| File                                  | Changes                                                                                                                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `bin/core/src/resource/deployment.rs` | Remove `get_swarm_or_server`; update `validate_config` to call `pick_target`; update `post_create`/`post_update` to set `assigned_server`/`host_ports` |
-| `bin/core/src/resource/stack.rs` | Same pattern as deployment |
-| `bin/core/src/resource/server.rs` | Add drain-state reconciliation in `post_update` |
-| `bin/core/src/resource/mod.rs` | Remove `pub mod swarm;` from module list |
-| `bin/core/src/main.rs` | Add `mod placement; mod backup; mod server;` |
+| `bin/core/src/resource/stack.rs`      | Same pattern as deployment                                                                                                                             |
+| `bin/core/src/resource/server.rs`     | Add drain-state reconciliation in `post_update`                                                                                                        |
+| `bin/core/src/resource/mod.rs`        | Remove `pub mod swarm;` from module list                                                                                                               |
+| `bin/core/src/main.rs`                | Add `mod placement; mod backup; mod server;`                                                                                                           |
 
 ### Modified files (Periphery)
 
-| File | Changes |
-|------|---------|
-| `bin/periphery/src/api/mod.rs` | Add 5 new `PeripheryRequest` enum variants |
-| `bin/periphery/src/main.rs` | Add `mod placement; mod volume_backup;` + startup Podman version probe |
-| `bin/periphery/src/config.rs` | (No change — S3 config is forwarded per-op, not stored) |
+| File                           | Changes                                                                |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| `bin/periphery/src/api/mod.rs` | Add 5 new `PeripheryRequest` enum variants                             |
+| `bin/periphery/src/main.rs`    | Add `mod placement; mod volume_backup;` + startup Podman version probe |
+| `bin/periphery/src/config.rs`  | (No change — S3 config is forwarded per-op, not stored)                |
 
 ### Modified files (Core config)
 
-| File | Changes |
-|------|---------|
+| File                                                                                | Changes                                           |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------- |
 | `client/core/rs/src/entities/config/core.rs` (or wherever `CoreConfig`/`Env` lives) | Add `BackupDestination` fields to Core env config |
-| `bin/core/src/config.rs` | Wire backup destination from env |
+| `bin/core/src/config.rs`                                                            | Wire backup destination from env                  |
 
 ### Deleted files (Swarm removal)
 
-| File | Action |
-|------|--------|
-| `bin/core/src/resource/swarm.rs` | Delete |
-| `bin/periphery/src/api/swarm/` | Delete directory |
-| `client/periphery/rs/src/api/swarm.rs` | Delete |
-| `client/core/rs/src/entities/swarm.rs` | Delete |
+| File                                   | Action           |
+| -------------------------------------- | ---------------- |
+| `bin/core/src/resource/swarm.rs`       | Delete           |
+| `bin/periphery/src/api/swarm/`         | Delete directory |
+| `client/periphery/rs/src/api/swarm.rs` | Delete           |
+| `client/core/rs/src/entities/swarm.rs` | Delete           |
 
 ---
 
@@ -107,23 +138,30 @@
 **Covers:** [S4] (Swarm removal part)
 
 **Files:**
+
 - Delete: `bin/core/src/resource/swarm.rs`
 - Delete: `bin/periphery/src/api/swarm/` (directory)
 - Delete: `client/periphery/rs/src/api/swarm.rs`
 - Delete: `client/core/rs/src/entities/swarm.rs`
 - Modify: `client/core/rs/src/entities/mod.rs` — remove `pub mod swarm;`
-- Modify: `client/core/rs/src/entities/deployment.rs` — remove `swarm_id` field (line 101) and `swarm_id` from `DeploymentListItemInfo` (line 59)
+- Modify: `client/core/rs/src/entities/deployment.rs` — remove `swarm_id` field
+  (line 101) and `swarm_id` from `DeploymentListItemInfo` (line 59)
 - Modify: `client/core/rs/src/entities/stack.rs` — remove `swarm_id` field
-- Modify: `bin/core/src/resource/mod.rs` — remove `pub mod swarm;` from module declarations
-- Modify: `bin/core/src/resource/deployment.rs` — remove `get_swarm_or_server` dual-resolution logic and all `swarm_id` references
+- Modify: `bin/core/src/resource/mod.rs` — remove `pub mod swarm;` from module
+  declarations
+- Modify: `bin/core/src/resource/deployment.rs` — remove `get_swarm_or_server`
+  dual-resolution logic and all `swarm_id` references
 - Modify: `bin/core/src/resource/stack.rs` — remove all `swarm_id` references
-- Modify: `bin/periphery/src/api/mod.rs` — remove all `swarm::*` imports and Swarm-related `PeripheryRequest` variants
+- Modify: `bin/periphery/src/api/mod.rs` — remove all `swarm::*` imports and
+  Swarm-related `PeripheryRequest` variants
 - Modify: `bin/periphery/src/main.rs` — remove `mod swarm` declaration
 - Modify: `client/periphery/rs/src/api/mod.rs` — remove `pub mod swarm;`
 
 **Interfaces:**
+
 - Consumes: nothing
-- Produces: a workspace with no Swarm references, where `server_id` is the sole deployment target field
+- Produces: a workspace with no Swarm references, where `server_id` is the sole
+  deployment target field
 
 - [ ] **Step 1: Delete Swarm entity types**
 
@@ -131,7 +169,8 @@
 rm client/core/rs/src/entities/swarm.rs
 ```
 
-Remove the module registration in `client/core/rs/src/entities/mod.rs` — find and delete the line `pub mod swarm;`.
+Remove the module registration in `client/core/rs/src/entities/mod.rs` — find
+and delete the line `pub mod swarm;`.
 
 - [ ] **Step 2: Delete Swarm Periphery API**
 
@@ -140,8 +179,8 @@ rm -rf bin/periphery/src/api/swarm/
 rm client/periphery/rs/src/api/swarm.rs
 ```
 
-Remove `pub mod swarm;` from `client/periphery/rs/src/api/mod.rs`.
-Remove `mod swarm;` from `bin/periphery/src/main.rs`.
+Remove `pub mod swarm;` from `client/periphery/rs/src/api/mod.rs`. Remove
+`mod swarm;` from `bin/periphery/src/main.rs`.
 
 - [ ] **Step 3: Delete Swarm Core resource handler**
 
@@ -149,39 +188,63 @@ Remove `mod swarm;` from `bin/periphery/src/main.rs`.
 rm bin/core/src/resource/swarm.rs
 ```
 
-Remove `pub mod swarm;` from `bin/core/src/resource/mod.rs` (around line 56-67 in the module list).
+Remove `pub mod swarm;` from `bin/core/src/resource/mod.rs` (around line 56-67
+in the module list).
 
 - [ ] **Step 4: Remove Swarm variants from PeripheryRequest enum**
 
-In `bin/periphery/src/api/mod.rs`, remove all lines that import from `swarm::` and all `PeripheryRequest` enum variants that reference Swarm types (e.g. `PollSwarmStatus(PollSwarmStatus)`, `InspectSwarmNode`, `RemoveSwarmNodes`, `UpdateSwarmNode`, `InspectSwarmStack`, `DeploySwarmStack`, `RemoveSwarmStacks`, `InspectSwarmService`, `GetSwarmServiceLog`, `GetSwarmServiceLogSearch`, `CreateSwarmService`, `UpdateSwarmService`, `RollbackSwarmService`, `RemoveSwarmServices`, `InspectSwarmTask`, `InspectSwarmConfig`, `CreateSwarmConfig`, `RotateSwarmConfig`, `RemoveSwarmConfigs`, `InspectSwarmSecret`, `CreateSwarmSecret`, `RotateSwarmSecret`, `RemoveSwarmSecrets`).
+In `bin/periphery/src/api/mod.rs`, remove all lines that import from `swarm::`
+and all `PeripheryRequest` enum variants that reference Swarm types (e.g.
+`PollSwarmStatus(PollSwarmStatus)`, `InspectSwarmNode`, `RemoveSwarmNodes`,
+`UpdateSwarmNode`, `InspectSwarmStack`, `DeploySwarmStack`, `RemoveSwarmStacks`,
+`InspectSwarmService`, `GetSwarmServiceLog`, `GetSwarmServiceLogSearch`,
+`CreateSwarmService`, `UpdateSwarmService`, `RollbackSwarmService`,
+`RemoveSwarmServices`, `InspectSwarmTask`, `InspectSwarmConfig`,
+`CreateSwarmConfig`, `RotateSwarmConfig`, `RemoveSwarmConfigs`,
+`InspectSwarmSecret`, `CreateSwarmSecret`, `RotateSwarmSecret`,
+`RemoveSwarmSecrets`).
 
 Also remove `use ... swarm::*` from the import block at the top of the file.
 
-- [ ] **Step 5: Remove swarm_id from DeploymentConfig and DeploymentListItemInfo**
+- [ ] **Step 5: Remove swarm_id from DeploymentConfig and
+      DeploymentListItemInfo**
 
 In `client/core/rs/src/entities/deployment.rs`:
+
 - Delete the `pub swarm_id: String,` field at line 101 in `DeploymentConfig`.
-- Delete the `pub swarm_id: String,` field at line 59 in `DeploymentListItemInfo` (if present).
-- Remove `swarm_id` from the `Default` impl for `DeploymentConfig` if one exists.
+- Delete the `pub swarm_id: String,` field at line 59 in
+  `DeploymentListItemInfo` (if present).
+- Remove `swarm_id` from the `Default` impl for `DeploymentConfig` if one
+  exists.
 - Remove `swarm_id` from any `PartialDeploymentConfig` struct.
 
 - [ ] **Step 6: Remove swarm_id from StackConfig**
 
 In `client/core/rs/src/entities/stack.rs`:
+
 - Delete the `pub swarm_id: String,` field (around line 314).
 - Remove from `Default` impl and `PartialStackConfig` if present.
 
 - [ ] **Step 7: Remove get_swarm_or_server from deployment resource**
 
 In `bin/core/src/resource/deployment.rs`:
-- Find the `get_swarm_or_server` function or equivalent logic (around lines 75-78, 277-294, 389-411). Replace all dual-resolution with plain `server_id`-only resolution.
-- In `validate_config` (private function at ~line 385), remove the `swarm_id` validation branch. Keep the `server_id` validation but change it from "required" to "optional" — remove the error that fires when `server_id` is empty.
-- In `inherit_specific_permissions` (~line 75-78), remove the `swarm_id` branch; keep only the `server_id` branch.
+
+- Find the `get_swarm_or_server` function or equivalent logic (around lines
+  75-78, 277-294, 389-411). Replace all dual-resolution with plain
+  `server_id`-only resolution.
+- In `validate_config` (private function at ~line 385), remove the `swarm_id`
+  validation branch. Keep the `server_id` validation but change it from
+  "required" to "optional" — remove the error that fires when `server_id` is
+  empty.
+- In `inherit_specific_permissions` (~line 75-78), remove the `swarm_id` branch;
+  keep only the `server_id` branch.
 
 - [ ] **Step 8: Remove swarm_id from stack resource handler**
 
 In `bin/core/src/resource/stack.rs`:
-- Remove any `swarm_id` references in validation, `inherit_specific_permissions`, and `setup_stack_execution` (or equivalent).
+
+- Remove any `swarm_id` references in validation,
+  `inherit_specific_permissions`, and `setup_stack_execution` (or equivalent).
 - Remove the `swarm_id` validation branch; make `server_id` optional.
 
 - [ ] **Step 9: Search for remaining Swarm references and clean up**
@@ -190,16 +253,21 @@ In `bin/core/src/resource/stack.rs`:
 rg -i 'swarm' --type rust -l
 ```
 
-For each file found, remove the Swarm-specific code. Common spots: `bin/core/src/api/` (execute endpoints for swarm operations), `bin/core/src/state.rs` (`swarm_status_cache`), `client/core/rs/src/entities/` (any remaining swarm references in `mod.rs` or `action.rs` or `permission.rs`).
+For each file found, remove the Swarm-specific code. Common spots:
+`bin/core/src/api/` (execute endpoints for swarm operations),
+`bin/core/src/state.rs` (`swarm_status_cache`), `client/core/rs/src/entities/`
+(any remaining swarm references in `mod.rs` or `action.rs` or `permission.rs`).
 
-Remove `swarm_status_cache()` and its `OnceLock` from `bin/core/src/state.rs` if present.
+Remove `swarm_status_cache()` and its `OnceLock` from `bin/core/src/state.rs` if
+present.
 
 - [ ] **Step 10: Verify the workspace compiles**
 
-Run: `cargo check --workspace 2>&1 | tail -40`
-Expected: May show errors in files still referencing Swarm — fix iteratively until `cargo check` passes.
+Run: `cargo check --workspace 2>&1 | tail -40` Expected: May show errors in
+files still referencing Swarm — fix iteratively until `cargo check` passes.
 
-Set environment: `CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace`
+Set environment:
+`CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace`
 
 - [ ] **Step 11: Commit**
 
@@ -219,29 +287,57 @@ server_id is now the sole deployment target field, and is optional."
 **Covers:** [S4] (typed ports/volumes part)
 
 **Files:**
-- Modify: `client/core/rs/src/entities/deployment.rs` — replace `ports: String` (line 239) with `ports: Vec<PortMapping>`; replace `volumes: String` (line 249) with `volumes: Vec<VolumeMount>`; add `backup: Option<BackupConfig>`; add new structs `PortMapping`, `VolumeMount`, `BackupConfig`, `AssignedPort`, `VolumeBackupRecord`, `VolumeBackupInfo`, `MigrationState`; extend `DeploymentInfo`; remove `Conversion` struct (line 415) and `conversions_from_str` (line 422)
-- Modify: `client/core/rs/src/entities/stack.rs` — add `backup: Option<BackupConfig>`; extend `StackInfo`
-- Modify: `bin/periphery/src/api/container/run.rs` — update `push_conversions` calls (lines 150-160) to use typed `Vec<PortMapping>` / `Vec<VolumeMount>` instead of `conversions_from_str`
-- Modify: `bin/periphery/src/helpers.rs` — update or remove `push_conversions` helper (line 87-97) if no longer needed
-- Modify: `bin/core/src/resource/deployment.rs` — update any code that references `config.ports` or `config.volumes` as strings
-- Modify: `bin/core/src/resource/stack.rs` — update any code that references stack volume/ports as strings
+
+- Modify: `client/core/rs/src/entities/deployment.rs` — replace `ports: String`
+  (line 239) with `ports: Vec<PortMapping>`; replace `volumes: String`
+  (line 249) with `volumes: Vec<VolumeMount>`; add
+  `backup: Option<BackupConfig>`; add new structs `PortMapping`, `VolumeMount`,
+  `BackupConfig`, `AssignedPort`, `VolumeBackupRecord`, `VolumeBackupInfo`,
+  `MigrationState`; extend `DeploymentInfo`; remove `Conversion` struct
+  (line 415) and `conversions_from_str` (line 422)
+- Modify: `client/core/rs/src/entities/stack.rs` — add
+  `backup: Option<BackupConfig>`; extend `StackInfo`
+- Modify: `bin/periphery/src/api/container/run.rs` — update `push_conversions`
+  calls (lines 150-160) to use typed `Vec<PortMapping>` / `Vec<VolumeMount>`
+  instead of `conversions_from_str`
+- Modify: `bin/periphery/src/helpers.rs` — update or remove `push_conversions`
+  helper (line 87-97) if no longer needed
+- Modify: `bin/core/src/resource/deployment.rs` — update any code that
+  references `config.ports` or `config.volumes` as strings
+- Modify: `bin/core/src/resource/stack.rs` — update any code that references
+  stack volume/ports as strings
 
 **Interfaces:**
+
 - Consumes: nothing (Task 1 must be complete — `swarm_id` already removed)
 - Produces:
-  - `PortMapping { container: u16, host: Option<u16> }` in `client/core/rs/src/entities/deployment.rs`
+  - `PortMapping { container: u16, host: Option<u16> }` in
+    `client/core/rs/src/entities/deployment.rs`
   - `VolumeMount { volume: String, mount_path: String }` in the same file
-  - `BackupConfig { schedule: Option<String>, max_backups: u32 }` in the same file
+  - `BackupConfig { schedule: Option<String>, max_backups: u32 }` in the same
+    file
   - `AssignedPort { container: u16, host: u16 }` in the same file
-  - `VolumeBackupInfo { s3_key: String, timestamp: i64, size_bytes: u64 }` in the same file
-  - `VolumeBackupRecord { s3_key: String, timestamp: i64, size_bytes: u64, checksum: String }` in the same file
-  - `MigrationState` enum (`Migrating { target_server_id: String, started_at: i64 }` | `Failed { reason: String, at: i64 }`)
-  - `DeploymentInfo` now has: `latest_image_digest` (existing), `assigned_server: String`, `host_ports: Vec<AssignedPort>`, `last_backup: HashMap<String, VolumeBackupRecord>`, `migration_state: Option<MigrationState>`
-  - `StackInfo` now has: existing fields + `assigned_server: String`, `host_ports: HashMap<String, Vec<AssignedPort>>`, `last_backup: HashMap<String, VolumeBackupRecord>`, `migration_state: Option<MigrationState>`
+  - `VolumeBackupInfo { s3_key: String, timestamp: i64, size_bytes: u64 }` in
+    the same file
+  - `VolumeBackupRecord { s3_key: String, timestamp: i64, size_bytes: u64, checksum: String }`
+    in the same file
+  - `MigrationState` enum
+    (`Migrating { target_server_id: String, started_at: i64 }` |
+    `Failed { reason: String, at: i64 }`)
+  - `DeploymentInfo` now has: `latest_image_digest` (existing),
+    `assigned_server: String`, `host_ports: Vec<AssignedPort>`,
+    `last_backup: HashMap<String, VolumeBackupRecord>`,
+    `migration_state: Option<MigrationState>`
+  - `StackInfo` now has: existing fields + `assigned_server: String`,
+    `host_ports: HashMap<String, Vec<AssignedPort>>`,
+    `last_backup: HashMap<String, VolumeBackupRecord>`,
+    `migration_state: Option<MigrationState>`
 
 - [ ] **Step 1: Add new structs to deployment.rs**
 
-In `client/core/rs/src/entities/deployment.rs`, remove the `Conversion` struct (lines 415-420) and `conversions_from_str` function (lines 422-431). Then add the following structs near the bottom of the file (before any impl blocks):
+In `client/core/rs/src/entities/deployment.rs`, remove the `Conversion` struct
+(lines 415-420) and `conversions_from_str` function (lines 422-431). Then add
+the following structs near the bottom of the file (before any impl blocks):
 
 ```rust
 #[typeshare]
@@ -316,16 +412,23 @@ pub enum MigrationState {
 
 - [ ] **Step 2: Replace ports and volumes fields in DeploymentConfig**
 
-In `client/core/rs/src/entities/deployment.rs`, in the `DeploymentConfig` struct (line 89):
-- Replace `pub ports: String,` (line 239) with `pub ports: Vec<PortMapping>,`
-- Replace `pub volumes: String,` (line 249) with `pub volumes: Vec<VolumeMount>,`
-- Add `pub backup: Option<BackupConfig>,` after the `labels` field (around line 267).
+In `client/core/rs/src/entities/deployment.rs`, in the `DeploymentConfig` struct
+(line 89):
 
-Update the `Default` impl for `DeploymentConfig` if it initializes `ports`/`volumes` as `String::default()` — they should now be `Vec::default()` (which is `vec![]`).
+- Replace `pub ports: String,` (line 239) with `pub ports: Vec<PortMapping>,`
+- Replace `pub volumes: String,` (line 249) with
+  `pub volumes: Vec<VolumeMount>,`
+- Add `pub backup: Option<BackupConfig>,` after the `labels` field (around line
+  267).
+
+Update the `Default` impl for `DeploymentConfig` if it initializes
+`ports`/`volumes` as `String::default()` — they should now be `Vec::default()`
+(which is `vec![]`).
 
 - [ ] **Step 3: Extend DeploymentInfo**
 
-In `client/core/rs/src/entities/deployment.rs`, in the `DeploymentInfo` struct (line 69), add after the existing `latest_image_digest` field:
+In `client/core/rs/src/entities/deployment.rs`, in the `DeploymentInfo` struct
+(line 69), add after the existing `latest_image_digest` field:
 
 ```rust
 pub assigned_server: String,
@@ -339,14 +442,23 @@ Update `Default` impl for `DeploymentInfo`.
 - [ ] **Step 4: Add backup field and extend StackInfo in stack.rs**
 
 In `client/core/rs/src/entities/stack.rs`:
-- Add `pub backup: Option<BackupConfig>,` to `StackConfig` (import `BackupConfig` from `super::deployment` or re-export).
-- Add to `StackInfo`: `pub assigned_server: String`, `pub host_ports: std::collections::HashMap<String, Vec<AssignedPort>>`, `pub last_backup: std::collections::HashMap<String, VolumeBackupRecord>`, `pub migration_state: Option<MigrationState>`.
 
-Import the necessary types from `deployment.rs` (they're in the same crate — `use super::deployment::{BackupConfig, AssignedPort, VolumeBackupRecord, MigrationState};`).
+- Add `pub backup: Option<BackupConfig>,` to `StackConfig` (import
+  `BackupConfig` from `super::deployment` or re-export).
+- Add to `StackInfo`: `pub assigned_server: String`,
+  `pub host_ports: std::collections::HashMap<String, Vec<AssignedPort>>`,
+  `pub last_backup: std::collections::HashMap<String, VolumeBackupRecord>`,
+  `pub migration_state: Option<MigrationState>`.
+
+Import the necessary types from `deployment.rs` (they're in the same crate —
+`use super::deployment::{BackupConfig, AssignedPort, VolumeBackupRecord, MigrationState};`).
 
 - [ ] **Step 5: Update container run.rs to use typed ports/volumes**
 
-In `bin/periphery/src/api/container/run.rs` (the `RunContainer` handler), find the `push_conversions` calls at lines 150-160. Replace the `conversions_from_str(ports)` pattern with direct iteration over `Vec<PortMapping>`:
+In `bin/periphery/src/api/container/run.rs` (the `RunContainer` handler), find
+the `push_conversions` calls at lines 150-160. Replace the
+`conversions_from_str(ports)` pattern with direct iteration over
+`Vec<PortMapping>`:
 
 ```rust
 // Replace push_conversions call for ports:
@@ -363,15 +475,21 @@ for vm in &volumes {
 }
 ```
 
-Remove the `conversions_from_str` calls and the `.context("Invalid ports")` / `.context("Invalid volumes")` error handling (no longer needed — types are validated at the type level).
+Remove the `conversions_from_str` calls and the `.context("Invalid ports")` /
+`.context("Invalid volumes")` error handling (no longer needed — types are
+validated at the type level).
 
 - [ ] **Step 6: Remove or update push_conversions helper**
 
-In `bin/periphery/src/helpers.rs`, check if `push_conversions` (line 87) is used anywhere else. If not, remove it. If yes, leave it but it will be unused after the above change — remove it and let the compiler confirm no other callers.
+In `bin/periphery/src/helpers.rs`, check if `push_conversions` (line 87) is used
+anywhere else. If not, remove it. If yes, leave it but it will be unused after
+the above change — remove it and let the compiler confirm no other callers.
 
 - [ ] **Step 7: Update Core resource handlers for typed ports/volumes**
 
-Search for any code in `bin/core/src/resource/deployment.rs` and `bin/core/src/resource/stack.rs` that treats `config.ports` or `config.volumes` as strings. Update to work with `Vec<PortMapping>` / `Vec<VolumeMount>`.
+Search for any code in `bin/core/src/resource/deployment.rs` and
+`bin/core/src/resource/stack.rs` that treats `config.ports` or `config.volumes`
+as strings. Update to work with `Vec<PortMapping>` / `Vec<VolumeMount>`.
 
 ```bash
 rg 'config.ports|config.volumes' bin/core/src/resource/ --type rust
@@ -379,7 +497,8 @@ rg 'config.ports|config.volumes' bin/core/src/resource/ --type rust
 
 - [ ] **Step 8: Verify compilation**
 
-Run: `CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace 2>&1 | tail -40`
+Run:
+`CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace 2>&1 | tail -40`
 Expected: PASS — fix any remaining type mismatches.
 
 - [ ] **Step 9: Commit**
@@ -402,20 +521,27 @@ DeploymentInfo and StackInfo with placement and backup state."
 **Covers:** [S5] (probe + readback part)
 
 **Files:**
+
 - Create: `client/periphery/rs/src/api/placement.rs` — request/response types
 - Create: `bin/periphery/src/api/placement.rs` — handler impls
 - Modify: `client/periphery/rs/src/api/mod.rs` — add `pub mod placement;`
-- Modify: `bin/periphery/src/api/mod.rs` — add `placement::*` imports + 2 `PeripheryRequest` variants
+- Modify: `bin/periphery/src/api/mod.rs` — add `placement::*` imports + 2
+  `PeripheryRequest` variants
 - Modify: `bin/periphery/src/main.rs` — add `mod placement;`
 - Modify: `bin/periphery/Cargo.toml` — add `netstat2` dependency
 - Test: `bin/periphery/tests/placement.rs` (new test file)
 
 **Interfaces:**
-- Consumes: `AssignedPort` from `client/core/rs/src/entities/deployment.rs` (Task 2)
+
+- Consumes: `AssignedPort` from `client/core/rs/src/entities/deployment.rs`
+  (Task 2)
 - Produces:
-  - `CheckHostPorts { ports: Vec<u16> } -> CheckHostPortsResponse { free: Vec<u16> }` — Periphery RPC
-  - `ReadContainerPorts { container_name: String } -> ReadContainerPortsResponse { ports: Vec<AssignedPort> }` — Periphery RPC
-  - Both are dispatched from Core via `periphery.request(CheckHostPorts { ... }).await`
+  - `CheckHostPorts { ports: Vec<u16> } -> CheckHostPortsResponse { free: Vec<u16> }`
+    — Periphery RPC
+  - `ReadContainerPorts { container_name: String } -> ReadContainerPortsResponse { ports: Vec<AssignedPort> }`
+    — Periphery RPC
+  - Both are dispatched from Core via
+    `periphery.request(CheckHostPorts { ... }).await`
 
 - [ ] **Step 1: Add netstat2 dependency**
 
@@ -425,7 +551,9 @@ In `bin/periphery/Cargo.toml`, add to `[dependencies]`:
 netstat2 = "0.11"
 ```
 
-Check the workspace `Cargo.toml` — if there's a `[workspace.dependencies]` section, add it there instead and reference it as `netstat2.workspace = true` in `bin/periphery/Cargo.toml`.
+Check the workspace `Cargo.toml` — if there's a `[workspace.dependencies]`
+section, add it there instead and reference it as `netstat2.workspace = true` in
+`bin/periphery/Cargo.toml`.
 
 - [ ] **Step 2: Create placement.rs in periphery client API**
 
@@ -476,7 +604,10 @@ pub mod placement;
 - [ ] **Step 4: Add PeripheryRequest enum variants**
 
 In `bin/periphery/src/api/mod.rs`:
-- Add `use placement::{CheckHostPorts, ReadContainerPorts};` to the import block (note: the import path may be `periphery_client::api::placement::*` depending on how the file is structured — match the existing import style).
+
+- Add `use placement::{CheckHostPorts, ReadContainerPorts};` to the import block
+  (note: the import path may be `periphery_client::api::placement::*` depending
+  on how the file is structured — match the existing import style).
 - Add to the `PeripheryRequest` enum:
 
 ```rust
@@ -563,7 +694,8 @@ impl Resolve<Args> for ReadContainerPorts {
 
 - [ ] **Step 6: Register module in Periphery main.rs**
 
-In `bin/periphery/src/main.rs`, add to the module declarations (around line 13-21):
+In `bin/periphery/src/main.rs`, add to the module declarations (around line
+13-21):
 
 ```rust
 mod placement;
@@ -584,7 +716,7 @@ async fn test_check_host_ports_finds_bound_port() {
   // Port 22 (SSH) is usually bound on test machines, or we bind one ourselves.
   let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
   let bound_port = listener.local_addr().unwrap().port();
-  
+
   let sockets = netstat2::get_sockets_info(
     netstat2::AddressFamilyFlags::all(),
     netstat2::ProtocolFlags::TCP,
@@ -596,7 +728,7 @@ async fn test_check_host_ports_finds_bound_port() {
       _ => None,
     })
     .collect();
-  
+
   assert!(bound_ports.contains(&bound_port), "netstat2 should detect the bound port {}", bound_port);
   drop(listener);
 }
@@ -604,12 +736,14 @@ async fn test_check_host_ports_finds_bound_port() {
 
 - [ ] **Step 8: Run the test**
 
-Run: `CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo test -p periphery --test placement -- --nocapture`
+Run:
+`CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo test -p periphery --test placement -- --nocapture`
 Expected: PASS
 
 - [ ] **Step 9: Verify workspace compiles**
 
-Run: `CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace 2>&1 | tail -20`
+Run:
+`CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace 2>&1 | tail -20`
 Expected: PASS
 
 - [ ] **Step 10: Commit**
@@ -630,22 +764,32 @@ running container and returns its host port bindings."
 **Covers:** [S5] (algorithm + lifecycle hooks part)
 
 **Files:**
-- Create: `bin/core/src/placement/mod.rs` — `pick_target` function + `PlacementError`
+
+- Create: `bin/core/src/placement/mod.rs` — `pick_target` function +
+  `PlacementError`
 - Modify: `bin/core/src/main.rs` — add `mod placement;`
-- Modify: `bin/core/src/resource/deployment.rs` — call `pick_target` in `validate_create_config` / `validate_update_config`; set `assigned_server` in `post_create` / `post_update`
+- Modify: `bin/core/src/resource/deployment.rs` — call `pick_target` in
+  `validate_create_config` / `validate_update_config`; set `assigned_server` in
+  `post_create` / `post_update`
 - Modify: `bin/core/src/resource/stack.rs` — same pattern
-- Modify: `bin/core/src/helpers/mod.rs` — may need a helper to list eligible servers
+- Modify: `bin/core/src/helpers/mod.rs` — may need a helper to list eligible
+  servers
 - Test: `bin/core/tests/placement.rs` (new test file)
 
 **Interfaces:**
+
 - Consumes:
-  - `DeploymentConfig` / `StackConfig` from `client/core/rs/src/entities/` (Task 2)
+  - `DeploymentConfig` / `StackConfig` from `client/core/rs/src/entities/`
+    (Task 2)
   - `CheckHostPorts` RPC from Task 3
   - `periphery_client()` helper from `bin/core/src/helpers/mod.rs:187`
-  - `db_client()` from `bin/core/src/state.rs:34` — to list servers and count deployments per server
+  - `db_client()` from `bin/core/src/state.rs:34` — to list servers and count
+    deployments per server
 - Produces:
-  - `pub async fn pick_target(config_ports: &[PortMapping], hint_server_id: &str) -> Result<String, PlacementError>` — returns chosen `server_id`
-  - Called from `Deployment::validate_create_config` and `Deployment::validate_update_config`
+  - `pub async fn pick_target(config_ports: &[PortMapping], hint_server_id: &str) -> Result<String, PlacementError>`
+    — returns chosen `server_id`
+  - Called from `Deployment::validate_create_config` and
+    `Deployment::validate_update_config`
 
 - [ ] **Step 1: Create placement module**
 
@@ -785,7 +929,9 @@ mod placement;
 
 - [ ] **Step 3: Call pick_target in Deployment validate_config**
 
-In `bin/core/src/resource/deployment.rs`, in the private `validate_config` function (around line 385), after removing the `server_id` required-validation (done in Task 1), add:
+In `bin/core/src/resource/deployment.rs`, in the private `validate_config`
+function (around line 385), after removing the `server_id` required-validation
+(done in Task 1), add:
 
 ```rust
 // If server_id is empty (not pinned), the scheduler picks a target.
@@ -801,11 +947,18 @@ let chosen = crate::placement::pick_target(
 config.server_id = chosen;
 ```
 
-Note: at validate time we set `config.server_id` to the chosen server. In `post_create`/`post_update` we copy it to `info.assigned_server` and may clear the config hint if it was empty. However, since `config.server_id` now holds the actual target and the user may have set it as a hint, we need to track whether the user originally pinned. For simplicity in this plan: `info.assigned_server` is set from `config.server_id` in post_create, and the config retains the pinned hint (or the chosen id if auto-placed).
+Note: at validate time we set `config.server_id` to the chosen server. In
+`post_create`/`post_update` we copy it to `info.assigned_server` and may clear
+the config hint if it was empty. However, since `config.server_id` now holds the
+actual target and the user may have set it as a hint, we need to track whether
+the user originally pinned. For simplicity in this plan: `info.assigned_server`
+is set from `config.server_id` in post_create, and the config retains the pinned
+hint (or the chosen id if auto-placed).
 
 - [ ] **Step 4: Set assigned_server in Deployment post_create/post_update**
 
-In `bin/core/src/resource/deployment.rs`, in `post_create` (around line 206), add after the existing logic:
+In `bin/core/src/resource/deployment.rs`, in `post_create` (around line 206),
+add after the existing logic:
 
 ```rust
 // Set assigned_server from the validated config
@@ -822,7 +975,11 @@ In `post_update` (around line 254), add the same pattern.
 - [ ] **Step 5: Call pick_target in Stack validate and post_create/post_update**
 
 Apply the same pattern to `bin/core/src/resource/stack.rs`:
-- In the stack's `validate_config`, call `pick_target` with the stack's ports (note: stack ports live inside compose YAML, so for this task pass an empty slice — stack port checking will be added when compose validation is implemented in Task 5).
+
+- In the stack's `validate_config`, call `pick_target` with the stack's ports
+  (note: stack ports live inside compose YAML, so for this task pass an empty
+  slice — stack port checking will be added when compose validation is
+  implemented in Task 5).
 - In `post_create` and `post_update`, set `info.assigned_server`.
 
 - [ ] **Step 6: Write test for pick_target**
@@ -846,11 +1003,14 @@ fn placement_error_display() {
 }
 ```
 
-Note: Full integration tests require a running MongoDB + Periphery. The test infrastructure for this will be bootstrapped as part of Task 7 (volume integration tests). For now, verify compilation and manual testing.
+Note: Full integration tests require a running MongoDB + Periphery. The test
+infrastructure for this will be bootstrapped as part of Task 7 (volume
+integration tests). For now, verify compilation and manual testing.
 
 - [ ] **Step 7: Verify compilation**
 
-Run: `CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace 2>&1 | tail -30`
+Run:
+`CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace 2>&1 | tail -30`
 Expected: PASS
 
 - [ ] **Step 8: Commit**
@@ -873,14 +1033,18 @@ post_create/post_update hooks."
 **Covers:** [S6] (validation part)
 
 **Files:**
+
 - Create: `bin/core/src/resource/stack_validation.rs` — compose YAML validator
 - Modify: `bin/core/src/resource/stack.rs` — call validator in `validate_config`
-- Modify: `bin/core/src/main.rs` or `bin/core/src/resource/mod.rs` — add `mod stack_validation;` (or `pub mod`)
+- Modify: `bin/core/src/main.rs` or `bin/core/src/resource/mod.rs` — add
+  `mod stack_validation;` (or `pub mod`)
 - Test: `bin/core/tests/volume_validation.rs` (new test file)
 
 **Interfaces:**
+
 - Consumes: `StackConfig.file_contents` (the compose YAML string)
-- Produces: `pub fn validate_compose_yaml(yaml: &str) -> anyhow::Result<()>` — rejects bind mounts and Swarm-only keys
+- Produces: `pub fn validate_compose_yaml(yaml: &str) -> anyhow::Result<()>` —
+  rejects bind mounts and Swarm-only keys
 
 - [ ] **Step 1: Create stack_validation module**
 
@@ -897,7 +1061,7 @@ use anyhow::{bail, Context};
 pub fn validate_compose_yaml(yaml: &str) -> anyhow::Result<()> {
   let parsed: Value = serde_yaml::from_str(yaml)
     .context("Failed to parse compose file as YAML")?;
-  
+
   let services = parsed
     .get("services")
     .and_then(|s| s.as_mapping())
@@ -1062,7 +1226,9 @@ pub mod stack_validation;
 
 - [ ] **Step 3: Call validator in Stack validate_config**
 
-In `bin/core/src/resource/stack.rs`, in the stack's `validate_config` function (the private validation helper that `validate_create_config` and `validate_update_config` delegate to), add:
+In `bin/core/src/resource/stack.rs`, in the stack's `validate_config` function
+(the private validation helper that `validate_create_config` and
+`validate_update_config` delegate to), add:
 
 ```rust
 crate::resource::stack_validation::validate_compose_yaml(&config.file_contents)
@@ -1071,12 +1237,14 @@ crate::resource::stack_validation::validate_compose_yaml(&config.file_contents)
 
 - [ ] **Step 4: Run the tests**
 
-Run: `CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo test -p core --lib resource::stack_validation -- --nocapture`
+Run:
+`CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo test -p core --lib resource::stack_validation -- --nocapture`
 Expected: All 5 tests PASS
 
 - [ ] **Step 5: Verify workspace compiles**
 
-Run: `CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace 2>&1 | tail -20`
+Run:
+`CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace 2>&1 | tail -20`
 Expected: PASS
 
 - [ ] **Step 6: Commit**
@@ -1099,28 +1267,37 @@ Swarm deploy key, and anonymous volumes."
 **Covers:** [S6] (export/import/retention part)
 
 **Files:**
-- Create: `client/periphery/rs/src/api/volume_backup.rs` — request/response types
+
+- Create: `client/periphery/rs/src/api/volume_backup.rs` — request/response
+  types
 - Create: `bin/periphery/src/api/volume_backup.rs` — handler impls
 - Modify: `client/periphery/rs/src/api/mod.rs` — add `pub mod volume_backup;`
-- Modify: `bin/periphery/src/api/mod.rs` — add `volume_backup::*` imports + 3 `PeripheryRequest` variants
-- Modify: `bin/periphery/src/main.rs` — add `mod volume_backup;` + startup Podman version probe
+- Modify: `bin/periphery/src/api/mod.rs` — add `volume_backup::*` imports + 3
+  `PeripheryRequest` variants
+- Modify: `bin/periphery/src/main.rs` — add `mod volume_backup;` + startup
+  Podman version probe
 - Modify: `bin/periphery/Cargo.toml` — add `rust-s3` dependency
-- Modify: workspace `Cargo.toml` — add `rust-s3` to `[workspace.dependencies]` if using that pattern
+- Modify: workspace `Cargo.toml` — add `rust-s3` to `[workspace.dependencies]`
+  if using that pattern
 - Test: `bin/periphery/tests/volume_backup.rs` (new test file)
 
 **Interfaces:**
+
 - Consumes:
-  - `VolumeBackupInfo` / `VolumeBackupRecord` from `client/core/rs/src/entities/deployment.rs` (Task 2)
+  - `VolumeBackupInfo` / `VolumeBackupRecord` from
+    `client/core/rs/src/entities/deployment.rs` (Task 2)
   - `BackupDestination` config type (added in this task to entity types)
 - Produces:
   - `BackupVolume { deployment_id, volume_name, destination } -> BackupResult { s3_key, size_bytes, checksum }`
   - `RestoreVolume { deployment_id, volume_name, source_key, destination } -> RestoreResult { bytes_restored }`
   - `ListVolumeBackups { deployment_id, volume_name, destination } -> Vec<VolumeBackupInfo>`
-  - `BackupDestination { endpoint, region, bucket, access_key, secret_key }` struct in entities
+  - `BackupDestination { endpoint, region, bucket, access_key, secret_key }`
+    struct in entities
 
 - [ ] **Step 1: Add BackupDestination type**
 
-In `client/core/rs/src/entities/deployment.rs` (or a new `backup.rs` entity file), add:
+In `client/core/rs/src/entities/deployment.rs` (or a new `backup.rs` entity
+file), add:
 
 ```rust
 #[typeshare]
@@ -1354,11 +1531,14 @@ impl Resolve<Args> for ListVolumeBackups {
 }
 ```
 
-Note: Add `chrono`, `md5` dependencies to `bin/periphery/Cargo.toml` (or workspace deps) if not already present. Check with: `rg 'chrono|md5 ' Cargo.toml bin/periphery/Cargo.toml`.
+Note: Add `chrono`, `md5` dependencies to `bin/periphery/Cargo.toml` (or
+workspace deps) if not already present. Check with:
+`rg 'chrono|md5 ' Cargo.toml bin/periphery/Cargo.toml`.
 
 - [ ] **Step 7: Add Podman version probe at Periphery startup**
 
-In `bin/periphery/src/main.rs`, in the `app()` function (line 23), add at the start:
+In `bin/periphery/src/main.rs`, in the `app()` function (line 23), add at the
+start:
 
 ```rust
 // Verify podman volume export/import support
@@ -1421,7 +1601,7 @@ async fn test_volume_backup_restore_roundtrip() {
   };
 
   let volume_name = "komodo-test-roundtrip";
-  
+
   // Create a volume with known content
   std::process::Command::new("podman")
     .args(["volume", "create", volume_name])
@@ -1447,7 +1627,8 @@ async fn test_volume_backup_restore_roundtrip() {
 
 - [ ] **Step 10: Verify compilation**
 
-Run: `CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace 2>&1 | tail -30`
+Run:
+`CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace 2>&1 | tail -30`
 Expected: PASS — fix any dependency/type issues iteratively.
 
 - [ ] **Step 11: Commit**
@@ -1469,13 +1650,18 @@ Startup probe rejects unsupported Podman versions."
 **Covers:** [S7] (on-demand + scheduled backup part)
 
 **Files:**
-- Create: `bin/core/src/backup/mod.rs` — `backup_deployment_volumes` / `backup_stack_volumes` functions + retention enforcement
+
+- Create: `bin/core/src/backup/mod.rs` — `backup_deployment_volumes` /
+  `backup_stack_volumes` functions + retention enforcement
 - Create: `bin/core/src/backup/scheduler.rs` — cron-driven background task
-- Modify: `bin/core/src/main.rs` — add `mod backup;` and spawn scheduler in `app()`
+- Modify: `bin/core/src/main.rs` — add `mod backup;` and spawn scheduler in
+  `app()`
 - Modify: `bin/core/src/config.rs` — add `BackupDestination` config from env
-- Modify: workspace `Cargo.toml` or `bin/core/Cargo.toml` — add `cron` crate dependency
+- Modify: workspace `Cargo.toml` or `bin/core/Cargo.toml` — add `cron` crate
+  dependency
 
 **Interfaces:**
+
 - Consumes:
   - `BackupVolume`, `RestoreVolume`, `ListVolumeBackups` RPCs from Task 6
   - `periphery_client()` from `bin/core/src/helpers/mod.rs`
@@ -1483,9 +1669,12 @@ Startup probe rejects unsupported Podman versions."
   - `BackupConfig` / `VolumeBackupRecord` from Task 2
   - `BackupDestination` from Task 6
 - Produces:
-  - `pub async fn backup_deployment_volumes(deployment_id: &str) -> anyhow::Result<()>` — backs up all volumes, updates `info.last_backup`, enforces retention
-  - `pub async fn backup_stack_volumes(stack_id: &str) -> anyhow::Result<()>` — same for stacks
-  - `pub fn backup_destination() -> Option<&'static BackupDestination>` — global config accessor
+  - `pub async fn backup_deployment_volumes(deployment_id: &str) -> anyhow::Result<()>`
+    — backs up all volumes, updates `info.last_backup`, enforces retention
+  - `pub async fn backup_stack_volumes(stack_id: &str) -> anyhow::Result<()>` —
+    same for stacks
+  - `pub fn backup_destination() -> Option<&'static BackupDestination>` — global
+    config accessor
   - Scheduler spawns in `main.rs::app()` and ticks on cron schedules
 
 - [ ] **Step 1: Add cron crate dependency**
@@ -1845,7 +2034,8 @@ In `bin/core/src/main.rs`, add to module declarations:
 mod backup;
 ```
 
-In the `app()` function (around line 30-90), after `state::init_db_client().await`, add:
+In the `app()` function (around line 30-90), after
+`state::init_db_client().await`, add:
 
 ```rust
 tokio::spawn(backup::scheduler::run_scheduler());
@@ -1853,7 +2043,8 @@ tokio::spawn(backup::scheduler::run_scheduler());
 
 - [ ] **Step 6: Verify compilation**
 
-Run: `CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace 2>&1 | tail -30`
+Run:
+`CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace 2>&1 | tail -30`
 Expected: PASS
 
 - [ ] **Step 7: Commit**
@@ -1876,13 +2067,20 @@ deletes oldest backups beyond max_backups."
 **Covers:** [S8], [S7] (migration sequence part)
 
 **Files:**
-- Modify: `client/core/rs/src/entities/server.rs` — add `Draining`/`Drained` to `ServerState`; add `desired_state`/`drain_timeout_seconds` to `ServerConfig`; add `ServerDesiredState` enum
-- Create: `bin/core/src/server/drain.rs` — drain controller + migration orchestration
+
+- Modify: `client/core/rs/src/entities/server.rs` — add `Draining`/`Drained` to
+  `ServerState`; add `desired_state`/`drain_timeout_seconds` to `ServerConfig`;
+  add `ServerDesiredState` enum
+- Create: `bin/core/src/server/drain.rs` — drain controller + migration
+  orchestration
 - Modify: `bin/core/src/main.rs` — add `mod server;` and spawn drain controller
-- Modify: `bin/core/src/resource/server.rs` — handle `desired_state` changes in `post_update`
-- Modify: `bin/core/src/api/execute/` — add `DrainServer`, `CancelDrain`, `GetDrainStatus` endpoints (if an execute API exists)
+- Modify: `bin/core/src/resource/server.rs` — handle `desired_state` changes in
+  `post_update`
+- Modify: `bin/core/src/api/execute/` — add `DrainServer`, `CancelDrain`,
+  `GetDrainStatus` endpoints (if an execute API exists)
 
 **Interfaces:**
+
 - Consumes:
   - `pick_target` from `bin/core/src/placement/mod.rs` (Task 4)
   - `backup_deployment_volumes` from `bin/core/src/backup/mod.rs` (Task 7)
@@ -1891,7 +2089,8 @@ deletes oldest backups beyond max_backups."
   - Server/Deployment/Stack entities
 - Produces:
   - `pub async fn run_drain_controller()` — background task
-  - `pub async fn migrate_deployment(deployment_id: &str, target_server_id: Option<&str>) -> anyhow::Result<()>` — single migration
+  - `pub async fn migrate_deployment(deployment_id: &str, target_server_id: Option<&str>) -> anyhow::Result<()>`
+    — single migration
   - `ServerConfig.desired_state: ServerDesiredState` (`Run`/`Drain`)
   - `ServerState::Draining` / `ServerState::Drained`
   - API endpoints: `DrainServer`, `CancelDrain`, `GetDrainStatus`
@@ -1929,7 +2128,8 @@ pub desired_state: ServerDesiredState,
 pub drain_timeout_seconds: u64,
 ```
 
-Update the `Default` impl for `ServerConfig` — `desired_state` defaults to `Run`, `drain_timeout_seconds` defaults to `1800`.
+Update the `Default` impl for `ServerConfig` — `desired_state` defaults to
+`Run`, `drain_timeout_seconds` defaults to `1800`.
 
 - [ ] **Step 2: Create drain controller**
 
@@ -2219,7 +2419,8 @@ tokio::spawn(server::drain::run_drain_controller());
 
 - [ ] **Step 4: Handle desired_state changes in Server resource**
 
-In `bin/core/src/resource/server.rs`, in `post_update` (or equivalent), add logic to handle `desired_state` transitions:
+In `bin/core/src/resource/server.rs`, in `post_update` (or equivalent), add
+logic to handle `desired_state` transitions:
 
 ```rust
 if updated.config.desired_state == ServerDesiredState::Drain {
@@ -2237,17 +2438,24 @@ Import `ServerDesiredState` from the entities crate.
 
 - [ ] **Step 5: Add API endpoints (DrainServer, CancelDrain, GetDrainStatus)**
 
-This step depends on Komodo's execute API structure. The execute API is in `bin/core/src/api/execute/`. Follow the existing pattern for execute endpoints — add a new file `bin/core/src/api/execute/server.rs` (or extend the existing server execute file if one exists).
+This step depends on Komodo's execute API structure. The execute API is in
+`bin/core/src/api/execute/`. Follow the existing pattern for execute endpoints —
+add a new file `bin/core/src/api/execute/server.rs` (or extend the existing
+server execute file if one exists).
 
-For `DrainServer { server_id }`: update `ServerConfig.desired_state = Drain` via the resource update flow.
-For `CancelDrain { server_id }`: update `ServerConfig.desired_state = Run`.
-For `GetDrainStatus { server_id }`: query deployments with `assigned_server == server_id` and return counts.
+For `DrainServer { server_id }`: update `ServerConfig.desired_state = Drain` via
+the resource update flow. For `CancelDrain { server_id }`: update
+`ServerConfig.desired_state = Run`. For `GetDrainStatus { server_id }`: query
+deployments with `assigned_server == server_id` and return counts.
 
-These are thin wrappers over the resource update and read APIs. The exact execute endpoint structure should mirror existing endpoints like `DeployContainer` or `ComposeUp`.
+These are thin wrappers over the resource update and read APIs. The exact
+execute endpoint structure should mirror existing endpoints like
+`DeployContainer` or `ComposeUp`.
 
 - [ ] **Step 6: Verify compilation**
 
-Run: `CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace 2>&1 | tail -30`
+Run:
+`CARGO_TARGET_DIR=/home/acheong/.cargo-target TMPDIR=/home/acheong/.tmp/gotmp cargo check --workspace 2>&1 | tail -30`
 Expected: PASS
 
 - [ ] **Step 7: Commit**
@@ -2269,31 +2477,50 @@ migration. API endpoints: DrainServer, CancelDrain, GetDrainStatus."
 
 ### Spec coverage check
 
-| Spec Section | Covered by Task(s) |
-|---|---|
-| [S1] Problem | (Context, no implementation needed) |
-| [S2] Solution Overview | (Context, no implementation needed) |
-| [S3] Scope | (Context, no implementation needed) |
-| [S4] Resource Model Changes | Task 1 (Swarm removal), Task 2 (typed ports/volumes + new types) |
-| [S5] Placement Scheduler | Task 3 (probe + readback RPCs), Task 4 (algorithm + lifecycle hooks) |
-| [S6] Volume Lifecycle | Task 2 (VolumeMount type + validation by typing), Task 5 (compose YAML validation), Task 6 (export/import/retention RPCs) |
-| [S7] Backup & Restore Triggers | Task 7 (on-demand + scheduled backup), Task 8 (migration sequence) |
-| [S8] Node Draining | Task 8 (drain controller + state machine) |
-| [S9] Testing Strategy | Tests included in Tasks 3, 5, 6; full integration tests deferred |
-| [S10] Open Questions | (No implementation needed) |
+| Spec Section                   | Covered by Task(s)                                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| [S1] Problem                   | (Context, no implementation needed)                                                                                       |
+| [S2] Solution Overview         | (Context, no implementation needed)                                                                                       |
+| [S3] Scope                     | (Context, no implementation needed)                                                                                       |
+| [S4] Resource Model Changes    | Task 1 (Swarm removal), Task 2 (typed ports/volumes + new types)                                                          |
+| [S5] Placement Scheduler       | Task 3 (probe + readback RPCs), Task 4 (algorithm + lifecycle hooks)                                                      |
+| [S6] Volume Lifecycle          | Task 2 (VolumeMount type + validation by typing), Task 5 (compose YAML validation), Task 6 (export/import/retention RPCs) |
+| [S7] Backup & Restore Triggers | Task 7 (on-demand + scheduled backup), Task 8 (migration sequence)                                                        |
+| [S8] Node Draining             | Task 8 (drain controller + state machine)                                                                                 |
+| [S9] Testing Strategy          | Tests included in Tasks 3, 5, 6; full integration tests deferred                                                          |
+| [S10] Open Questions           | (No implementation needed)                                                                                                |
 
 ### Type consistency check
 
-- `PortMapping { container: u16, host: Option<u16> }` — defined Task 2, used Task 3 (no, Task 3 uses `AssignedPort`), Task 4 (`pick_target` takes `&[PortMapping]`), Task 8 (migration reads `config.ports`). ✓
-- `VolumeMount { volume: String, mount_path: String }` — defined Task 2, used Task 6 (volume discovery via `config.volumes`), Task 7 (backup iterates `config.volumes`), Task 8 (restore iterates `config.volumes`). ✓
-- `BackupConfig { schedule: Option<String>, max_backups: u32 }` — defined Task 2, used Task 7 (scheduler reads `config.backup.schedule`, `config.backup.max_backups`). ✓
-- `AssignedPort { container: u16, host: u16 }` — defined Task 2, used Task 3 (`ReadContainerPortsResponse.ports`), Task 8 (readback after deploy). ✓
-- `BackupDestination { endpoint, region, bucket, access_key, secret_key }` — defined Task 6, used Task 7 (config accessor returns it), Task 8 (migration passes it to `RestoreVolume`). ✓
-- `MigrationState` enum — defined Task 2, used Task 8 (set/cleared during migration). ✓
-- `ServerDesiredState` enum — defined Task 8, used Task 8 (drain controller checks `config.desired_state`). ✓
+- `PortMapping { container: u16, host: Option<u16> }` — defined Task 2, used
+  Task 3 (no, Task 3 uses `AssignedPort`), Task 4 (`pick_target` takes
+  `&[PortMapping]`), Task 8 (migration reads `config.ports`). ✓
+- `VolumeMount { volume: String, mount_path: String }` — defined Task 2, used
+  Task 6 (volume discovery via `config.volumes`), Task 7 (backup iterates
+  `config.volumes`), Task 8 (restore iterates `config.volumes`). ✓
+- `BackupConfig { schedule: Option<String>, max_backups: u32 }` — defined Task
+  2, used Task 7 (scheduler reads `config.backup.schedule`,
+  `config.backup.max_backups`). ✓
+- `AssignedPort { container: u16, host: u16 }` — defined Task 2, used Task 3
+  (`ReadContainerPortsResponse.ports`), Task 8 (readback after deploy). ✓
+- `BackupDestination { endpoint, region, bucket, access_key, secret_key }` —
+  defined Task 6, used Task 7 (config accessor returns it), Task 8 (migration
+  passes it to `RestoreVolume`). ✓
+- `MigrationState` enum — defined Task 2, used Task 8 (set/cleared during
+  migration). ✓
+- `ServerDesiredState` enum — defined Task 8, used Task 8 (drain controller
+  checks `config.desired_state`). ✓
 
 ### Known gaps
 
-1. **Stack migration** (`migrate_stack`) is marked `todo!()` in Task 8. This should be implemented following the same pattern as `migrate_deployment` but using `ComposeUp` instead of `DeployContainer`. This is a real gap that needs filling during implementation.
-2. **Deploy-on-target step** in Task 8 (Step 5 of the migration sequence) references "the existing DeployContainer execute API" but doesn't show the exact call. The implementer should look at `bin/core/src/api/execute/` for the existing deploy execution path and call it.
-3. **Full integration tests** (2-node minicluster drain test) are not included in this plan — they require a running Podman + MongoDB + multi-node setup. The plan includes unit tests and smoke tests only.
+1. **Stack migration** (`migrate_stack`) is marked `todo!()` in Task 8. This
+   should be implemented following the same pattern as `migrate_deployment` but
+   using `ComposeUp` instead of `DeployContainer`. This is a real gap that needs
+   filling during implementation.
+2. **Deploy-on-target step** in Task 8 (Step 5 of the migration sequence)
+   references "the existing DeployContainer execute API" but doesn't show the
+   exact call. The implementer should look at `bin/core/src/api/execute/` for
+   the existing deploy execution path and call it.
+3. **Full integration tests** (2-node minicluster drain test) are not included
+   in this plan — they require a running Podman + MongoDB + multi-node setup.
+   The plan includes unit tests and smoke tests only.

@@ -1,6 +1,7 @@
 # Integration tests for luddite deploy
 
-End-to-end tests that exercise the Komodo control plane against real multi-node infrastructure.
+End-to-end tests that exercise the Komodo control plane against real multi-node
+infrastructure.
 
 ## Prerequisites
 
@@ -34,12 +35,13 @@ cd tests/integration
 .venv/bin/pytest -v
 ```
 
-The test suite cleans up all `test-*` resources (containers, volumes, DB rows) before and after each test, so re-runs are safe.
+The test suite cleans up all `test-*` resources (containers, volumes, DB rows)
+before and after each test, so re-runs are safe.
 
 ## What's tested
 
-| Test file | Coverage |
-|-----------|----------|
+| Test file           | Coverage                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------ |
 | `test_placement.py` | Adaptive placement: fixed-port routing, port-conflict avoidance, empty server_id scheduler |
-| `test_backup.py` | Volume backup via scheduler, idempotent backups |
-| `test_migration.py` | Stack + deployment drain migration, source container cleanup (Polish 1 fix) |
+| `test_backup.py`    | Volume backup via scheduler, idempotent backups                                            |
+| `test_migration.py` | Stack + deployment drain migration, source container cleanup (Polish 1 fix)                |

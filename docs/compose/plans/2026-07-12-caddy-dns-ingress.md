@@ -1,24 +1,41 @@
 # Caddy + DNS Ingress Implementation Plan
 
-**Status:** ✅ All 11 tasks complete + e2e tested. PR: https://github.com/luddite-dev/deploy/pull/18
+**Status:** ✅ All 11 tasks complete + e2e tested. PR:
+<https://github.com/luddite-dev/deploy/pull/18>
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use compose:subagent (recommended) or compose:execute to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use compose:subagent
+> (recommended) or compose:execute to implement this plan task-by-task. Steps
+> use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement automatic HTTPS ingress for user-deployed Docker web apps using Caddy reverse proxy, Cloudflare DNS management, and an Iroh-based HTTP bridge from ingress nodes to worker nodes.
+**Goal:** Implement automatic HTTPS ingress for user-deployed Docker web apps
+using Caddy reverse proxy, Cloudflare DNS management, and an Iroh-based HTTP
+bridge from ingress nodes to worker nodes.
 
-**Architecture:** Dedicated ingress nodes (public IP) run Caddy on 80/443 + an in-process Iroh HTTP bridge listener. Worker nodes accept Iroh streams and forward to local Docker container ports. Core manages DNS records via a trait-abstracted `DnsProvider` (Cloudflare first), maintains a `dns_records` DB table for failover tracking, and pushes Caddy JSON config to ingress Peripheries via the Iroh control plane. Caddy is vendored as a static binary via a dedicated `luddite-dev/vendored` repo with daily CI.
+**Architecture:** Dedicated ingress nodes (public IP) run Caddy on 80/443 + an
+in-process Iroh HTTP bridge listener. Worker nodes accept Iroh streams and
+forward to local Docker container ports. Core manages DNS records via a
+trait-abstracted `DnsProvider` (Cloudflare first), maintains a `dns_records` DB
+table for failover tracking, and pushes Caddy JSON config to ingress Peripheries
+via the Iroh control plane. Caddy is vendored as a static binary via a dedicated
+`luddite-dev/vendored` repo with daily CI.
 
-**Tech Stack:** Rust (axum, iroh, reqwest, serde_json), Caddy (xcaddy-built with caddy-dns/cloudflare), Cloudflare API, MongoDB (existing)
+**Tech Stack:** Rust (axum, iroh, reqwest, serde_json), Caddy (xcaddy-built with
+caddy-dns/cloudflare), Cloudflare API, MongoDB (existing)
 
 ## Global Constraints
 
 - `CARGO_TARGET_DIR=/home/acheong/.cargo-target` before every cargo command
 - `cargo fmt` before commits (enforced by `.githooks/pre-commit`)
-- Build with `cargo build -p komodo_core -p komodo_periphery` (package names, not binary names)
-- Hard fork — no backward compatibility constraints, all types can be freely broken
-- Vendored Caddy binary path: `~/.local/share/luddite/bin/caddy-luddite` (NOT `/usr/local/bin`)
-- DNS provider must be trait-abstracted (`DnsProvider` trait), Cloudflare is first impl only
-- Caddy configured via JSON (serde structs + `POST /load` admin API), NOT Caddyfile text
+- Build with `cargo build -p komodo_core -p komodo_periphery` (package names,
+  not binary names)
+- Hard fork — no backward compatibility constraints, all types can be freely
+  broken
+- Vendored Caddy binary path: `~/.local/share/luddite/bin/caddy-luddite` (NOT
+  `/usr/local/bin`)
+- DNS provider must be trait-abstracted (`DnsProvider` trait), Cloudflare is
+  first impl only
+- Caddy configured via JSON (serde structs + `POST /load` admin API), NOT
+  Caddyfile text
 - Spec: `docs/compose/specs/2026-07-12-caddy-dns-ingress-design.md`
 
 ---
@@ -62,18 +79,27 @@ client/core/rs/src/entities/dns.rs   # DnsRecord, DnsRecordType, DnsProviderConf
 
 ### Modified files
 
-- `client/core/rs/src/entities/config/core.rs` — add `IngressConfig` field to `CoreConfig`
-- `client/core/rs/src/entities/server.rs` — add `ingress_enabled`, `public_ipv4`, `public_ipv6` to `ServerConfig`
-- `client/core/rs/src/entities/deployment.rs` — add `http_proxy: Option<HttpProxyConfig>` to `DeploymentConfig`
-- `client/core/rs/src/entities/config/periphery.rs` — add `http_bridge_port`, `caddy_binary_path`, `vendored_manifest_url`
+- `client/core/rs/src/entities/config/core.rs` — add `IngressConfig` field to
+  `CoreConfig`
+- `client/core/rs/src/entities/server.rs` — add `ingress_enabled`,
+  `public_ipv4`, `public_ipv6` to `ServerConfig`
+- `client/core/rs/src/entities/deployment.rs` — add
+  `http_proxy: Option<HttpProxyConfig>` to `DeploymentConfig`
+- `client/core/rs/src/entities/config/periphery.rs` — add `http_bridge_port`,
+  `caddy_binary_path`, `vendored_manifest_url`
 - `bin/core/src/config.rs` — add `cloudflare_api_token()` loader
 - `bin/core/src/main.rs` — initialize DNS provider
-- `bin/periphery/src/main.rs` — start Caddy supervisor (ingress nodes) + HTTP bridge
+- `bin/periphery/src/main.rs` — start Caddy supervisor (ingress nodes) + HTTP
+  bridge
 - `bin/periphery/src/state.rs` — add ingress config accessors
-- `bin/core/src/resource/deployment.rs` — wire DNS record create/delete + Caddy config sync on deploy/undeploy
-- `bin/core/src/resource/deployment.rs:216` — implement `TODO(Task 8)` ReadContainerPorts readback
-- `bin/core/src/resource/stack.rs:286` — implement `TODO(Task 8)` ReadContainerPorts readback (stack equivalent)
-- `Cargo.toml` (workspace) — add `reqwest` features if needed (likely already available)
+- `bin/core/src/resource/deployment.rs` — wire DNS record create/delete + Caddy
+  config sync on deploy/undeploy
+- `bin/core/src/resource/deployment.rs:216` — implement `TODO(Task 8)`
+  ReadContainerPorts readback
+- `bin/core/src/resource/stack.rs:286` — implement `TODO(Task 8)`
+  ReadContainerPorts readback (stack equivalent)
+- `Cargo.toml` (workspace) — add `reqwest` features if needed (likely already
+  available)
 - `bin/core/Cargo.toml` — add `async-trait`
 - `bin/periphery/Cargo.toml` — add dependencies for Caddy admin client
 
@@ -95,6 +121,7 @@ github.com/luddite-dev/vendored/
 **Covers:** [S4]
 
 **Files:**
+
 - Create: `bin/core/src/dns/mod.rs`
 - Create: `bin/core/src/dns/provider.rs`
 - Create: `bin/core/src/dns/cloudflare.rs`
@@ -103,7 +130,10 @@ github.com/luddite-dev/vendored/
 - Modify: `bin/core/src/main.rs` (add `mod dns;`)
 
 **Interfaces:**
-- Produces: `DnsProvider` trait, `RecordType` enum, `CloudflareDnsProvider` struct, `DnsRecord` / `DnsRecordType` / `DnsProviderConfig` / `IngressConfig` entities
+
+- Produces: `DnsProvider` trait, `RecordType` enum, `CloudflareDnsProvider`
+  struct, `DnsRecord` / `DnsRecordType` / `DnsProviderConfig` / `IngressConfig`
+  entities
 
 - [ ] **Step 1: Create the DNS entity types**
 
@@ -175,7 +205,8 @@ pub struct IngressConfig {
 
 - [ ] **Step 2: Add IngressConfig to CoreConfig**
 
-In `client/core/rs/src/entities/config/core.rs`, add to the `CoreConfig` struct (after the `secrets` field, before `ssl_enabled`):
+In `client/core/rs/src/entities/config/core.rs`, add to the `CoreConfig` struct
+(after the `secrets` field, before `ssl_enabled`):
 
 ```rust
   // ============
@@ -186,7 +217,8 @@ In `client/core/rs/src/entities/config/core.rs`, add to the `CoreConfig` struct 
   pub ingress: komodo_client::entities::dns::IngressConfig,
 ```
 
-Add the import at the top of the file if not already present (entities are typically re-exported via `komodo_client::entities::`).
+Add the import at the top of the file if not already present (entities are
+typically re-exported via `komodo_client::entities::`).
 
 Add to the `Default` impl for `CoreConfig`:
 
@@ -496,20 +528,24 @@ async-trait = "0.1"
 
 - [ ] **Step 7: Add the dns entity module to entities**
 
-In `client/core/rs/src/entities/mod.rs` (or wherever entities are re-exported), add:
+In `client/core/rs/src/entities/mod.rs` (or wherever entities are re-exported),
+add:
 
 ```rust
 pub mod dns;
 ```
 
-If there is a `lib.rs` pattern, follow the same pattern used by existing entity modules like `server`.
+If there is a `lib.rs` pattern, follow the same pattern used by existing entity
+modules like `server`.
 
 - [ ] **Step 8: Build and verify compilation**
 
 Run:
+
 ```bash
 CARGO_TARGET_DIR=/home/acheong/.cargo-target cargo check -p komodo_core -p komodo_client 2>&1 | tail -20
 ```
+
 Expected: 0 errors (warnings about unused code are OK at this stage).
 
 - [ ] **Step 9: Commit**
@@ -531,17 +567,23 @@ CoreConfig. Zone ID caching. Token loaded via file: spec pattern."
 **Covers:** [S3, S9]
 
 **Files:**
-- Modify: `client/core/rs/src/entities/server.rs` (add `ingress_enabled`, `public_ipv4`, `public_ipv6` to `ServerConfig`)
-- Modify: `client/core/rs/src/entities/config/periphery.rs` (add `http_bridge_port`, `caddy_binary_path`, `vendored_manifest_url`)
+
+- Modify: `client/core/rs/src/entities/server.rs` (add `ingress_enabled`,
+  `public_ipv4`, `public_ipv6` to `ServerConfig`)
+- Modify: `client/core/rs/src/entities/config/periphery.rs` (add
+  `http_bridge_port`, `caddy_binary_path`, `vendored_manifest_url`)
 - Modify: `bin/periphery/src/state.rs` (add config accessors)
 
 **Interfaces:**
+
 - Consumes: `IngressConfig` from Task 1
-- Produces: `ServerConfig.ingress_enabled`, `ServerConfig.public_ipv4/v6`, `PeripheryConfig.http_bridge_port/caddy_binary_path/vendored_manifest_url`
+- Produces: `ServerConfig.ingress_enabled`, `ServerConfig.public_ipv4/v6`,
+  `PeripheryConfig.http_bridge_port/caddy_binary_path/vendored_manifest_url`
 
 - [ ] **Step 1: Add ingress fields to ServerConfig**
 
-In `client/core/rs/src/entities/server.rs`, add to the `ServerConfig` struct (after `maintenance_windows`):
+In `client/core/rs/src/entities/server.rs`, add to the `ServerConfig` struct
+(after `maintenance_windows`):
 
 ```rust
   // =============
@@ -575,7 +617,9 @@ Add to the `Default` impl for `ServerConfig`:
 
 - [ ] **Step 2: Add ingress fields to PeripheryConfig**
 
-In `client/core/rs/src/entities/config/periphery.rs`, add to the `PeripheryConfig` struct (after the `default_terminal_command` section or similar, before any closing brace):
+In `client/core/rs/src/entities/config/periphery.rs`, add to the
+`PeripheryConfig` struct (after the `default_terminal_command` section or
+similar, before any closing brace):
 
 ```rust
   // =================
@@ -618,9 +662,11 @@ fn default_vendored_manifest_url() -> String {
 - [ ] **Step 3: Build and verify**
 
 Run:
+
 ```bash
 CARGO_TARGET_DIR=/home/acheong/.cargo-target cargo check --workspace 2>&1 | tail -10
 ```
+
 Expected: 0 errors.
 
 - [ ] **Step 4: Commit**
@@ -641,14 +687,19 @@ PeripheryConfig gains http_bridge_port (8443), caddy_binary_path
 **Covers:** [S9]
 
 **Files:**
-- Modify: `client/core/rs/src/entities/deployment.rs` (add `HttpProxyConfig` + `http_proxy` field to `DeploymentConfig`)
+
+- Modify: `client/core/rs/src/entities/deployment.rs` (add `HttpProxyConfig` +
+  `http_proxy` field to `DeploymentConfig`)
 
 **Interfaces:**
-- Produces: `HttpProxyConfig { subdomain: String, container_port: u16 }`, `DeploymentConfig.http_proxy`
+
+- Produces: `HttpProxyConfig { subdomain: String, container_port: u16 }`,
+  `DeploymentConfig.http_proxy`
 
 - [ ] **Step 1: Add HttpProxyConfig struct**
 
-In `client/core/rs/src/entities/deployment.rs`, add near the other config structs (e.g., near `PortMapping`):
+In `client/core/rs/src/entities/deployment.rs`, add near the other config
+structs (e.g., near `PortMapping`):
 
 ```rust
 #[typeshare]
@@ -677,9 +728,11 @@ In the same file, add to the `DeploymentConfig` struct:
 - [ ] **Step 3: Build and verify**
 
 Run:
+
 ```bash
 CARGO_TARGET_DIR=/home/acheong/.cargo-target cargo check --workspace 2>&1 | tail -10
 ```
+
 Expected: 0 errors.
 
 - [ ] **Step 4: Commit**
@@ -700,20 +753,28 @@ Caddy route generation for automatic HTTPS."
 **Covers:** [S7] (prerequisite — host_ports data contract)
 
 **Files:**
+
 - Modify: `bin/core/src/resource/deployment.rs:216` (implement TODO Task 8)
 - Modify: `bin/core/src/resource/stack.rs:286` (implement TODO Task 8)
 
 **Interfaces:**
+
 - Consumes: `ReadContainerPorts` RPC from `periphery_client::api::placement`
-- Produces: populated `DeploymentInfo.host_ports` on create/update (not just migration)
+- Produces: populated `DeploymentInfo.host_ports` on create/update (not just
+  migration)
 
 - [ ] **Step 1: Read the existing TODO and nearby code**
 
-Read `bin/core/src/resource/deployment.rs` around line 216 to understand what the TODO expects. Read `bin/core/src/resource/stack.rs` around line 286. Read the existing drain path (`bin/core/src/server/drain.rs:325-373`) to see how `ReadContainerPorts` is called there — this is the pattern to replicate.
+Read `bin/core/src/resource/deployment.rs` around line 216 to understand what
+the TODO expects. Read `bin/core/src/resource/stack.rs` around line 286. Read
+the existing drain path (`bin/core/src/server/drain.rs:325-373`) to see how
+`ReadContainerPorts` is called there — this is the pattern to replicate.
 
 - [ ] **Step 2: Implement ReadContainerPorts readback in deployment create**
 
-In `bin/core/src/resource/deployment.rs`, replace the `// TODO(Task 8)` comment with code that:
+In `bin/core/src/resource/deployment.rs`, replace the `// TODO(Task 8)` comment
+with code that:
+
 1. Gets the `PeripheryClient` for the assigned server
 2. Sends `ReadContainerPorts` RPC with the container name
 3. Writes the returned `Vec<AssignedPort>` to `info.host_ports`
@@ -723,14 +784,18 @@ Follow the pattern in `bin/core/src/server/drain.rs:325-373`.
 
 - [ ] **Step 3: Implement the equivalent in stack resource**
 
-In `bin/core/src/resource/stack.rs`, replace the `// TODO(Task 8)` comment with the equivalent code for stacks (loop over compose services, read ports for each).
+In `bin/core/src/resource/stack.rs`, replace the `// TODO(Task 8)` comment with
+the equivalent code for stacks (loop over compose services, read ports for
+each).
 
 - [ ] **Step 4: Build and verify**
 
 Run:
+
 ```bash
 CARGO_TARGET_DIR=/home/acheong/.cargo-target cargo check -p komodo_core 2>&1 | tail -10
 ```
+
 Expected: 0 errors.
 
 - [ ] **Step 5: Commit**
@@ -751,6 +816,7 @@ Required by Caddy controller to discover container host ports."
 **Covers:** [S7]
 
 **Files:**
+
 - Create: `bin/periphery/src/http_bridge/mod.rs`
 - Create: `bin/periphery/src/http_bridge/ingress.rs`
 - Create: `bin/periphery/src/http_bridge/forward.rs`
@@ -759,8 +825,11 @@ Required by Caddy controller to discover container host ports."
 - Modify: `lib/transport/src/iroh/endpoint.rs` (add `HTTP_PROXY_ALPN` constant)
 
 **Interfaces:**
-- Consumes: `iroh::Endpoint`, `iroh::Connection`, existing transport Iroh infrastructure
-- Produces: `start_ingress_bridge(endpoint, port)`, `start_forward_handler(endpoint)`, `HTTP_PROXY_ALPN`
+
+- Consumes: `iroh::Endpoint`, `iroh::Connection`, existing transport Iroh
+  infrastructure
+- Produces: `start_ingress_bridge(endpoint, port)`,
+  `start_forward_handler(endpoint)`, `HTTP_PROXY_ALPN`
 
 - [ ] **Step 1: Add ALPN constant**
 
@@ -1153,7 +1222,8 @@ In `bin/periphery/src/main.rs`, add:
 mod http_bridge;
 ```
 
-And in the startup section (inside the `async` block, after the outbound connection spawning), add:
+And in the startup section (inside the `async` block, after the outbound
+connection spawning), add:
 
 ```rust
     // Start HTTP forward handler (all nodes)
@@ -1178,9 +1248,16 @@ And in the startup section (inside the `async` block, after the outbound connect
     }
 ```
 
-Note: `config.ingress_enabled` / `config.http_bridge_port` come from the `PeripheryConfig` additions in Task 2. However, `ingress_enabled` is on `ServerConfig`, not `PeripheryConfig`. The Periphery doesn't load `ServerConfig` — that's a Core entity.
+Note: `config.ingress_enabled` / `config.http_bridge_port` come from the
+`PeripheryConfig` additions in Task 2. However, `ingress_enabled` is on
+`ServerConfig`, not `PeripheryConfig`. The Periphery doesn't load `ServerConfig`
+— that's a Core entity.
 
-**Design note:** The Periphery needs to know if it's an ingress node. Since `ServerConfig` is a Core entity, the Periphery should get this flag from its own config. Add `ingress_enabled: bool` to `PeripheryConfig` as well (the Periphery declares itself as ingress, and Core validates/updates the `ServerConfig` to match).
+**Design note:** The Periphery needs to know if it's an ingress node. Since
+`ServerConfig` is a Core entity, the Periphery should get this flag from its own
+config. Add `ingress_enabled: bool` to `PeripheryConfig` as well (the Periphery
+declares itself as ingress, and Core validates/updates the `ServerConfig` to
+match).
 
 - [ ] **Step 5: Add ingress_enabled to PeripheryConfig (design fix)**
 
@@ -1199,20 +1276,24 @@ Update the main.rs spawn block from Step 4 to use `config.ingress_enabled`.
 
 - [ ] **Step 7: Add necessary Cargo dependencies**
 
-In `bin/periphery/Cargo.toml`, ensure `axum`, `http-body-util` are available. Add if missing:
+In `bin/periphery/Cargo.toml`, ensure `axum`, `http-body-util` are available.
+Add if missing:
 
 ```toml
 http-body-util = "0.1"
 ```
 
-(already has `axum` via workspace? Check — if not, add `axum = { workspace = true }`)
+(already has `axum` via workspace? Check — if not, add
+`axum = { workspace = true }`)
 
 - [ ] **Step 8: Build and verify**
 
 Run:
+
 ```bash
 CARGO_TARGET_DIR=/home/acheong/.cargo-target cargo check -p komodo_periphery 2>&1 | tail -20
 ```
+
 Expected: 0 errors (warnings about unused code OK).
 
 - [ ] **Step 9: Commit**
@@ -1236,12 +1317,16 @@ Connection pooling per worker endpoint ID."
 **Covers:** [S6]
 
 **Files:**
+
 - Create: `bin/core/src/ingress/mod.rs`
 - Create: `bin/core/src/ingress/config.rs`
 
 **Interfaces:**
-- Consumes: `DeploymentInfo.host_ports`, `ServerConfig.ingress_enabled/public_ipv4`, `DnsProviderConfig`
-- Produces: `build_caddy_json_config(routes, cloudflare_token)` → `serde_json::Value`
+
+- Consumes: `DeploymentInfo.host_ports`,
+  `ServerConfig.ingress_enabled/public_ipv4`, `DnsProviderConfig`
+- Produces: `build_caddy_json_config(routes, cloudflare_token)` →
+  `serde_json::Value`
 
 - [ ] **Step 1: Create the ingress module**
 
@@ -1344,9 +1429,11 @@ mod ingress;
 - [ ] **Step 3: Build and verify**
 
 Run:
+
 ```bash
 CARGO_TARGET_DIR=/home/acheong/.cargo-target cargo check -p komodo_core 2>&1 | tail -10
 ```
+
 Expected: 0 errors.
 
 - [ ] **Step 4: Commit**
@@ -1367,14 +1454,19 @@ with cloudflare DNS-01 challenge. POSTed to Caddy /load endpoint."
 **Covers:** [S8]
 
 **Files:**
+
 - Create: `bin/periphery/src/caddy/mod.rs`
 - Create: `bin/periphery/src/caddy/supervisor.rs`
 - Create: `bin/periphery/src/caddy/binary.rs`
-- Modify: `bin/periphery/src/main.rs` (start Caddy supervisor if ingress_enabled)
+- Modify: `bin/periphery/src/main.rs` (start Caddy supervisor if
+  ingress_enabled)
 
 **Interfaces:**
-- Consumes: `PeripheryConfig.caddy_binary_path`, `PeripheryConfig.vendored_manifest_url`
-- Produces: `start_caddy_supervisor(config)`, `reload_caddy_config(json)` admin API client
+
+- Consumes: `PeripheryConfig.caddy_binary_path`,
+  `PeripheryConfig.vendored_manifest_url`
+- Produces: `start_caddy_supervisor(config)`, `reload_caddy_config(json)` admin
+  API client
 
 - [ ] **Step 1: Create the binary management module**
 
@@ -1647,9 +1739,11 @@ hex = "0.4"
 - [ ] **Step 5: Build and verify**
 
 Run:
+
 ```bash
 CARGO_TARGET_DIR=/home/acheong/.cargo-target cargo check -p komodo_periphery 2>&1 | tail -20
 ```
+
 Expected: 0 errors.
 
 - [ ] **Step 6: Commit**
@@ -1671,13 +1765,18 @@ client for hot config reload via POST /load with JSON."
 **Covers:** [S4, S5]
 
 **Files:**
-- Create: `bin/core/src/ingress/management.rs` (deployment → DNS → Caddy config orchestration)
+
+- Create: `bin/core/src/ingress/management.rs` (deployment → DNS → Caddy config
+  orchestration)
 - Create: `bin/core/src/ingress/failover.rs` (ingress node failure handling)
 - Modify: `bin/core/src/ingress/mod.rs` (add submodules)
 
 **Interfaces:**
-- Consumes: `DnsProvider` trait (Task 1), `build_caddy_config` (Task 6), `DnsRecord` entity (Task 1)
-- Produces: `create_app_dns_record()`, `delete_app_dns_record()`, `migrate_ingress_records()`, `get_ingress_routes_for_node()`
+
+- Consumes: `DnsProvider` trait (Task 1), `build_caddy_config` (Task 6),
+  `DnsRecord` entity (Task 1)
+- Produces: `create_app_dns_record()`, `delete_app_dns_record()`,
+  `migrate_ingress_records()`, `get_ingress_routes_for_node()`
 
 - [ ] **Step 1: Create the management module**
 
@@ -1845,9 +1944,11 @@ pub use config::*;
 - [ ] **Step 4: Build and verify**
 
 Run:
+
 ```bash
 CARGO_TARGET_DIR=/home/acheong/.cargo-target cargo check -p komodo_core 2>&1 | tail -10
 ```
+
 Expected: 0 errors.
 
 - [ ] **Step 5: Commit**
@@ -1869,14 +1970,19 @@ DB integration marked as TODO — needs MongoDB collection wiring."
 **Covers:** [S8]
 
 **Files:**
-- Create: (in separate repo `luddite-dev/vendored`) `.github/workflows/caddy-check.yml`, `.github/workflows/caddy-build.yml`, `manifest.json`, `README.md`
+
+- Create: (in separate repo `luddite-dev/vendored`)
+  `.github/workflows/caddy-check.yml`, `.github/workflows/caddy-build.yml`,
+  `manifest.json`, `README.md`
 
 **Interfaces:**
+
 - Produces: `manifest.json` with Caddy version + checksums + download URLs
 
 - [ ] **Step 1: Create the vendored repo structure locally**
 
-Create a new local directory (not inside the deploy repo) and initialize the vendored repo:
+Create a new local directory (not inside the deploy repo) and initialize the
+vendored repo:
 
 ```bash
 mkdir -p /tmp/vendored
@@ -1935,10 +2041,10 @@ jobs:
         run: |
           LATEST=$(gh release view --repo caddyserver/caddy --json tagName -q .tagName | sed 's/^v//')
           CURRENT=$(jq -r '.artifacts.caddy.version' manifest.json)
-          
+
           echo "latest_version=$LATEST" >> $GITHUB_OUTPUT
           echo "Latest Caddy: $LATEST, Current: $CURRENT"
-          
+
           if [ "$LATEST" != "$CURRENT" ]; then
             echo "needs_update=true" >> $GITHUB_OUTPUT
           else
@@ -2018,7 +2124,7 @@ jobs:
         run: |
           AMD64_CHECKSUM=$(sha256sum caddy-luddite-*-linux-amd64 | cut -d' ' -f1)
           ARM64_CHECKSUM=$(sha256sum caddy-luddite-*-linux-arm64 | cut -d' ' -f1)
-          
+
           jq \
             --arg version "${{ inputs.caddy_version }}" \
             --arg upstream "v${{ inputs.caddy_version }}" \
@@ -2043,7 +2149,8 @@ jobs:
 ```markdown
 # Vendored Binaries
 
-This repository manages the build pipeline for vendored binaries used by Luddite.
+This repository manages the build pipeline for vendored binaries used by
+Luddite.
 
 ## Artifacts
 
@@ -2051,9 +2158,12 @@ This repository manages the build pipeline for vendored binaries used by Luddite
 
 Custom Caddy build with the `caddy-dns/cloudflare` plugin baked in.
 
-- **Manifest:** `manifest.json` tracks the latest version, checksums, and download URLs.
-- **CI:** Daily check for new upstream Caddy releases. Builds and publishes automatically.
-- **Consumers:** Periphery fetches `manifest.json` to detect version changes and auto-updates the local binary.
+- **Manifest:** `manifest.json` tracks the latest version, checksums, and
+  download URLs.
+- **CI:** Daily check for new upstream Caddy releases. Builds and publishes
+  automatically.
+- **Consumers:** Periphery fetches `manifest.json` to detect version changes and
+  auto-updates the local binary.
 ```
 
 - [ ] **Step 6: Commit and push the vendored repo**
@@ -2080,27 +2190,39 @@ Wait for the build to complete and verify `manifest.json` gets updated.
 **Covers:** [S10]
 
 **Files:**
-- Modify: `bin/core/src/resource/deployment.rs` (on create: create DNS record, push Caddy config; on delete: delete DNS record, push Caddy config)
-- Modify: `bin/core/src/ingress/management.rs` (wire to real MongoDB, remove TODOs)
+
+- Modify: `bin/core/src/resource/deployment.rs` (on create: create DNS record,
+  push Caddy config; on delete: delete DNS record, push Caddy config)
+- Modify: `bin/core/src/ingress/management.rs` (wire to real MongoDB, remove
+  TODOs)
 
 **Interfaces:**
-- Consumes: All prior tasks (DnsProvider, Caddy config builder, management module)
-- Produces: End-to-end flow — deploy app → DNS created → Caddy configured → traffic flows
+
+- Consumes: All prior tasks (DnsProvider, Caddy config builder, management
+  module)
+- Produces: End-to-end flow — deploy app → DNS created → Caddy configured →
+  traffic flows
 
 - [ ] **Step 1: Wire management module to MongoDB**
 
-In `bin/core/src/ingress/management.rs`, replace the `// TODO: Save to MongoDB` comments with actual database calls. Follow the existing pattern in `bin/core/src/resource/` for how MongoDB collections are accessed (look at `bin/core/src/db.rs` or equivalent).
+In `bin/core/src/ingress/management.rs`, replace the `// TODO: Save to MongoDB`
+comments with actual database calls. Follow the existing pattern in
+`bin/core/src/resource/` for how MongoDB collections are accessed (look at
+`bin/core/src/db.rs` or equivalent).
 
 The `dns_records` collection stores `DnsRecord` documents. Implement:
-- `insert_dns_record(record)` 
-- `delete_dns_record(id)` 
-- `find_dns_records_by_node(node_id)` 
-- `find_dns_record_by_deployment(deployment_id)` 
+
+- `insert_dns_record(record)`
+- `delete_dns_record(id)`
+- `find_dns_records_by_node(node_id)`
+- `find_dns_record_by_deployment(deployment_id)`
 - `update_dns_record_target(id, new_node_id)`
 
 - [ ] **Step 2: Hook into deployment create**
 
-In `bin/core/src/resource/deployment.rs`, in the `post_create` function (around line 200-214), after `info.assigned_server` is set and `ReadContainerPorts` readback (Task 4) populates `info.host_ports`:
+In `bin/core/src/resource/deployment.rs`, in the `post_create` function (around
+line 200-214), after `info.assigned_server` is set and `ReadContainerPorts`
+readback (Task 4) populates `info.host_ports`:
 
 ```rust
 // If http_proxy is configured, create DNS record + push Caddy config
@@ -2110,7 +2232,7 @@ if let Some(http_proxy) = &config.http_proxy {
     if let Some(base_domain) = base_domain {
       // Find or select an ingress node
       let ingress_node = select_ingress_node().await?;
-      
+
       let record = crate::ingress::management::create_app_dns_record(
         dns_provider.as_ref(),
         base_domain,
@@ -2127,7 +2249,7 @@ if let Some(http_proxy) = &config.http_proxy {
         &cloudflare_api_token,
         ingress_node.http_bridge_port,
       );
-      
+
       // Send config to Periphery via Iroh control plane
       send_caddy_config_to_periphery(&ingress_node.id, &caddy_config).await?;
     }
@@ -2135,7 +2257,8 @@ if let Some(http_proxy) = &config.http_proxy {
 }
 ```
 
-(Actual function signatures may vary — follow existing code patterns for how Core communicates with Periphery via the Iroh control plane.)
+(Actual function signatures may vary — follow existing code patterns for how
+Core communicates with Periphery via the Iroh control plane.)
 
 - [ ] **Step 3: Hook into deployment delete**
 
@@ -2149,9 +2272,11 @@ In the deployment delete path, before the deployment is removed:
 - [ ] **Step 4: Build and verify**
 
 Run:
+
 ```bash
 CARGO_TARGET_DIR=/home/acheong/.cargo-target cargo check --workspace 2>&1 | tail -20
 ```
+
 Expected: 0 errors.
 
 - [ ] **Step 5: Commit**
@@ -2173,6 +2298,7 @@ End-to-end: deploy app → DNS → cert → Caddy → Iroh bridge → container.
 **Covers:** [S11, S12]
 
 **Files:**
+
 - All files touched in prior tasks
 - Modify: `roadmap.md` (mark M4 section)
 - Modify: `readme.md` (add M4 section)
@@ -2188,6 +2314,7 @@ CARGO_TARGET_DIR=/home/acheong/.cargo-target cargo fmt
 ```bash
 CARGO_TARGET_DIR=/home/acheong/.cargo-target cargo clippy --workspace 2>&1 | tail -30
 ```
+
 Fix any warnings.
 
 - [ ] **Step 3: Full workspace check**
@@ -2195,6 +2322,7 @@ Fix any warnings.
 ```bash
 CARGO_TARGET_DIR=/home/acheong/.cargo-target cargo check --workspace 2>&1 | tail -10
 ```
+
 Expected: 0 errors, 0 warnings.
 
 - [ ] **Step 4: Run existing tests**
@@ -2202,11 +2330,13 @@ Expected: 0 errors, 0 warnings.
 ```bash
 CARGO_TARGET_DIR=/home/acheong/.cargo-target cargo test -p transport --lib iroh 2>&1 | tail -10
 ```
+
 Expected: 5/5 pass (existing M3 tests).
 
 - [ ] **Step 5: Update roadmap.md**
 
-Read `roadmap.md` and mark M4 as complete (or in progress, depending on actual completion status).
+Read `roadmap.md` and mark M4 as complete (or in progress, depending on actual
+completion status).
 
 - [ ] **Step 6: Update docs/forking.md**
 
