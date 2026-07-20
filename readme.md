@@ -44,6 +44,25 @@ sync, and working with containers. With Komodo, we:
 
 ## Quickstart
 
+### Deploying the Core
+
+First, copy `./compose.yml` onto a server. Since we use
+[Iroh](https://www.iroh.computer/) for networking, this server doesn't need to
+have a public IP. Then, create a `.env` file in the same directory and copy over
+the contents from `./.env.example`. Make sure to change
+`KOMODO_INIT_ADMIN_PASSWORD` as by default, the UI is publicly exposed.
+
+For now, automatic DNS & HTTPS only works with Cloudflare. To configure it, do
+`mkdir -p config/keys` and paste your Cloudflare API token (with permissions to
+write to DNS) into `config/keys/cloudflare-token` and enter your top level
+domain for which subdomains will be created upon. We currently do not support
+multiple domains yet.
+
+### Deploying the Periphery and Onboarding
+
+First, we need an onboarding key from the core to ensure the periphery is
+authorized.
+
 <details>
 
 <summary>

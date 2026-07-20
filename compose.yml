@@ -1,0 +1,124 @@
+####################################
+# 🦎 LUDDITE CORE COMPOSE 🦎 #
+####################################
+
+## Deploys Core only (no Periphery) with:
+##   1. PostgreSQL + DocumentDB extension
+##   2. FerretDB (Mongo-compatible API on PostgreSQL)
+##   3. MinIO S3 (community fork: pgsty/minio)
+##   4. Komodo Core
+##
+## Usage:
+##   cp .env.example .env   # then edit .env
+##   docker compose up -d
+
+services:
+  # ─── Database: PostgreSQL + DocumentDB ───
+  postgres:
+    image: ghcr.io/ferretdb/postgres-documentdb
+    labels:
+      komodo.skip: true
+    restart: unless-stopped
+    ports:
+      - "${INTERNAL_IP}:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${KOMODO_DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${KOMODO_DATABASE_PASSWORD}
+      POSTGRES_DB: postgres
+
+  # ─── Database: FerretDB (Mongo wire protocol → PostgreSQL) ───
+  ferretdb:
+    image: ghcr.io/ferretdb/ferretdb:1
+    labels:
+      komodo.skip: true
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    # ports:
+    #   - "${INTERNAL_IP}:27017:27017"
+    volumes:
+      - ferretdb-state:/state
+    environment:
+      FERRETDB_POSTGRESQL_URL: postgres://${KOMODO_DATABASE_USERNAME}:${KOMODO_DATABASE_PASSWORD}@postgres:5432/postgres
+
+  # ─── S3: MinIO (community fork) ───
+  minio:
+    image: pgsty/minio:latest
+    labels:
+      komodo.skip: true
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    environment:
+      MINIO_ROOT_USER: ${KOMODO_BACKUP_S3_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${KOMODO_BACKUP_S3_SECRET_ACCESS_KEY}
+    # ports:
+      # - "${INTERNAL_IP}:9000:9000"  # S3 API
+      # - "${INTERNAL_IP}:9001:9001"  # MinIO console
+
+  # Create the backup bucket on first run
+  minio-init:
+    image: pgsty/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 3;
+      mc alias set local http://minio:9000 ${KOMODO_BACKUP_S3_ACCESS_KEY_ID} ${KOMODO_BACKUP_S3_SECRET_ACCESS_KEY};
+      mc mb --ignore-existing local/${KOMODO_BACKUP_S3_BUCKET};
+      "
+
+  # ─── Komodo Core ───
+  core:
+    build:
+      context: .
+      dockerfile: bin/core/aio.Dockerfile
+    init: true
+    restart: unless-stopped
+    depends_on:
+      - ferretdb
+      - minio
+    ports:
+      - "9120:9120"
+    environment:
+      # Database — FerretDB speaks Mongo wire protocol
+      KOMODO_DATABASE_ADDRESS: ferretdb:27017
+      KOMODO_DATABASE_USERNAME: ${KOMODO_DATABASE_USERNAME}
+      KOMODO_DATABASE_PASSWORD: ${KOMODO_DATABASE_PASSWORD}
+
+      # S3 backup destination (MinIO)
+      KOMODO_BACKUP_S3_ENDPOINT: http://minio:9000
+      KOMODO_BACKUP_S3_REGION: us-east-1
+      KOMODO_BACKUP_S3_BUCKET: ${KOMODO_BACKUP_S3_BUCKET}
+      KOMODO_BACKUP_S3_ACCESS_KEY_ID: ${KOMODO_BACKUP_S3_ACCESS_KEY_ID}
+      KOMODO_BACKUP_S3_SECRET_ACCESS_KEY: ${KOMODO_BACKUP_S3_SECRET_ACCESS_KEY}
+
+      # Auth
+      KOMODO_LOCAL_AUTH: "true"
+      KOMODO_INIT_ADMIN_USERNAME: ${KOMODO_INIT_ADMIN_USERNAME}
+      KOMODO_INIT_ADMIN_PASSWORD: ${KOMODO_INIT_ADMIN_PASSWORD}
+      KOMODO_JWT_SECRET: ${KOMODO_JWT_SECRET}
+
+      # Host
+      KOMODO_HOST: ${KOMODO_HOST}
+
+      # Iroh transport (Core↔Periphery)
+      KOMODO_IROH_SECRET_KEY: file:/config/keys/iroh.key
+
+      # DNS ingress (optional, needed for auto HTTPS)
+      KOMODO_INGRESS_DNS_PROVIDER: ${KOMODO_INGRESS_DNS_PROVIDER:-}
+      KOMODO_INGRESS_DNS_CLOUDFLARE_API_TOKEN: ${KOMODO_INGRESS_DNS_CLOUDFLARE_API_TOKEN:-}
+      KOMODO_INGRESS_DNS_BASE_DOMAIN: ${KOMODO_INGRESS_DNS_BASE_DOMAIN:-}
+    volumes:
+      - keys:/config/keys
+      - backups:/backups
+
+volumes:
+  postgres-data:
+  ferretdb-state:
+  minio-data:
+  keys:
+  backups:
