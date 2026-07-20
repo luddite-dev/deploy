@@ -30,13 +30,15 @@ sync, and working with containers. With Komodo, we:
 - Iroh p2p transport replaces the original websocket + Noise handshake protocol.
   Both because Iroh is cool and I often have nodes without public IP addresses.
 
-> ![NOTE]
+> [!NOTE]
 >
 > AI-use disclosure: A significant portion of the code has been written by AI,
 > specifically `GLM-5.2` with
-> [Mimocode](https://github.com/XiaomiMiMo/MiMo-Code). I then proceeded to give
-> the agent access to VPS machines for actual deployment and testing. I
-> personally find the code quality to be abhorrent, but it does somehow work.
+> [Mimocode](https://github.com/XiaomiMiMo/MiMo-Code). Not exactly "vibe coding"
+> as I spent a decent amount of time on specs, but definitely not to my usual
+> "hand crafted" quality. You may find many of the abstractions and design
+> inelegant.
+>
 > Initially intended as an experiment, but I am slowly adopting it myself. The
 > S3 backups are completely separate from the system & directly compatible with
 > podman imports, and so hopefully if anything does go wrong, I can restore
