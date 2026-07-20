@@ -112,6 +112,8 @@ we're root or not, but you can also set
 You can finally run the periphery binary. Set it up as a `systemd` service or
 just run it in `screen`.
 
+### TODO: Document basic example of compose stack
+
 <details>
 
 <summary>
