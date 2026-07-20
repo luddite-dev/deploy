@@ -25,13 +25,13 @@ export default function NewOnboardingKey() {
   const [privateKey, setPrivateKey] = useState("");
   const [expires, setExpires] = useState<ExpiresOptions>("1 day");
 
-  const [created, setCreated] = useState<{ private_key: string }>();
+  const [created, setCreated] = useState<{ private_key: string; public_key: string }>();
   const invalidate = useInvalidate();
   const { mutate, isPending } = useWrite("CreateOnboardingKey", {
-    onSuccess: ({ private_key }) => {
+    onSuccess: ({ private_key, created }) => {
       notifications.show({ message: "Onboarding Key Created" });
       invalidate(["ListOnboardingKeys"]);
-      setCreated({ private_key });
+      setCreated({ private_key, public_key: created.public_key });
     },
   });
   const now = Date.now();
@@ -123,6 +123,12 @@ export default function NewOnboardingKey() {
               <Text size="md" my="sm">
                 Copy the onboarding key below. <b>It won't be shown again</b>.
               </Text>
+
+              <CopyText
+                content={created.public_key}
+                label="public key (use this for PERIPHERY_ONBOARDING_KEY)"
+                w="90%"
+              />
 
               <CopyText
                 content={created.private_key}

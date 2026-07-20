@@ -205,13 +205,39 @@ async fn handle_onboarding_connection(
   reader: FramedReader<iroh::endpoint::RecvStream>,
   token: String,
 ) -> anyhow::Result<()> {
-  // Validate the onboarding token against DB
+  // Validate the onboarding token against DB.
+  // The token can be either the public key (stored in DB) or the
+  // private key (shown to the user in the UI). If the direct lookup
+  // fails, try deriving the public key from the token as a private key.
   let onboarding_key = db_client()
     .onboarding_keys
     .find_one(doc! { "public_key": &token })
     .await
-    .context("Failed to query database for onboarding keys")?
-    .context("Matching onboarding key not found")?;
+    .context("Failed to query database for onboarding keys")?;
+
+  let onboarding_key = match onboarding_key {
+    Some(k) => k,
+    None => {
+      // Token didn't match a public key — try treating it as a private key
+      let derived_public =
+        mogh_pki::EncodedKeyPair::from_private_key(
+          mogh_pki::PkiKind::Mutual,
+          &token,
+        )
+        .ok()
+        .map(|kp| kp.public.into_inner());
+
+      match derived_public {
+        Some(pk) => db_client()
+          .onboarding_keys
+          .find_one(doc! { "public_key": &pk })
+          .await
+          .context("Failed to query database for onboarding keys")?
+          .context("Matching onboarding key not found")?,
+        None => anyhow::bail!("Matching onboarding key not found"),
+      }
+    }
+  };
 
   if !onboarding_key.enabled
     || (onboarding_key.expires != 0
