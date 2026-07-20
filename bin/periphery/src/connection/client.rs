@@ -106,14 +106,16 @@ pub async fn handler(
           .await;
           continue;
         }
+        // Send ConnectAs with the desired server name.
+        // Core will use the Iroh connection's remote_id for the endpoint_id.
         if let Err(e) = writer
           .write_message(
-            &LoginMessage::EndpointId(our_endpoint_id.clone())
+            &LoginMessage::ConnectAs(config.connect_as.clone())
               .encode(),
           )
           .await
         {
-          warn!("Failed to send EndpointId | {e:#}");
+          warn!("Failed to send ConnectAs | {e:#}");
           tokio::time::sleep(Duration::from_secs(
             periphery_client::CONNECTION_RETRY_SECONDS,
           ))

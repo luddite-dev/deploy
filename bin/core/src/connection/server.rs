@@ -97,11 +97,20 @@ async fn handle_connection(conn: Connection) -> anyhow::Result<()> {
       .await
     }
     LoginMessage::OnboardingToken(token) => {
-      handle_onboarding_connection(writer, reader, token).await
+      handle_onboarding_connection(
+        writer,
+        reader,
+        token,
+        remote_endpoint_id,
+      )
+      .await
     }
     LoginMessage::Success => {
       Err(anyhow!("Received unexpected LoginMessage::Success"))
     }
+    LoginMessage::ConnectAs(_) => Err(anyhow!(
+      "Received unexpected LoginMessage::ConnectAs as first message"
+    )),
   }
 }
 
@@ -204,6 +213,7 @@ async fn handle_onboarding_connection(
   mut writer: FramedWriter<iroh::endpoint::SendStream>,
   reader: FramedReader<iroh::endpoint::RecvStream>,
   token: String,
+  remote_endpoint_id: String,
 ) -> anyhow::Result<()> {
   // Validate the onboarding token against DB.
   // The token can be either the public key (stored in DB) or the
@@ -246,37 +256,41 @@ async fn handle_onboarding_connection(
     return Err(anyhow!("Onboarding key is invalid"));
   }
 
-  // The remote endpoint_id will be used as the server's endpoint_id
-  // We need to get it from the connection, but we already consumed the
-  // bidi stream. The endpoint_id will be received in a subsequent message
-  // or we can use the onboarding key's associated data.
-
-  // Read the endpoint_id from the next message
+  // Read the ConnectAs message — the desired server name
   let mut reader = reader;
-  let endpoint_msg = reader.read_message().await?;
-  let endpoint_id: String = match endpoint_msg.decode() {
+  let connect_as_msg = reader.read_message().await?;
+  let server_name: String = match connect_as_msg.decode() {
     Ok(TransportMessage::Login(encoded)) => {
       match encoded.decode()? {
-        LoginMessage::EndpointId(id) => id,
+        LoginMessage::ConnectAs(name) => name,
         _ => {
           writer
             .write_message(&LoginMessage::Success.encode())
             .await?;
           return Err(anyhow!(
-            "Expected EndpointId after onboarding"
+            "Expected ConnectAs after onboarding token"
           ));
         }
       }
     }
     _ => {
-      return Err(anyhow!("Expected EndpointId message"));
+      return Err(anyhow!("Expected ConnectAs message"));
     }
+  };
+
+  // Use the server name if provided, otherwise fall back to the
+  // onboarding key's public key
+  let server_name = if server_name.is_empty() {
+    onboarding_key.public_key.clone()
+  } else {
+    server_name
   };
 
   // Create or update the server
   let server_id = match create_or_update_server(
     &onboarding_key,
-    endpoint_id.clone(),
+    remote_endpoint_id.clone(),
+    server_name,
   )
   .await
   {
@@ -318,7 +332,7 @@ async fn handle_onboarding_connection(
     .context("Failed to send Login Success")?;
 
   info!(
-    "Server onboarded successfully | server_id: {server_id} | endpoint_id: {endpoint_id}"
+    "Server onboarded successfully | server_id: {server_id} | endpoint_id: {remote_endpoint_id}"
   );
 
   // Spawn cache refresh
@@ -339,11 +353,12 @@ async fn handle_onboarding_connection(
 async fn create_or_update_server(
   onboarding_key: &OnboardingKey,
   endpoint_id: String,
+  server_name: String,
 ) -> anyhow::Result<String> {
   // Check if a server with this name already exists (from a prior onboarding)
   let existing = db_client()
     .servers
-    .find_one(id_or_name_filter(&onboarding_key.public_key))
+    .find_one(id_or_name_filter(&server_name))
     .await
     .ok()
     .flatten();
@@ -368,12 +383,18 @@ async fn create_or_update_server(
   }
 
   // Server doesn't exist — create it
-  create_server_maybe_builder(onboarding_key, endpoint_id).await
+  create_server_maybe_builder(
+    onboarding_key,
+    endpoint_id,
+    server_name,
+  )
+  .await
 }
 
 async fn create_server_maybe_builder(
   onboarding_key: &OnboardingKey,
   endpoint_id: String,
+  server_name: String,
 ) -> anyhow::Result<String> {
   let config = if onboarding_key.copy_server.is_empty() {
     PartialServerConfig {
@@ -412,7 +433,7 @@ async fn create_server_maybe_builder(
   };
 
   let server = CreateServer {
-    name: onboarding_key.public_key.clone(),
+    name: server_name,
     config,
     public_key: Some(endpoint_id),
   }

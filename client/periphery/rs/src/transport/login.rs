@@ -43,6 +43,10 @@ pub enum LoginMessage {
   /// The sender's Iroh EndpointId.
   /// Sent as the first message when reconnecting a known node.
   EndpointId(String),
+  /// The desired server name (PERIPHERY_CONNECT_AS).
+  /// Sent as the second message during onboarding, after OnboardingToken.
+  /// Core uses the Iroh connection's remote_id for the endpoint_id.
+  ConnectAs(String),
   /// Login completed successfully.
   Success,
 }
@@ -55,6 +59,7 @@ impl Encode<EncodedTransportMessage> for LoginMessage {
       LoginMessage::Success => Vec::new(),
       LoginMessage::OnboardingToken(token) => token.into_bytes(),
       LoginMessage::EndpointId(id) => id.into_bytes(),
+      LoginMessage::ConnectAs(name) => name.into_bytes(),
     };
     bytes.push(variant_byte);
     let inner = InnerEncodedLoginMessage(bytes);
@@ -90,6 +95,11 @@ impl Decode<LoginMessage> for EncodedLoginMessage {
           .context("EndpointId is not valid utf-8")?;
         LoginMessage::EndpointId(id)
       }
+      ConnectAs => {
+        let name = String::from_utf8(bytes)
+          .context("ConnectAs is not valid utf-8")?;
+        LoginMessage::ConnectAs(name)
+      }
     };
 
     Ok(message)
@@ -103,6 +113,7 @@ impl LoginMessageVariant {
       0 => OnboardingToken,
       1 => EndpointId,
       2 => Success,
+      3 => ConnectAs,
       other => {
         return Err(anyhow!(
           "Got unrecognized LoginMessageVariant byte: {other}"
@@ -118,6 +129,7 @@ impl LoginMessageVariant {
       OnboardingToken => 0,
       EndpointId => 1,
       Success => 2,
+      ConnectAs => 3,
     }
   }
 }
