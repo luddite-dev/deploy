@@ -62,6 +62,7 @@ clap.workspace = true
 envy.workspace = true
 uuid.workspace = true
 rust-s3.workspace = true
+openssl-sys.workspace = true
 md-5.workspace = true
 digest.workspace = true
 sha2.workspace = true

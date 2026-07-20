@@ -39,3 +39,4 @@ tokio.workspace = true
 serde.workspace = true
 clap.workspace = true
 envy.workspace = true
+openssl-sys.workspace = true
