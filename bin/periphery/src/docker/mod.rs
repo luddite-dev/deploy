@@ -1,3 +1,5 @@
+use std::{path::Path, sync::OnceLock};
+
 use anyhow::{Context, anyhow};
 use bollard::Docker;
 use command::{
@@ -21,10 +23,84 @@ pub struct DockerClient {
 
 impl DockerClient {
   pub fn connect() -> anyhow::Result<DockerClient> {
+    // Autodetect Podman socket if DOCKER_HOST is not explicitly set.
+    // This sets the env var so both bollard's API connection and the
+    // `docker compose` CLI commands shell out to the same socket.
+    if std::env::var("DOCKER_HOST").is_err() {
+      if let Some(socket) = autodetect_container_socket() {
+        info!("Auto-detected container runtime socket: {socket}");
+        // SAFETY: This runs during single-threaded startup before any
+        // threads that might read DOCKER_HOST are spawned.
+        unsafe { std::env::set_var("DOCKER_HOST", &socket) };
+      } else {
+        warn!(
+          "No container runtime socket found. \
+           Checked: $XDG_RUNTIME_DIR/podman/podman.sock, \
+           /run/podman/podman.sock, /var/run/docker.sock. \
+           Set DOCKER_HOST manually if your socket is elsewhere."
+        );
+      }
+    }
+
     let docker = Docker::connect_with_defaults()
-      .context("Failed to connect to docker api. Docker monitoring won't work and will return empty results.")?;
+      .context("Failed to connect to container runtime API. Container monitoring won't work.")?;
     Ok(DockerClient { docker })
   }
+}
+
+/// Probe for a container runtime socket (Podman first, then Docker).
+/// Returns a `unix://` URL suitable for `DOCKER_HOST`.
+fn autodetect_container_socket() -> Option<String> {
+  // 1. Rootless Podman: $XDG_RUNTIME_DIR/podman/podman.sock
+  if let Ok(xdg) = std::env::var("XDG_RUNTIME_DIR") {
+    let path = format!("{xdg}/podman/podman.sock");
+    if Path::new(&path).exists() {
+      return Some(format!("unix://{path}"));
+    }
+  }
+
+  // 2. System Podman: /run/podman/podman.sock
+  let system_podman = "/run/podman/podman.sock";
+  if Path::new(system_podman).exists() {
+    return Some(format!("unix://{system_podman}"));
+  }
+
+  // 3. Docker fallback: /var/run/docker.sock
+  let docker_sock = "/var/run/docker.sock";
+  if Path::new(docker_sock).exists() {
+    return Some(format!("unix://{docker_sock}"));
+  }
+
+  None
+}
+
+/// Returns the container CLI binary name to use for shell-out commands.
+///
+/// If `DOCKER_HOST` explicitly points to `/var/run/docker.sock`, the user
+/// has chosen Docker — return `"docker"`. Otherwise, prefer `podman` if the
+/// binary exists in PATH, falling back to `"docker"`.
+pub fn container_cli() -> &'static str {
+  static CLI: OnceLock<&str> = OnceLock::new();
+  CLI.get_or_init(|| {
+    // Explicit Docker usage
+    if let Ok(host) = std::env::var("DOCKER_HOST") {
+      if host.contains("/var/run/docker.sock") {
+        return "docker";
+      }
+    }
+    // Prefer podman if available
+    if std::process::Command::new("podman")
+      .arg("--version")
+      .stdout(std::process::Stdio::null())
+      .stderr(std::process::Stdio::null())
+      .status()
+      .is_ok()
+    {
+      return "podman";
+    }
+    // Fallback
+    "docker"
+  })
 }
 
 /// Returns whether login was actually performed.
@@ -44,8 +120,9 @@ pub async fn docker_login(
     None => crate::helpers::registry_token(domain, account)?,
   };
 
+  let cli = container_cli();
   let log = run_shell_command(&format!(
-    "echo {registry_token} | docker login {domain} --username '{account}' --password-stdin",
+    "echo {registry_token} | {cli} login {domain} --username '{account}' --password-stdin",
   ), CommandOptions::default())
   .await;
 
@@ -69,7 +146,8 @@ pub async fn docker_login(
 
 #[instrument("PullImage")]
 pub async fn pull_image(image: &str) -> Log {
-  let command = format!("docker pull {image}");
+  let cli = container_cli();
+  let command = format!("{cli} pull {image}");
   run_komodo_standard_command(
     "Docker Pull",
     command,
@@ -89,7 +167,8 @@ pub fn stop_container_command(
   let time = time
     .map(|time| format!(" --time {time}"))
     .unwrap_or_default();
-  format!("docker stop{signal}{time} {container_name}")
+  let cli = container_cli();
+  format!("{cli} stop{signal}{time} {container_name}")
 }
 
 fn convert_object_version(

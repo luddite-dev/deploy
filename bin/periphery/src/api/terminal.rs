@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 use crate::{
   config::periphery_config,
+  docker::container_cli,
   state::{
     TerminalChannel, core_connections, terminal_channels,
     terminal_triggers,
@@ -125,7 +126,10 @@ impl Resolve<crate::api::Args> for CreateContainerExecTerminal {
         format!("exec-{container}-{}", existing.len())
       }),
       target,
-      Some(format!("docker exec -it {container} {command}")),
+      Some(format!(
+        "{} exec -it {container} {command}",
+        container_cli()
+      )),
       recreate,
     )
     .await
@@ -180,7 +184,10 @@ impl Resolve<crate::api::Args> for CreateContainerAttachTerminal {
         format!("attach-{container}-{}", existing.len())
       }),
       target,
-      Some(format!("docker attach {container} --sig-proxy=false")),
+      Some(format!(
+        "{} attach {container} --sig-proxy=false",
+        container_cli()
+      )),
       recreate,
     )
     .await

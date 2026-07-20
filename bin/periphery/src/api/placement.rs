@@ -13,7 +13,7 @@ use periphery_client::api::placement::{
   ReadContainerPortsResponse,
 };
 
-use crate::api::Args;
+use crate::{api::Args, docker::container_cli};
 
 impl Resolve<Args> for CheckHostPorts {
   #[instrument("CheckHostPorts")]
@@ -51,12 +51,15 @@ impl Resolve<Args> for ReadContainerPorts {
     self,
     _args: &Args,
   ) -> anyhow::Result<ReadContainerPortsResponse> {
-    let cmd =
-      format!("docker inspect --format json {}", self.container_name);
+    let cmd = format!(
+      "{} inspect --format json {}",
+      container_cli(),
+      self.container_name
+    );
     let output =
       run_standard_command(&cmd, CommandOptions::default()).await;
     if !output.success() {
-      anyhow::bail!("docker inspect failed: {}", output.stderr);
+      anyhow::bail!("container inspect failed: {}", output.stderr);
     }
     let parsed: Vec<serde_json::Value> =
       serde_json::from_str(&output.stdout)?;

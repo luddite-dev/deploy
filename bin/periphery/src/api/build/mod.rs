@@ -29,7 +29,7 @@ use tracing::Instrument;
 
 use crate::{
   config::periphery_config,
-  docker::docker_login,
+  docker::{container_cli, docker_login},
   helpers::{format_extra_args, format_labels},
   state::build_cancel_cache,
 };
@@ -338,9 +338,10 @@ impl Resolve<crate::api::Args> for build::Build {
 
       let maybe_push = if should_push { " --push" } else { "" };
 
+      let cli = container_cli();
       // Construct command
       let command = format!(
-        "docker{buildx} build{build_args}{command_secret_args}{extra_args}{labels}{image_tags}{maybe_push} -f {dockerfile_path} .",
+        "{cli}{buildx} build{build_args}{command_secret_args}{extra_args}{labels}{image_tags}{maybe_push} -f {dockerfile_path} .",
       );
 
       anyhow::Ok(command)
@@ -416,7 +417,7 @@ impl Resolve<crate::api::Args> for PruneBuilders {
     self,
     args: &crate::api::Args,
   ) -> anyhow::Result<Log> {
-    let command = String::from("docker builder prune -a -f");
+    let command = format!("{} builder prune -a -f", container_cli());
     Ok(
       run_komodo_standard_command(
         "Prune Builders",
@@ -443,7 +444,7 @@ impl Resolve<crate::api::Args> for PruneBuildx {
     self,
     args: &crate::api::Args,
   ) -> anyhow::Result<Log> {
-    let command = String::from("docker buildx prune -a -f");
+    let command = format!("{} buildx prune -a -f", container_cli());
     Ok(
       run_komodo_standard_command(
         "Prune Buildx",

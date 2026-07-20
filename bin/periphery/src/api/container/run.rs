@@ -23,7 +23,7 @@ use tracing::Instrument;
 
 use crate::{
   config::periphery_config,
-  docker::{docker_login, pull_image},
+  docker::{container_cli, docker_login, pull_image},
   helpers::{push_environment, push_extra_args, push_labels},
 };
 
@@ -142,8 +142,10 @@ fn docker_run_command(
   }: &Deployment,
   image: &str,
 ) -> anyhow::Result<String> {
-  let mut res =
-    format!("docker run -d --name {name} --network {network}");
+  let mut res = format!(
+    "{} run -d --name {name} --network {network}",
+    container_cli()
+  );
 
   for pm in ports {
     match pm.host {

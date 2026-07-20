@@ -14,7 +14,10 @@ use serde::{Deserialize, Serialize};
 use strum::EnumDiscriminants;
 use uuid::Uuid;
 
-use crate::{config::periphery_config, state::stats_client};
+use crate::{
+  config::periphery_config, docker::container_cli,
+  state::stats_client,
+};
 
 pub mod terminal;
 
@@ -245,7 +248,8 @@ impl Resolve<Args> for PruneSystem {
     )
   )]
   async fn resolve(self, args: &Args) -> anyhow::Result<Log> {
-    let command = String::from("docker system prune -a -f --volumes");
+    let command =
+      format!("{} system prune -a -f --volumes", container_cli());
     Ok(
       run_komodo_standard_command(
         "Prune System",

@@ -16,7 +16,8 @@ use komodo_client::entities::docker::{
 };
 
 use crate::{
-  config::periphery_config, docker::DockerClient,
+  config::periphery_config,
+  docker::{DockerClient, container_cli},
   state::container_stats,
 };
 
@@ -63,8 +64,10 @@ pub async fn get_container_stats(
     Some(name) => format!(" {name}"),
     None => "".to_string(),
   };
-  let command =
-    format!("docker stats{container_name} --no-stream {format}");
+  let command = format!(
+    "{} stats{container_name} --no-stream {format}",
+    container_cli()
+  );
   let output = run_standard_command(
     &command,
     CommandOptions::default().timeout(Duration::from_secs(10)),

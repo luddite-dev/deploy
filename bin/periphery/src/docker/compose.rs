@@ -6,13 +6,19 @@ use komodo_client::entities::stack::ComposeProject;
 use serde::{Deserialize, Serialize};
 
 use crate::config::periphery_config;
+use crate::docker::container_cli;
 
 pub fn docker_compose() -> &'static str {
-  if periphery_config().legacy_compose_cli {
-    "docker-compose"
-  } else {
-    "docker compose"
-  }
+  static COMPOSE: std::sync::OnceLock<&str> =
+    std::sync::OnceLock::new();
+  COMPOSE.get_or_init(|| {
+    let cli = container_cli();
+    if periphery_config().legacy_compose_cli {
+      Box::leak(format!("{cli}-compose").into_boxed_str())
+    } else {
+      Box::leak(format!("{cli} compose").into_boxed_str())
+    }
+  })
 }
 
 pub async fn list_compose_projects()

@@ -9,7 +9,7 @@ use komodo_client::entities::docker::{
 };
 use serde::Deserialize;
 
-use super::DockerClient;
+use super::{DockerClient, container_cli};
 
 impl DockerClient {
   pub async fn list_images(
@@ -192,9 +192,10 @@ fn convert_oci_platform(
 pub async fn get_image_digest_from_registry(
   image: &str,
 ) -> anyhow::Result<String> {
-  let command = String::from(
-    r#"docker buildx imagetools inspect --format "{{json .Manifest}}" "#,
-  ) + image;
+  let cli = container_cli();
+  let command = format!(
+    r#"{cli} buildx imagetools inspect --format "{{json .Manifest}}" {image}"#,
+  );
   let log = run_komodo_standard_command(
     "",
     command,

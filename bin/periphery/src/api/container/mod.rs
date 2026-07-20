@@ -17,7 +17,9 @@ use mogh_resolver::Resolve;
 use periphery_client::api::container::*;
 
 use crate::{
-  docker::{stats::get_container_stats, stop_container_command},
+  docker::{
+    container_cli, stats::get_container_stats, stop_container_command,
+  },
   helpers::format_log_grep,
   state::docker_client,
 };
@@ -61,8 +63,10 @@ impl Resolve<crate::api::Args> for GetContainerLog {
     } else {
       Default::default()
     };
-    let command =
-      format!("docker logs {name} --tail {tail}{timestamps}");
+    let command = format!(
+      "{} logs {name} --tail {tail}{timestamps}",
+      container_cli()
+    );
     Ok(
       run_komodo_standard_command(
         "Get container log",
@@ -95,7 +99,8 @@ impl Resolve<crate::api::Args> for GetContainerLogSearch {
       Default::default()
     };
     let command = format!(
-      "docker logs {name} --tail 5000{timestamps} 2>&1 | {grep}"
+      "{} logs {name} --tail 5000{timestamps} 2>&1 | {grep}",
+      container_cli(),
     );
     Ok(
       run_komodo_shell_command(
@@ -170,7 +175,7 @@ impl Resolve<crate::api::Args> for StartContainer {
     Ok(
       run_komodo_standard_command(
         "Docker Start",
-        format!("docker start {}", self.name),
+        format!("{} start {}", container_cli(), self.name),
         CommandOptions::default(),
       )
       .await,
@@ -197,7 +202,7 @@ impl Resolve<crate::api::Args> for RestartContainer {
     Ok(
       run_komodo_standard_command(
         "Docker Restart",
-        format!("docker restart {}", self.name),
+        format!("{} restart {}", container_cli(), self.name),
         CommandOptions::default(),
       )
       .await,
@@ -224,7 +229,7 @@ impl Resolve<crate::api::Args> for PauseContainer {
     Ok(
       run_komodo_standard_command(
         "Docker Pause",
-        format!("docker pause {}", self.name),
+        format!("{} pause {}", container_cli(), self.name),
         CommandOptions::default(),
       )
       .await,
@@ -249,7 +254,7 @@ impl Resolve<crate::api::Args> for UnpauseContainer {
     Ok(
       run_komodo_standard_command(
         "Docker Unpause",
-        format!("docker unpause {}", self.name),
+        format!("{} unpause {}", container_cli(), self.name),
         CommandOptions::default(),
       )
       .await,
@@ -376,7 +381,8 @@ impl Resolve<crate::api::Args> for RenameContainer {
       curr_name,
       new_name,
     } = self;
-    let command = format!("docker rename {curr_name} {new_name}");
+    let command =
+      format!("{} rename {curr_name} {new_name}", container_cli());
     Ok(
       run_komodo_standard_command(
         "Docker Rename",
@@ -403,7 +409,7 @@ impl Resolve<crate::api::Args> for PruneContainers {
     self,
     args: &crate::api::Args,
   ) -> anyhow::Result<Log> {
-    let command = String::from("docker container prune -f");
+    let command = format!("{} container prune -f", container_cli());
     Ok(
       run_komodo_standard_command(
         "Prune Containers",
@@ -446,7 +452,7 @@ impl Resolve<crate::api::Args> for StartAllContainers {
         {
           return None;
         }
-        let command = format!("docker start {name}");
+        let command = format!("{} start {name}", container_cli());
         Some(async move {
           run_komodo_standard_command(
             &command.clone(),
@@ -492,7 +498,7 @@ impl Resolve<crate::api::Args> for RestartAllContainers {
         {
           return None;
         }
-        let command = format!("docker restart {name}");
+        let command = format!("{} restart {name}", container_cli());
         Some(async move {
           run_komodo_standard_command(
             &command.clone(),
@@ -538,7 +544,7 @@ impl Resolve<crate::api::Args> for PauseAllContainers {
         {
           return None;
         }
-        let command = format!("docker pause {name}");
+        let command = format!("{} pause {name}", container_cli());
         Some(async move {
           run_komodo_standard_command(
             &command.clone(),
@@ -584,7 +590,7 @@ impl Resolve<crate::api::Args> for UnpauseAllContainers {
         {
           return None;
         }
-        let command = format!("docker unpause {name}");
+        let command = format!("{} unpause {name}", container_cli());
         Some(async move {
           run_komodo_standard_command(
             &command.clone(),
