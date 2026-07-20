@@ -73,9 +73,7 @@ services:
 
   # ─── Komodo Core ───
   core:
-    build:
-      context: .
-      dockerfile: bin/core/aio.Dockerfile
+    image: ghcr.io/luddite-dev/core:${KOMODO_IMAGE_TAG:-latest}
     init: true
     restart: unless-stopped
     depends_on:
