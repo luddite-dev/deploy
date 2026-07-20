@@ -546,6 +546,34 @@ export function useUserTargetPermissions(user_target: Types.UserTarget) {
   return perms;
 }
 
+export function useIsCancelling(
+  target: Types.ResourceTarget,
+  runOp: Types.Operation,
+  cancelOp: Types.Operation,
+) {
+  const updates = useRead("ListUpdates", {
+    query: {
+      "target.type": target.type,
+      "target.id": target.id,
+    },
+  }).data?.updates;
+  if (!updates) {
+    return true;
+  }
+  let hasCancel = false;
+  for (const update of updates) {
+    if (update.operation === cancelOp) {
+      hasCancel = true;
+    } else if (
+      update.operation === runOp &&
+      update.status === Types.UpdateStatus.InProgress
+    ) {
+      return hasCancel;
+    }
+  }
+  return false;
+}
+
 function addUserTargetPermissions<I>(
   user_target: Types.UserTarget,
   permissions: Types.Permission[] | undefined,
