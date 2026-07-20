@@ -30,7 +30,7 @@ services:
 
   # ─── Database: FerretDB (Mongo wire protocol → PostgreSQL) ───
   ferretdb:
-    image: ghcr.io/ferretdb/ferretdb:1
+    image: ghcr.io/ferretdb/ferretdb:2.7.0
     labels:
       komodo.skip: true
     restart: unless-stopped
@@ -111,12 +111,11 @@ services:
       KOMODO_INGRESS_DNS_CLOUDFLARE_API_TOKEN: ${KOMODO_INGRESS_DNS_CLOUDFLARE_API_TOKEN:-}
       KOMODO_INGRESS_DNS_BASE_DOMAIN: ${KOMODO_INGRESS_DNS_BASE_DOMAIN:-}
     volumes:
-      - keys:/config/keys
+      - ./data/config/keys:/config/keys
       - backups:/backups
 
 volumes:
   postgres-data:
   ferretdb-state:
   minio-data:
-  keys:
   backups:
