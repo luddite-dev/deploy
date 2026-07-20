@@ -58,10 +58,59 @@ write to DNS) into `config/keys/cloudflare-token` and enter your top level
 domain for which subdomains will be created upon. We currently do not support
 multiple domains yet.
 
-### Deploying the Periphery and Onboarding
+### Get the Onboarding Key and Public Key
 
 First, we need an onboarding key from the core to ensure the periphery is
-authorized.
+authorized. Go to `http://<core-ip>:9210` and log in with the credentials in
+`.env` (Default is `admin:changeme`)
+
+On the sidebar, click on "Settings". Then click on the dropdown (Says
+"Variables" initially) and select "Onboarding". Then click "New Onboarding Key".
+Copy that key.
+
+The public key should be shown at the top of the same page above the dropdown
+menu.
+
+### Deploying the Periphery
+
+The Periphery is where containers are actually deployed. I haven't figured out
+podman in podman yet, so for now you should deploy on the host itself. In theory
+you should be able to mount the podman socket and have a compose for this too
+but you'd still be limited to 1 periphery instance per host.
+
+- Grab a [release binary](https://github.com/luddite-dev/deploy/releases) and
+  drop it on your server.
+
+If running as non-root user:
+
+- `sudo loginctl enable-linger $USER` to keep sockets and services alive after
+  logout
+- Ensure podman sockets are enabled:
+  `systemctl --user enable --now podman.socket`
+
+If running as root:
+
+- `systemctl enable --now podman.socket`
+
+Then
+
+- In the same directory, create `periphery.env`
+
+```bash
+PERIPHERY_CORE_ENDPOINT_ADDRS="xxx" # Core Public Key
+PERIPHERY_ONBOARDING_KEY="xxx" # Onboarding Key
+PERIPHERY_CONNECT_AS="Primary Node" # Arbitrary name
+PERIPHERY_ROOT_DIRECTORY="$HOME/.local/share/luddite"
+PERIPHERY_INGRESS_ENABLED=true # Or false. I think you need root for ingress to get port 80 and 443, but there are ways to allow a non-root access to reserve these ports as well.
+PERIPHERY_HTTP_BRIDGE_PORT=8443 # Change to a different port if occupied
+```
+
+The periphery should auto-detect which podman socket to use depending on whether
+we're root or not, but you can also set
+`DOCKER_HOST=unix:///var/run/docker.sock` manually.
+
+You can finally run the periphery binary. Set it up as a `systemd` service or
+just run it in `screen`.
 
 <details>
 
