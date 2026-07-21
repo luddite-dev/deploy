@@ -9,7 +9,7 @@ import NewResource from "@/resources/new";
 import { ConfirmButton, hexColorByIntention } from "mogh_ui";
 import { Prune } from "./executions";
 import ServerVersion from "./version";
-import { Box, Group, HoverCard } from "@mantine/core";
+import { Box, Group, HoverCard, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import ConfirmServerPubkey from "./confirm-pubkey";
 import ServerTabs from "./tabs";
@@ -159,27 +159,38 @@ export const ServerComponents: RequiredResourceComponents<
   Info: {
     ServerVersion,
     PublicIp: ({ id }) => {
-      const publicIp = useServer(id)?.info.public_ip;
+      const info = useServer(id)?.info;
+      const publicIpv4 = info?.public_ipv4;
+      const publicIpv6 = info?.public_ipv6;
       return (
         <HoverCard position="bottom-start">
           <HoverCard.Target>
             <Group
               gap="xs"
               onClick={() => {
-                publicIp &&
+                publicIpv4 &&
                   navigator.clipboard
-                    .writeText(publicIp)
+                    .writeText(publicIpv4)
                     .then(() =>
-                      notifications.show({ message: "Copied public IP" }),
+                      notifications.show({ message: "Copied public IPv4" }),
                     );
               }}
               style={{ cursor: "pointer" }}
             >
               <ICONS.IP size="1rem" />
-              {publicIp ?? "Unknown IP"}
+              {publicIpv4 ?? "Unknown IP"}
             </Group>
           </HoverCard.Target>
-          <HoverCard.Dropdown>Public IP (click to copy)</HoverCard.Dropdown>
+          <HoverCard.Dropdown>
+            <Stack gap="xs">
+              <Text size="sm">
+                Public IPv4 (click to copy): {publicIpv4 ?? "Unknown"}
+              </Text>
+              <Text size="sm">
+                Public IPv6: {publicIpv6 ?? "Unknown"}
+              </Text>
+            </Stack>
+          </HoverCard.Dropdown>
         </HoverCard>
       );
     },
