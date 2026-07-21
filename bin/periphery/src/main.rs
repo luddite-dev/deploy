@@ -5,7 +5,10 @@ use futures_util::{StreamExt, stream::FuturesUnordered};
 use komodo_client::entities::config::periphery::CliArgs;
 use tracing::Instrument;
 
-use crate::{config::periphery_args, state::periphery_secret_key};
+use crate::{
+  config::periphery_args,
+  state::{host_public_ipv4, host_public_ipv6, periphery_secret_key},
+};
 
 #[macro_use]
 extern crate tracing;
@@ -86,6 +89,31 @@ async fn app() -> anyhow::Result<()> {
         error!("HTTP forward handler error: {e:#}");
       }
     });
+  }
+
+  // ===========
+  // = Ingress startup hard-gate =
+  // ===========
+  // Ingress nodes need a public IP (auto-discovered or env-overridden)
+  // to route DNS records to. If both are None at startup, exit non-
+  // zero so systemd reports failure rather than silently running an
+  // ingress node that can't serve traffic.
+  if config.ingress_enabled {
+    let (ipv4, ipv6) =
+      tokio::join!(host_public_ipv4(), host_public_ipv6());
+    if ipv4.is_none() && ipv6.is_none() {
+      error!(
+        "ingress-enabled Periphery has no public IPv4/IPv6 — \
+         set PERIPHERY_PUBLIC_IPV4 / PERIPHERY_PUBLIC_IPV6, \
+         or ensure HTTPS egress to api4.ipify.org and \
+         api6.ipify.org works"
+      );
+      std::process::exit(1);
+    }
+    info!(
+      "Ingress startup check OK: ipv4={:?} ipv6={:?}",
+      ipv4, ipv6
+    );
   }
 
   // Start HTTP ingress bridge (ingress nodes only)

@@ -35,12 +35,30 @@ pub async fn handle_ingress_failover(
     new_node.id, failed_node_id
   );
 
+  // Read new node's public IPs from cache (same pattern as
+  // try_setup_ingress in resource/deployment.rs).
+  let cache_entry = server_status_cache().get(&new_node.id).await;
+  let (new_ipv4, new_ipv6) = cache_entry
+    .as_ref()
+    .and_then(|s| s.periphery_info.as_ref())
+    .map(|info| (info.public_ipv4.clone(), info.public_ipv6.clone()))
+    .unwrap_or((None, None));
+
+  if new_ipv4.is_none() && new_ipv6.is_none() {
+    anyhow::bail!(
+      "failover target node {} has no cached public_ipv4/v6 — \
+       wait for the next poll cycle or set \
+       PERIPHERY_PUBLIC_IPV4 / _IPV6 on the Periphery host",
+      new_node.id
+    );
+  }
+
   // Repoint DNS records to the new ingress node.
   super::management::update_dns_records_for_node(
     failed_node_id,
     &new_node.id,
-    new_node.config.public_ipv4.as_deref(),
-    new_node.config.public_ipv6.as_deref(),
+    new_ipv4.as_deref(),
+    new_ipv6.as_deref(),
     ingress_config,
   )
   .await

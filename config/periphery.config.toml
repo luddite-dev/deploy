@@ -293,3 +293,46 @@ pretty_startup_config = false
 # [secrets]
 # SECRET_1 = "value_1"
 # SECRET_2 = "value_2"
+
+###########
+# INGRESS #
+###########
+
+## Whether this node is an ingress node (runs Caddy + HTTP bridge listener).
+## Ingress nodes terminate incoming HTTP/HTTPS traffic and proxy to per-deployment
+## bridge ports on 127.0.0.1. Must be reachable on ports 80 and 443 from the public
+## internet (or whatever upstream load balancer / DNS records point at this host).
+## Env: PERIPHERY_INGRESS_ENABLED
+## Default: false
+ingress_enabled = false
+
+## Optional manual IPv4 override for ingress traffic.
+## Used when auto-discovery (HTTPS to api4.ipify.org) is unavailable,
+## the discovered address is the wrong one (e.g. NAT/CGNAT), or you want
+## to pin a specific address. When unset, Periphery auto-discovers the
+## host's public IPv4 egress via HTTPS to https://api4.ipify.org (2s timeout).
+## Required for ingress-enabled nodes: if both this and public_ipv6 are
+## unset AND both ipify discovery calls fail, Periphery will exit(1)
+## at startup so systemd reports failure rather than silently running
+## an ingress node that cannot serve traffic.
+## Env: PERIPHERY_PUBLIC_IPV4
+## Default: None (auto-discover)
+# public_ipv4 = "203.0.113.10"
+
+## Optional manual IPv6 override. Same semantics as public_ipv4.
+## When unset, Periphery auto-discovers the host's public IPv6 egress
+## via HTTPS to https://api6.ipify.org (2s timeout).
+## Env: PERIPHERY_PUBLIC_IPV6
+# public_ipv6 = "2001:db8::1"
+
+## Optional. Path on disk to the Caddy binary used by the ingress node.
+## If the file does not exist, Periphery will download it automatically.
+## Env: PERIPHERY_CADDY_BINARY_PATH
+## Default: ${root_directory}/bin/caddy-luddite
+# caddy_binary_path = "/etc/komodo/bin/caddy-luddite"
+
+## Internal HTTP bridge port used by Caddy to proxy ingress traffic to
+## per-deployment listeners. Per-deployment listeners bind 127.0.0.1:{port}.
+## Env: PERIPHERY_HTTP_BRIDGE_PORT
+## Default: 8443
+# http_bridge_port = 8443

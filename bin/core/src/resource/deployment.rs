@@ -593,13 +593,37 @@ pub async fn try_setup_ingress(
   // Select a healthy ingress node.
   let ingress_node = select_new_ingress_node("").await?;
 
+  // Read the ingress node's public IPs from its cached
+  // PeripheryInformation (populated on every PollStatus cycle —
+  // ~stats_polling_rate cadence, default 5-15s). The IPs used to live
+  // on ServerConfig as manual overrides; they now flow Periphery →
+  // PeripheryInformation → ServerListItemInfo.
+  let cache_entry = crate::state::server_status_cache()
+    .get(&ingress_node.id)
+    .await;
+  let (target_ipv4, target_ipv6) = cache_entry
+    .as_ref()
+    .and_then(|s| s.periphery_info.as_ref())
+    .map(|info| (info.public_ipv4.clone(), info.public_ipv6.clone()))
+    .unwrap_or((None, None));
+
+  if target_ipv4.is_none() && target_ipv6.is_none() {
+    anyhow::bail!(
+      "ingress node {} has no cached public_ipv4/v6 — \
+       wait for the next poll cycle (default ~5-15s), or set \
+       PERIPHERY_PUBLIC_IPV4 / _IPV6 on the Periphery host and \
+       restart it",
+      ingress_node.id
+    );
+  }
+
   // Create DNS record(s) pointing to the ingress node.
   create_deployment_dns_record(
     &deployment.id,
     &http_proxy.subdomain,
     &ingress_node.id,
-    ingress_node.config.public_ipv4.as_deref(),
-    ingress_node.config.public_ipv6.as_deref(),
+    target_ipv4.as_deref(),
+    target_ipv6.as_deref(),
     &core_cfg,
     60,
   )

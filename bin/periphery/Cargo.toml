@@ -34,7 +34,6 @@ mogh_error = { workspace = true, features = ["axum"] }
 async_timing_util.workspace = true
 mogh_resolver.workspace = true
 # external
-hickory-resolver.workspace = true
 serde_yaml_ng.workspace = true
 data-encoding.workspace = true
 futures-util.workspace = true

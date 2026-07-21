@@ -163,6 +163,8 @@ pub fn periphery_config() -> &'static PeripheryConfig {
       ingress_enabled: env
         .periphery_ingress_enabled
         .unwrap_or(config.ingress_enabled),
+      public_ipv4: env.periphery_public_ipv4.or(config.public_ipv4),
+      public_ipv6: env.periphery_public_ipv6.or(config.public_ipv6),
     }
   })
 }
