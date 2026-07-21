@@ -410,8 +410,10 @@ pub struct PeripheryInformation {
   pub stats_polling_rate: Timelength,
   /// Whether Periphery is successfully connected to docker daemon.
   pub docker_connected: bool,
-  /// The host public ip, if it can be resolved.
-  pub public_ip: Option<String>,
+  /// The host public IPv4, if it could be resolved.
+  pub public_ipv4: Option<String>,
+  /// The host public IPv6, if it could be resolved.
+  pub public_ipv6: Option<String>,
 }
 
 /// Current pending actions on the server.

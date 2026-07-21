@@ -16,8 +16,10 @@ use transport::channel::BufferedChannel;
 use uuid::Uuid;
 
 use crate::{
-  config::periphery_config, docker::DockerClient,
-  helpers::resolve_host_public_ip, stats::StatsClient,
+  config::periphery_config,
+  docker::DockerClient,
+  helpers::{resolve_host_public_ipv4, resolve_host_public_ipv6},
+  stats::StatsClient,
   terminal::PeripheryTerminal,
 };
 
@@ -215,16 +217,39 @@ pub fn container_stats() -> &'static ArcSwap<ContainerStatsMap> {
   CONTAINER_STATS.get_or_init(Default::default)
 }
 
-pub async fn host_public_ip() -> Option<&'static String> {
-  static PUBLIC_IPS: OnceCell<Option<String>> = OnceCell::const_new();
-  PUBLIC_IPS
+pub async fn host_public_ipv4() -> Option<&'static String> {
+  static PUBLIC_IPV4: OnceCell<Option<String>> =
+    OnceCell::const_new();
+  PUBLIC_IPV4
     .get_or_init(|| async {
-      resolve_host_public_ip()
-        .await
-        .inspect_err(|e| {
-          warn!("Failed to resolve host public ip | {e:#}")
-        })
-        .ok()
+      // Override from config takes precedence — skip discovery if set.
+      let cfg = periphery_config();
+      if let Some(v4) = cfg.public_ipv4.clone() {
+        return Some(v4);
+      }
+      resolve_host_public_ipv4().await.or_else(|| {
+        warn!("Failed to resolve host public IPv4 via ipify");
+        None
+      })
+    })
+    .await
+    .as_ref()
+}
+
+pub async fn host_public_ipv6() -> Option<&'static String> {
+  static PUBLIC_IPV6: OnceCell<Option<String>> =
+    OnceCell::const_new();
+  PUBLIC_IPV6
+    .get_or_init(|| async {
+      // Override from config takes precedence — skip discovery if set.
+      let cfg = periphery_config();
+      if let Some(v6) = cfg.public_ipv6.clone() {
+        return Some(v6);
+      }
+      resolve_host_public_ipv6().await.or_else(|| {
+        warn!("Failed to resolve host public IPv6 via ipify");
+        None
+      })
     })
     .await
     .as_ref()

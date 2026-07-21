@@ -197,6 +197,10 @@ pub struct Env {
   pub periphery_caddy_binary_path: Option<String>,
   /// Override `vendored_manifest_url`
   pub periphery_vendored_manifest_url: Option<String>,
+  /// Override `public_ipv4`
+  pub periphery_public_ipv4: Option<String>,
+  /// Override `public_ipv6`
+  pub periphery_public_ipv6: Option<String>,
 }
 
 /// # Periphery Configuration File
@@ -358,6 +362,19 @@ pub struct PeripheryConfig {
   /// Default: false
   #[serde(default)]
   pub ingress_enabled: bool,
+
+  /// Optional manual IPv4 override for ingress traffic.
+  /// Used when auto-discovery (HTTPS to api4.ipify.org) is
+  /// unavailable or returns the wrong address.
+  /// Default: None (auto-discover)
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub public_ipv4: Option<String>,
+
+  /// Optional manual IPv6 override for ingress traffic.
+  /// Same semantics as public_ipv4.
+  /// Default: None (auto-discover)
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub public_ipv6: Option<String>,
 }
 
 fn default_root_directory() -> PathBuf {
@@ -420,6 +437,8 @@ impl Default for PeripheryConfig {
       caddy_binary_path: default_caddy_binary_path(),
       vendored_manifest_url: default_vendored_manifest_url(),
       ingress_enabled: false,
+      public_ipv4: None,
+      public_ipv6: None,
     }
   }
 }
@@ -497,6 +516,8 @@ impl PeripheryConfig {
       caddy_binary_path: self.caddy_binary_path.clone(),
       vendored_manifest_url: self.vendored_manifest_url.clone(),
       ingress_enabled: self.ingress_enabled,
+      public_ipv4: self.public_ipv4.clone(),
+      public_ipv6: self.public_ipv6.clone(),
     }
   }
 

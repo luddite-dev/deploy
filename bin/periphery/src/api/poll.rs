@@ -9,7 +9,8 @@ use crate::{
   config::periphery_config,
   docker::{DockerClient, compose::list_compose_projects},
   state::{
-    docker_client, host_public_ip, periphery_secret_key, stats_client,
+    docker_client, host_public_ipv4, host_public_ipv6,
+    periphery_secret_key, stats_client,
   },
 };
 
@@ -55,7 +56,8 @@ async fn periphery_information() -> PeripheryInformation {
     container_terminals_disabled: config.disable_container_terminals,
     stats_polling_rate: config.stats_polling_rate,
     docker_connected: docker_client().load().is_some(),
-    public_ip: host_public_ip().await.cloned(),
+    public_ipv4: host_public_ipv4().await.cloned(),
+    public_ipv6: host_public_ipv6().await.cloned(),
   }
 }
 

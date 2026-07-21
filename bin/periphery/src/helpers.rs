@@ -1,7 +1,4 @@
-use std::{
-  fmt::Write, net::IpAddr, path::PathBuf, str::FromStr as _,
-  sync::OnceLock, time::Duration,
-};
+use std::{fmt::Write, path::PathBuf, time::Duration};
 
 use anyhow::Context;
 use command::{
@@ -267,53 +264,37 @@ pub fn registry_token(
     .with_context(|| format!("did not find token in config for docker registry account {account_username} | domain {domain}"))
 }
 
-// ====================
-//  Public IP over DNS
-// ====================
+// ===========================
+//  Public IP over HTTPS (ipify)
+// ===========================
 
-type OpenDNSResolver = hickory_resolver::TokioResolver;
-
-fn opendns_resolver() -> &'static OpenDNSResolver {
-  static OPENDNS_RESOLVER: OnceLock<OpenDNSResolver> =
-    OnceLock::new();
-  OPENDNS_RESOLVER.get_or_init(|| {
-    // OpenDNS resolver ipv4s.
-    let name_servers = [
-      IpAddr::from_str("208.67.220.220").unwrap(),
-      IpAddr::from_str("208.67.222.222").unwrap(),
-    ]
-    .into_iter()
-    .map(hickory_resolver::config::NameServerConfig::udp_and_tcp)
-    .collect();
-
-    hickory_resolver::Resolver::builder_with_config(
-      hickory_resolver::config::ResolverConfig::from_parts(
-        None,
-        vec![],
-        name_servers,
-      ),
-      hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
-    )
-    .build()
-    .expect("Failed to build OpenDNS resolver")
-  })
+/// Resolve the host's public IPv4 egress address by querying
+/// `https://api4.ipify.org`. ipify's `api4.` subdomain has only A
+/// records (no AAAA), so transport is pinned to IPv4 — this returns
+/// the address external IPv4 connections see, which is what we want
+/// for DNS A records on the ingress node.
+///
+/// Caches in `host_public_ipv4()` via `OnceCell` — call that
+/// instead of this function directly unless you want a fresh lookup.
+pub async fn resolve_host_public_ipv4() -> Option<String> {
+  fetch_ip("https://api4.ipify.org").await
 }
 
-/// Includes 1s timeout
-pub async fn resolve_host_public_ip() -> anyhow::Result<String> {
-  tokio::time::timeout(Duration::from_secs(1), async {
-    opendns_resolver()
-      .lookup_ip("myip.opendns.com.")
-      .await
-      .context(
-        "Failed to query OpenDNS resolvers for host public IP",
-      )?
-      .iter()
-      .map(|ip| ip.to_string())
-      .next()
-      .context("OpenDNS call for public IP didn't return anything")
+/// Resolve the host's public IPv6 egress address by querying
+/// `https://api6.ipify.org`. Symmetric to `resolve_host_public_ipv4`
+/// — `api6.` has only AAAA records, so transport is pinned to IPv6.
+pub async fn resolve_host_public_ipv6() -> Option<String> {
+  fetch_ip("https://api6.ipify.org").await
+}
+
+/// GET the given HTTPS URL and return the response body as a trimmed
+/// string. Returns `None` on any network/parse error or 2s timeout.
+async fn fetch_ip(url: &str) -> Option<String> {
+  tokio::time::timeout(Duration::from_secs(2), async {
+    reqwest::get(url).await.ok()?.text().await.ok()
   })
   .await
-  .context("OpenDNS call for public IP timed out")
+  .ok()
   .flatten()
+  .map(|s| s.trim().to_string())
 }
