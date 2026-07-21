@@ -1958,8 +1958,10 @@ export interface PeripheryInformation {
 	stats_polling_rate: Timelength;
 	/** Whether Periphery is successfully connected to docker daemon. */
 	docker_connected: boolean;
-	/** The host public ip, if it can be resolved. */
-	public_ip?: string;
+	/** The host public IPv4, if it could be resolved. */
+	public_ipv4?: string;
+	/** The host public IPv6, if it could be resolved. */
+	public_ipv6?: string;
 }
 
 export type GetPeripheryInformationResponse = PeripheryInformation;
@@ -5450,8 +5452,10 @@ export interface ServerListItemInfo {
 	 * Used with links.
 	 */
 	external_address?: string;
-	/** Host public ip, if it could be resolved. */
-	public_ip?: string;
+	/** Host public IPv4, if it could be resolved. */
+	public_ipv4?: string;
+	/** Host public IPv6, if it could be resolved. */
+	public_ipv6?: string;
 	/** Whether server is configured to send disconnected alerts. */
 	send_unreachable_alerts: boolean;
 	/** Whether server is configured to send cpu alerts. */
