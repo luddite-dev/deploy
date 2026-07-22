@@ -283,3 +283,16 @@ export function listsEqual(a: string[], b: string[]) {
   }
   return true;
 }
+
+export function parseVersion(version: string): Types.Version {
+  const [major, minor, patch] = version
+    // In case of 'v2.0.0' fmt
+    .replaceAll("v", "")
+    .split(".")
+    .map(Number);
+  return {
+    major,
+    minor,
+    patch,
+  };
+}
