@@ -50,6 +50,9 @@ pub struct DnsRecord {
   /// The deployment this record is attached to, if any.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub deployment_id: Option<String>,
+  /// The stack this record is attached to, if any.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub stack_id: Option<String>,
   /// TTL in seconds.
   pub ttl: u32,
   /// Unix timestamp (ms) the record was created.

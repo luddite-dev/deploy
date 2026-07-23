@@ -1426,8 +1426,8 @@ export interface BackupConfig {
 export interface HttpProxyConfig {
     /** Subdomain for this app (e.g. "myapp" → "myapp.example.com") */
     subdomain: string;
-    /** Which container port to proxy HTTP traffic to. If None, auto-detect from the deployment's port mappings. */
-    container_port?: number;
+    /** Which container port to proxy HTTP traffic to */
+    container_port: number;
 }
 export interface DeploymentConfig {
     /**
@@ -2566,6 +2566,24 @@ export interface StackFileDependency {
     /** Specify */
     requires?: StackFileRequires;
 }
+/**
+ * Per-stack HTTP proxy ingress configuration.
+ *
+ * Selects a single compose service to receive proxied traffic at a
+ * subdomain under the ingress DNS base domain.
+ */
+export interface StackHttpProxyConfig {
+    /**
+     * Which compose service to proxy to. Must match a service name
+     * declared in the compose file. Resolved to a container name via
+     * `StackServiceNames.container_name` returned by `ComposeUp`.
+     */
+    service: string;
+    /** Subdomain. FQDN = "{subdomain}.{ingress.dns.base_domain}". */
+    subdomain: string;
+    /** Which container port on that service receives proxied traffic. */
+    container_port: number;
+}
 /** The compose file configuration. */
 export interface StackConfig {
     /**
@@ -2718,6 +2736,11 @@ export interface StackConfig {
     registry_account?: string;
     /** Backup configuration for the stack's volumes. */
     backup?: BackupConfig;
+    /**
+     * Optional HTTP proxy ingress config for the stack. Selects one
+     * compose service to receive proxied traffic at a subdomain.
+     */
+    http_proxy?: StackHttpProxyConfig;
     /** The optional command to run before the Stack is deployed. */
     pre_deploy?: SystemCommand;
     /** The optional command to run after the Stack is deployed. */
@@ -6081,6 +6104,8 @@ export interface DnsRecord {
     provider_record_id: string;
     /** The deployment this record is attached to, if any. */
     deployment_id?: string;
+    /** The stack this record is attached to, if any. */
+    stack_id?: string;
     /** TTL in seconds. */
     ttl: number;
     /** Unix timestamp (ms) the record was created. */

@@ -560,6 +560,13 @@ pub struct StackConfig {
   #[builder(default)]
   pub backup: Option<BackupConfig>,
 
+  /// Optional HTTP proxy ingress config for the stack. Selects one
+  /// compose service to receive proxied traffic at a subdomain.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[partial_attr(serde(default))]
+  #[builder(default)]
+  pub http_proxy: Option<StackHttpProxyConfig>,
+
   /// The optional command to run before the Stack is deployed.
   #[serde(default)]
   #[builder(default)]
@@ -751,6 +758,7 @@ impl Default for StackConfig {
       send_alerts: default_send_alerts(),
       links: Default::default(),
       backup: Default::default(),
+      http_proxy: Default::default(),
     }
   }
 }
@@ -1056,6 +1064,27 @@ pub struct AdditionalEnvFile {
 
 fn default_true() -> bool {
   true
+}
+
+/// Per-stack HTTP proxy ingress configuration.
+///
+/// Selects a single compose service to receive proxied traffic at a
+/// subdomain under the ingress DNS base domain.
+#[typeshare]
+#[derive(
+  Debug, Clone, Default, PartialEq, Serialize, Deserialize,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct StackHttpProxyConfig {
+  /// Which compose service to proxy to. Must match a service name
+  /// declared in the compose file. Resolved to a container name via
+  /// `StackServiceNames.container_name` returned by `ComposeUp`.
+  pub service: String,
+  /// Subdomain. FQDN = "{subdomain}.{ingress.dns.base_domain}".
+  pub subdomain: String,
+  /// Which container port on that service receives proxied traffic.
+  pub container_port: u16,
 }
 
 /// Used with custom de/serializer for [AdditionalEnvFile]

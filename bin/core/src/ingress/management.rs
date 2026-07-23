@@ -90,6 +90,7 @@ pub async fn create_deployment_dns_record(
     let record = DnsRecord {
       id: ObjectId::new().to_string(),
       deployment_id: Some(deployment_id.to_string()),
+      stack_id: None,
       hostname: fqdn.clone(),
       record_type: DnsRecordType::A,
       target_node_id: target_node_id.to_string(),
@@ -116,6 +117,7 @@ pub async fn create_deployment_dns_record(
     let record = DnsRecord {
       id: ObjectId::new().to_string(),
       deployment_id: Some(deployment_id.to_string()),
+      stack_id: None,
       hostname: fqdn.clone(),
       record_type: DnsRecordType::AAAA,
       target_node_id: target_node_id.to_string(),
