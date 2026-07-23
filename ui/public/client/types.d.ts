@@ -1542,17 +1542,32 @@ export interface DeploymentConfig {
      * Irrelevant if container network is `host`.
      * Maps ports on host to ports on container.
      */
-    ports?: string;
+    ports?: PortMapping[];
     /**
      * The container volume mapping.
      * Maps files / folders on host to files / folders in container.
      */
-    volumes?: string;
+    volumes?: VolumeMount[];
     /** The environment variables passed to the container / service. */
     environment?: string;
     /** The docker labels given to the container. */
     labels?: string;
 }
+
+export interface PortMapping {
+    /** The container port to expose. */
+    container: number;
+    /** The host port to bind. None = container-only, Podman assigns random high port. */
+    host?: number;
+}
+
+export interface VolumeMount {
+    /** The named volume (no host paths allowed). */
+    volume: string;
+    /** The path inside the container where the volume is mounted. */
+    mount_path: string;
+}
+
 /**
  * Example:
  * apache/tika@sha256:c0154cb95587cde64be74f35ada1a2bd7892219f3f0ac3c9dc6cab34046b3573

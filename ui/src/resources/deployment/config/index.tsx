@@ -19,6 +19,65 @@ import { TerminationSignal, TerminationTimeout } from "./termination";
 import { ReactNode } from "react";
 import { useFullDeployment } from "..";
 
+// The backend stores ports as Vec<PortMapping> and volumes as Vec<VolumeMount>,
+// but the Monaco editor works with text. These helpers convert between the two.
+// PortMapping = { container: u16, host?: u16 } — text format: "host:container"
+// VolumeMount  = { volume: String, mount_path: String } — text format: "volume:/mount/path"
+
+type PortMappingLike = Types.PortMapping;
+type VolumeMountLike = Types.VolumeMount;
+
+function portsToText(ports: unknown): string {
+  if (typeof ports === "string") return ports;
+  if (!Array.isArray(ports) || ports.length === 0) return "";
+  return (ports as PortMappingLike[])
+    .map((p) =>
+      p.host != null ? `${p.host}:${p.container}` : `${p.container}`,
+    )
+    .join("\n");
+}
+
+function textToPorts(text: string): PortMappingLike[] {
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"))
+    .map((line) => {
+      const parts = line.split(":");
+      if (parts.length === 2) {
+        const host = parseInt(parts[0], 10);
+        const container = parseInt(parts[1], 10);
+        return { host, container };
+      }
+      return { container: parseInt(parts[0], 10) };
+    })
+    .filter((p) => !isNaN(p.container));
+}
+
+function volumesToText(volumes: unknown): string {
+  if (typeof volumes === "string") return volumes;
+  if (!Array.isArray(volumes) || volumes.length === 0) return "";
+  return (volumes as VolumeMountLike[])
+    .map((v) => `${v.volume}:${v.mount_path}`)
+    .join("\n");
+}
+
+function textToVolumes(text: string): VolumeMountLike[] {
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"))
+    .map((line) => {
+      const idx = line.indexOf(":");
+      if (idx === -1) return { volume: line, mount_path: "" };
+      return {
+        volume: line.slice(0, idx),
+        mount_path: line.slice(idx + 1),
+      };
+    })
+    .filter((v) => v.volume);
+}
+
 export default function DeploymentConfig({
   id,
   titleOther,
@@ -206,9 +265,11 @@ export default function DeploymentConfig({
                     description="Configure port mappings."
                   >
                     <MonacoEditor
-                      value={ports || "  # 3000:3000\n"}
+                      value={portsToText(ports) || "  # 3000:3000\n"}
                       language="key_value"
-                      onValueChange={(ports) => set({ ports })}
+                      onValueChange={(ports) =>
+                        set({ ports: textToPorts(ports) })
+                      }
                       readOnly={disabled}
                     />
                   </ConfigItem>
@@ -252,9 +313,11 @@ export default function DeploymentConfig({
             fields: {
               volumes: (volumes, set) => (
                 <MonacoEditor
-                  value={volumes || "  # volume:/container/path\n"}
+                  value={volumesToText(volumes) || "  # volume:/container/path\n"}
                   language="key_value"
-                  onValueChange={(volumes) => set({ volumes })}
+                  onValueChange={(volumes) =>
+                    set({ volumes: textToVolumes(volumes) })
+                  }
                   readOnly={disabled}
                 />
               ),
