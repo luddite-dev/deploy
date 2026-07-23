@@ -4181,6 +4181,7 @@ dependencies = [
  "openssl-sys",
  "periphery_client",
  "portable-pty",
+ "regex",
  "reqwest 0.13.4",
  "rust-s3",
  "serde",
