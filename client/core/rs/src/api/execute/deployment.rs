@@ -13,7 +13,7 @@ use super::{BatchExecutionResponse, KomodoExecuteRequest};
 #[utoipa::path(
   post,
   path = "/Deploy",
-  description = "Deploys the container / swarm service for the target Deployment.",
+  description = "Deploys the container for the target Deployment.",
   request_body(content = Deploy),
   responses(
     (status = 200, description = "The update", body = Update),
@@ -21,7 +21,7 @@ use super::{BatchExecutionResponse, KomodoExecuteRequest};
 )]
 pub fn deploy() {}
 
-/// Deploys the container / swarm service for the target Deployment. Response: [Update].
+/// Deploys the container for the target Deployment. Response: [Update].
 ///
 /// For Server based Deployments (just a container):
 /// 1. Pulls the image onto the target server.

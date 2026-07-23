@@ -419,66 +419,6 @@ export default function DeploymentConfig({
               },
             },
           },
-          {
-            label: "HTTP Proxy",
-            labelHidden: true,
-            fields: {
-              http_proxy: (proxy, set) => (
-                <ConfigItem
-                  label="HTTP Proxy"
-                  description="Expose this deployment over HTTP with automatic DNS and HTTPS via Caddy."
-                >
-                  <Stack>
-                    <ConfigSwitch
-                      label="Enable HTTP Proxy"
-                      value={!!proxy}
-                      onCheckedChange={(on) =>
-                        set({
-                          http_proxy: on
-                            ? {
-                                subdomain: "",
-                                container_port: 0,
-                              }
-                            : undefined,
-                        })
-                      }
-                      disabled={disabled}
-                    />
-                    {proxy && (
-                      <Stack>
-                        <ConfigInput
-                          label="Subdomain"
-                          description="DNS subdomain. FQDN = '{subdomain}.{base_domain}'."
-                          value={proxy.subdomain}
-                          onValueChange={(subdomain) =>
-                            set({ http_proxy: { ...proxy, subdomain } })
-                          }
-                          disabled={disabled}
-                          placeholder="myapp"
-                        />
-                        <ConfigInput
-                          label="Container Port"
-                          description="Container port receiving proxied traffic."
-                          value={proxy.container_port}
-                          onValueChange={(port) =>
-                            set({
-                              http_proxy: {
-                                ...proxy,
-                                container_port: Number(port) || 0,
-                              },
-                            })
-                          }
-                          disabled={disabled}
-                          placeholder="8080"
-                          inputProps={{ type: "number" }}
-                        />
-                      </Stack>
-                    )}
-                  </Stack>
-                </ConfigItem>
-              ),
-            },
-          },
         ],
         advanced: [
           {

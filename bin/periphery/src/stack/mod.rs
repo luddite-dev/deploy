@@ -1,4 +1,4 @@
-//! Module to handle common parts of deploying Compose and Swarm Stacks.
+//! Module to handle common parts of deploying Compose Stacks.
 
 use std::path::{Path, PathBuf};
 

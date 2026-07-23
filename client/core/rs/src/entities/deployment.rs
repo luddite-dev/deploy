@@ -182,8 +182,6 @@ pub struct DeploymentConfig {
   pub command: String,
 
   /// The number of replicas for the Service.
-  ///
-  /// Note. Only used in Swarm mode.
   #[serde(default = "default_replicas")]
   #[builder(default = "default_replicas()")]
   #[partial_default(default_replicas())]
@@ -205,7 +203,6 @@ pub struct DeploymentConfig {
   /// and affect the container configuration.
   ///
   /// - Container ref: https://docs.docker.com/reference/cli/docker/container/run/#options
-  /// - Swarm Service ref: https://docs.docker.com/reference/cli/docker/service/create/#options
   #[serde(default, deserialize_with = "string_list_deserializer")]
   #[partial_attr(serde(
     default,
@@ -456,11 +453,10 @@ pub enum DeploymentState {
   Exited,
   /// Server mode only. Container is dead
   Dead,
-  /// Swarm mode only. Some tasks don't match their desired state.
   Unhealthy,
   /// The deployment is not deployed (no matching Container / Service)
   NotDeployed,
-  /// Server / Swarm not reachable for status
+  /// Server not reachable for status
   #[default]
   Unknown,
 }

@@ -1302,8 +1302,8 @@ export interface BackupConfig {
 export interface HttpProxyConfig {
 	/** Subdomain for this app (e.g. "myapp" → "myapp.example.com") */
 	subdomain: string;
-	/** Which container port to proxy HTTP traffic to */
-	container_port: number;
+	/** Which container port to proxy HTTP traffic to. If None, auto-detect from the deployment's port mappings. */
+	container_port?: number;
 }
 
 export interface DeploymentConfig {
@@ -1357,11 +1357,7 @@ export interface DeploymentConfig {
 	 * Empty is no command.
 	 */
 	command?: string;
-	/**
-	 * The number of replicas for the Service.
-	 * 
-	 * Note. Only used in Swarm mode.
-	 */
+	/** The number of replicas for the Service. */
 	replicas: number;
 	/** The default termination signal to use to stop the deployment. Defaults to SigTerm (default docker signal). */
 	termination_signal?: TerminationSignal;
@@ -1373,7 +1369,6 @@ export interface DeploymentConfig {
 	 * and affect the container configuration.
 	 * 
 	 * - Container ref: https://docs.docker.com/reference/cli/docker/container/run/#options
-	 * - Swarm Service ref: https://docs.docker.com/reference/cli/docker/service/create/#options
 	 */
 	extra_args?: string[];
 	/**
@@ -1480,11 +1475,10 @@ export enum DeploymentState {
 	Exited = "exited",
 	/** Server mode only. Container is dead */
 	Dead = "dead",
-	/** Swarm mode only. Some tasks don't match their desired state. */
 	Unhealthy = "unhealthy",
 	/** The deployment is not deployed (no matching Container / Service) */
 	NotDeployed = "not_deployed",
-	/** Server / Swarm not reachable for status */
+	/** Server not reachable for status */
 	Unknown = "unknown",
 }
 
@@ -2490,14 +2484,14 @@ export interface StackConfig {
 	 * Ensured latest images are deployed.
 	 * Will fail if the compose file specifies a locally build image.
 	 * 
-	 * Note. Not used in Swarm mode.
+	 * Note. Not used in Compose mode.
 	 */
 	auto_pull: boolean;
 	/**
 	 * Whether to `docker compose build` before `compose down` / `compose up`.
 	 * Combine with build_extra_args for custom behaviors.
 	 * 
-	 * Note. Not used in Swarm mode.
+	 * Note. Not used in Compose mode.
 	 */
 	run_build?: boolean;
 	/** Whether to poll for any updates to the images. */
@@ -2591,7 +2585,7 @@ export interface StackConfig {
 	 * Relative to the run directory root.
 	 * Default: .env
 	 * 
-	 * Note. Not used in Swarm mode.
+	 * Note. Not used in Compose mode.
 	 */
 	env_file_path: string;
 	/**
@@ -2633,7 +2627,6 @@ export interface StackConfig {
 	 * The extra arguments to pass to the deploy command.
 	 * 
 	 * - For Compose stack, uses `docker compose up -d [EXTRA_ARGS]`.
-	 * - For Swarm mode. `docker stack deploy [EXTRA_ARGS] STACK_NAME`
 	 * 
 	 * If empty, no extra arguments will be passed.
 	 */
@@ -2643,7 +2636,7 @@ export interface StackConfig {
 	 * If empty, no extra build arguments will be passed.
 	 * Only used if `run_build: true`
 	 * 
-	 * Note. Not used in Swarm mode.
+	 * Note. Not used in Compose mode.
 	 */
 	build_extra_args?: string[];
 	/**
@@ -2659,8 +2652,7 @@ export interface StackConfig {
 	/**
 	 * Which compose subcommands should use the wrapper.
 	 * Valid values for Compose: "config", "build", "pull", "up", "run"
-	 * Valid values for Swarm: "config", "deploy"
-	 * Default: [] (empty). If empty and wrapper is set, defaults to ["up"] (Compose) or ["deploy"] (Swarm).
+	 * Default: [] (empty). If empty and wrapper is set, defaults to ["up"].
 	 * Set to ["config", "build", "pull", "up"] for sops exec-file with {} placeholder.
 	 */
 	compose_cmd_wrapper_include: string[];
@@ -2684,7 +2676,7 @@ export interface StackConfig {
 	 * 
 	 * If it is empty, no file will be written.
 	 * 
-	 * Note. Not used in Swarm mode.
+	 * Note. Not used in Compose mode.
 	 */
 	environment?: string;
 }
@@ -2716,9 +2708,6 @@ export interface StackServiceNames {
 	 * 
 	 * This stores only 1. and 2., ie stacko-mongo.
 	 * Containers will be matched via regex like `^container_name-?[0-9]*$``
-	 * 
-	 * Note. Setting container_name is not supported by Swarm,
-	 * so will always be 1. and 2. in Swarm mode.
 	 */
 	container_name: string;
 	/** The services image. */
@@ -3995,14 +3984,11 @@ export type ListAllDockerContainersResponse = ContainerListItem[];
 
 /**
  * Combined state options for
- * both Server and Swarm based Stacks.
+ * Server based Stacks.
  */
 export enum StackServiceState {
-	/** (Swarm) All tasks OK */
 	Healthy = "Healthy",
-	/** (Swarm) Some tasks don't match desired state */
 	Unhealthy = "Unhealthy",
-	/** (Swarm) All tasks down. */
 	Down = "Down",
 	/** (Container) Container is running */
 	Running = "Running",
@@ -6145,7 +6131,7 @@ export interface DeleteVolume {
 }
 
 /**
- * Deploys the container / swarm service for the target Deployment. Response: [Update].
+ * Deploys the container for the target Deployment. Response: [Update].
  * 
  * For Server based Deployments (just a container):
  * 1. Pulls the image onto the target server.
@@ -6177,7 +6163,7 @@ export interface DeployStack {
 	 * Filter to only deploy specific services.
 	 * If empty, will deploy all services.
 	 * 
-	 * Note. For Swarm mode Stacks, this field is not supported and will be ignored.
+	 * Note. This field is not supported for Compose Stacks and will be ignored.
 	 */
 	services?: string[];
 	/**
