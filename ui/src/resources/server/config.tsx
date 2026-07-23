@@ -24,13 +24,13 @@ export default function ServerConfig({
 
   const server = useFullServer(id);
   const config = server?.config;
-  const [publicKey, setPublicKey] = useState("");
+  const [endpointId, setEndpointId] = useState("");
 
   useEffect(() => {
-    if (server?.info?.public_key) {
-      setPublicKey(server.info.public_key);
+    if (server?.info?.endpoint_id) {
+      setEndpointId(server.info.endpoint_id);
     }
-  }, [server?.info?.public_key]);
+  }, [server?.info?.endpoint_id]);
   const [update, setUpdate] = useLocalStorage<Partial<Types.ServerConfig>>({
     key: `server-${id}-update-v1`,
     defaultValue: {},
@@ -46,8 +46,6 @@ export default function ServerConfig({
   if (!config) return null;
 
   const disabled = globalDisabled || !canWrite;
-  const address = update.address ?? config.address;
-  const tlsAddress = !!address && !address.startsWith("ws://");
 
   return (
     <Config
@@ -75,11 +73,11 @@ export default function ServerConfig({
             fields: {
               enabled: () => (
                 <ConfigInput
-                  label="Periphery Public Key"
-                  description="If provided, the associated private key must be set as Periphery 'private_key'. For Periphery -> Core connection, either this or using 'periphery_public_key' in Core config is required for Periphery to be able to connect."
-                  placeholder="custom-public-key"
-                  value={publicKey}
-                  onValueChange={(publicKey) => setPublicKey(publicKey)}
+                  label="Periphery Endpoint ID"
+                  description="The Iroh EndpointId of the Periphery agent. Auto-registered during onboarding, but can be manually set here for re-registration."
+                  placeholder="endpoint-id"
+                  value={endpointId}
+                  onValueChange={(value) => setEndpointId(value)}
                   inputRight={
                     !disabled && (
                       <Group>
@@ -89,11 +87,11 @@ export default function ServerConfig({
                           onClick={() =>
                             updatePublicKey({
                               server: id,
-                              public_key: publicKey,
+                              public_key: endpointId,
                             })
                           }
                           loading={updatePublicPending}
-                          disabled={publicKey === server?.info?.public_key}
+                          disabled={endpointId === server?.info?.endpoint_id}
                         >
                           Save
                         </ConfirmButton>
@@ -119,21 +117,12 @@ export default function ServerConfig({
             },
           },
           {
-            label: "Address",
+            label: "Network",
             labelHidden: true,
             fields: {
-              address: {
-                description:
-                  "For Core -> Periphery connection mode, specify address of periphery in your network.",
-                placeholder: "12.34.56.78:8120",
-              },
-              insecure_tls: {
-                hidden: !tlsAddress,
-                description: "Skip Periphery TLS certificate validation.",
-              },
               external_address: {
                 description:
-                  "Optional. The address of the server used in container links, if different than the Address.",
+                  "Optional. The address of the server used in container links.",
                 placeholder: "my.server.int",
               },
               region: {

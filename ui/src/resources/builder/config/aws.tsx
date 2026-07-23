@@ -107,22 +107,12 @@ export default function AwsBuilderConfig({ id }: { id: string }) {
             label: "Connection",
             labelHidden: true,
             fields: {
-              periphery_public_key: {
-                label: "Periphery Public Key",
-                description:
-                  "If provided, the associated private key must be set as Periphery 'private_key'.",
-                placeholder: "custom-public-key",
-              },
               port: {
                 description: "Configure the port to connect to Periphery on.",
                 placeholder: "Input port",
               },
               use_https: {
                 description: "Whether to connect to Periphery using HTTPS.",
-              },
-              insecure_tls: {
-                description:
-                  "Skip Periphery TLS certificate validation when HTTPS is enabled.",
               },
             },
           },

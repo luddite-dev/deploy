@@ -279,14 +279,17 @@ pub async fn update_server_public_key(
   server_id: &str,
   public_key: &str,
 ) -> anyhow::Result<()> {
+  // In the Iroh transport era, the "public key" is the Periphery's
+  // Iroh EndpointId. ServerInfo.endpoint_id is the live field; the old
+  // info.public_key DB path is no longer read on deserialization.
   db_client()
     .servers
     .update_one(
       doc! { "_id": ObjectId::from_str(server_id)? },
-      doc! { "$set": { "info.public_key": public_key } },
+      doc! { "$set": { "info.endpoint_id": public_key } },
     )
     .await
-    .context("Failed to update Server public key on database")?;
+    .context("Failed to update Server endpoint id on database")?;
   Ok(())
 }
 
