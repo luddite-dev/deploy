@@ -11,11 +11,13 @@ import {
   ConfigGroupArgs,
   ConfigProps,
   ConfigItem,
+  ConfigInput,
   ConfigList,
   ConfigSwitch,
 } from "mogh_ui";
 import {
   ActionIcon,
+  Autocomplete,
   Button,
   Group,
   MultiSelect,
@@ -341,6 +343,89 @@ export default function StackConfig({
 
   const auto_update = update.auto_update ?? config.auto_update ?? false;
 
+  // Known service names from the last deploy's host port mappings. Empty
+  // before first deploy; the Autocomplete Service field still accepts
+  // free-text input in that case.
+  const httpProxyServices = stack?.info?.host_ports
+    ? Object.keys(stack.info.host_ports)
+    : [];
+
+  const httpProxyGroup: ConfigGroupArgs<Types.StackConfig> = {
+    label: "HTTP Proxy",
+    labelHidden: true,
+    fields: {
+      http_proxy: (proxy, set) => (
+        <ConfigItem
+          label="HTTP Proxy"
+          description="Expose a service over HTTP with automatic DNS and HTTPS via Caddy."
+        >
+          <Stack>
+            <ConfigSwitch
+              label="Enable HTTP Proxy"
+              value={!!proxy}
+              onCheckedChange={(on) =>
+                set({
+                  http_proxy: on
+                    ? {
+                        service: "",
+                        subdomain: "",
+                        container_port: 0,
+                      }
+                    : undefined,
+                })
+              }
+              disabled={disabled}
+            />
+            {proxy && (
+              <Stack>
+                <ConfigItem
+                  label="Service"
+                  description="The compose service to proxy to. Known services are suggested after the first deploy."
+                >
+                  <Autocomplete
+                    value={proxy.service}
+                    onChange={(service) =>
+                      set({ http_proxy: { ...proxy, service } })
+                    }
+                    data={httpProxyServices}
+                    disabled={disabled}
+                    placeholder="Select or enter a service"
+                  />
+                </ConfigItem>
+                <ConfigInput
+                  label="Subdomain"
+                  description="DNS subdomain. FQDN = '{subdomain}.{base_domain}'."
+                  value={proxy.subdomain}
+                  onValueChange={(subdomain) =>
+                    set({ http_proxy: { ...proxy, subdomain } })
+                  }
+                  disabled={disabled}
+                  placeholder="myapp"
+                />
+                <ConfigInput
+                  label="Container Port"
+                  description="Container port on the service receiving proxied traffic."
+                  value={proxy.container_port}
+                  onValueChange={(port) =>
+                    set({
+                      http_proxy: {
+                        ...proxy,
+                        container_port: Number(port) || 0,
+                      },
+                    })
+                  }
+                  disabled={disabled}
+                  placeholder="8080"
+                  inputProps={{ type: "number" }}
+                />
+              </Stack>
+            )}
+          </Stack>
+        </ConfigItem>
+      ),
+    },
+  };
+
   const generalCommon: ConfigGroupArgs<Types.StackConfig>[] = [
     {
       label: "Auto Update",
@@ -416,6 +501,7 @@ export default function StackConfig({
         ),
       },
     },
+    httpProxyGroup,
   ];
 
   const advanced: ConfigGroupArgs<Types.StackConfig>[] = [
