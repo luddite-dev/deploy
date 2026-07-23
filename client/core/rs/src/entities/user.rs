@@ -108,7 +108,7 @@ pub struct NewUserParams {
   pub admin: bool,
   pub super_admin: bool,
   pub config: UserConfig,
-  pub updated_at: i64,
+  pub updated_at: I64,
 }
 
 impl User {

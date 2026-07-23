@@ -15,7 +15,7 @@ use crate::{
     string_list_deserializer, term_labels_deserializer,
   },
   entities::{
-    EnvironmentVar, ImageDigest, environment_vars_from_str,
+    EnvironmentVar, I64, ImageDigest, U64, environment_vars_from_str,
     optional_str,
   },
   parsers::parse_key_value_list,
@@ -698,8 +698,8 @@ pub struct AssignedPort {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct VolumeBackupInfo {
   pub s3_key: String,
-  pub timestamp: i64,
-  pub size_bytes: u64,
+  pub timestamp: I64,
+  pub size_bytes: U64,
 }
 
 #[typeshare]
@@ -710,8 +710,8 @@ pub struct VolumeBackupInfo {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct VolumeBackupRecord {
   pub s3_key: String,
-  pub timestamp: i64,
-  pub size_bytes: u64,
+  pub timestamp: I64,
+  pub size_bytes: U64,
   pub checksum: String,
 }
 
@@ -737,7 +737,7 @@ pub struct BackupDestination {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct BackupResult {
   pub s3_key: String,
-  pub size_bytes: u64,
+  pub size_bytes: U64,
   pub checksum: String,
 }
 
@@ -748,7 +748,7 @@ pub struct BackupResult {
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct RestoreResult {
-  pub bytes_restored: u64,
+  pub bytes_restored: U64,
 }
 
 #[typeshare]
@@ -759,10 +759,10 @@ pub struct RestoreResult {
 pub enum MigrationState {
   Migrating {
     target_server_id: String,
-    started_at: i64,
+    started_at: I64,
   },
   Failed {
     reason: String,
-    at: i64,
+    at: I64,
   },
 }

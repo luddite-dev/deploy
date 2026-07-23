@@ -331,6 +331,8 @@ impl Resolve<ReadArgs> for GetCoreInfo {
       public_key: crate::config::core_secret_key()
         .public()
         .to_string(),
+      ingress_base_domain: config.ingress.dns.base_domain.clone(),
+      ingress_enabled: !config.ingress.dns.provider.is_empty(),
     };
     Ok(info)
   }

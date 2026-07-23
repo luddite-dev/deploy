@@ -10,7 +10,7 @@ use crate::{
   deserializers::{
     option_string_list_deserializer, string_list_deserializer,
   },
-  entities::{_Serror, MaintenanceWindow, Timelength},
+  entities::{_Serror, MaintenanceWindow, Timelength, U64},
 };
 
 use super::{
@@ -142,7 +142,7 @@ pub struct ServerConfig {
   #[serde(default = "default_drain_timeout_seconds")]
   #[builder(default = "default_drain_timeout_seconds()")]
   #[partial_default(default_drain_timeout_seconds())]
-  pub drain_timeout_seconds: u64,
+  pub drain_timeout_seconds: U64,
 
   /// Whether to automatically rotate Server keys when
   /// RotateAllServerKeys is called.

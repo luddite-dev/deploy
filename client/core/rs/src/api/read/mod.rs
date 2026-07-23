@@ -148,6 +148,10 @@ pub struct GetCoreInfoResponse {
   pub timezone: String,
   /// Public key for Core / Periphery authentication.
   pub public_key: String,
+  /// The base domain for ingress DNS, if configured.
+  pub ingress_base_domain: Option<String>,
+  /// Whether the ingress DNS layer is enabled (provider is set).
+  pub ingress_enabled: bool,
 }
 
 //
