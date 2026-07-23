@@ -12,8 +12,9 @@ use komodo_client::{
     server::Server,
     stack::{
       PartialStackConfig, Stack, StackConfig, StackConfigDiff,
-      StackInfo, StackListItem, StackListItemInfo,
-      StackQuerySpecifics, StackServiceWithUpdate, StackState,
+      StackHttpProxyConfig, StackInfo, StackListItem,
+      StackListItemInfo, StackQuerySpecifics, StackServiceWithUpdate,
+      StackState,
     },
     to_docker_compatible_name,
     update::Update,
@@ -31,7 +32,13 @@ use crate::{
     query::{get_server_for_command, get_stack_state},
     repo_link,
   },
+  ingress::{
+    config::build_caddy_config,
+    failover::select_new_ingress_node,
+    management::{create_stack_dns_record, delete_stack_dns_records},
+  },
   monitor::refresh_server_cache,
+  resource::deployment::{DEFAULT_BRIDGE_PORT, build_ingress_routes},
   state::{
     action_states, all_resources_cache, db_client,
     server_status_cache, stack_status_cache,
@@ -499,5 +506,195 @@ async fn validate_config(
     // in case it comes in as name
     config.linked_repo = Some(repo.id);
   }
+  Ok(())
+}
+
+/// Best-effort: set up DNS + Caddy ingress for a stack with
+/// `http_proxy`.
+///
+/// Mirrors `try_setup_ingress` for deployments:
+/// 1. Resolve the stack's assigned server → endpoint_id.
+/// 2. Find the proxied service's host port from
+///    `info.host_ports[http_proxy.service]`.
+/// 3. Select a healthy ingress-enabled node and read its cached
+///    public IPs.
+/// 4. Create a DNS record keyed by stack_id pointing at the ingress
+///    node's public IPs.
+/// 5. Build the complete Caddy JSON config (all http_proxy routes,
+///    deployments + stacks) and push it to the ingress Periphery via
+///    `ReloadCaddyConfig`.
+pub async fn try_setup_stack_ingress(
+  stack: &Stack,
+  http_proxy: &StackHttpProxyConfig,
+) -> anyhow::Result<()> {
+  let core_cfg = core_config().ingress.clone();
+  let base_domain = core_cfg
+    .dns
+    .base_domain
+    .as_deref()
+    .filter(|d| !d.is_empty())
+    .ok_or_else(|| {
+      anyhow::anyhow!(
+        "ingress.dns.base_domain not configured — cannot set up ingress"
+      )
+    })?;
+  let fqdn = format!("{}.{}", http_proxy.subdomain, base_domain);
+
+  // Find the stack's server for the Iroh endpoint_id. Prefer
+  // config.server_id, fall back to the assigned_server populated by
+  // the placement scheduler.
+  let server_id = if !stack.config.server_id.is_empty() {
+    &stack.config.server_id
+  } else {
+    &stack.info.assigned_server
+  };
+  let server = get_server_for_command(server_id).await?;
+  let target_endpoint_id = server.info.endpoint_id.clone();
+  if target_endpoint_id.is_empty() {
+    anyhow::bail!(
+      "Server {} has no endpoint_id — cannot route ingress traffic",
+      server.id
+    );
+  }
+
+  // Find the target host port matching http_proxy.container_port on
+  // the proxied compose service. Stack host_ports are keyed by
+  // service name (HashMap<String, Vec<AssignedPort>>), unlike
+  // deployments which use a flat Vec.
+  let host_port = stack
+    .info
+    .host_ports
+    .get(&http_proxy.service)
+    .and_then(|ports| {
+      ports
+        .iter()
+        .find(|p| p.container == http_proxy.container_port)
+    })
+    .map(|p| p.host)
+    .ok_or_else(|| {
+      anyhow::anyhow!(
+        "No host port found for container port {} on service {} of \
+         stack {}. ReadContainerPorts readback may not have \
+         completed.",
+        http_proxy.container_port,
+        http_proxy.service,
+        stack.name
+      )
+    })?;
+
+  // Select a healthy ingress node.
+  let ingress_node = select_new_ingress_node("").await?;
+
+  // Read the ingress node's public IPs from its cached
+  // PeripheryInformation (populated on every PollStatus cycle —
+  // ~stats_polling_rate cadence, default 5-15s).
+  let cache_entry = server_status_cache().get(&ingress_node.id).await;
+  let (target_ipv4, target_ipv6) = cache_entry
+    .as_ref()
+    .and_then(|s| s.periphery_info.as_ref())
+    .map(|info| (info.public_ipv4.clone(), info.public_ipv6.clone()))
+    .unwrap_or((None, None));
+
+  if target_ipv4.is_none() && target_ipv6.is_none() {
+    anyhow::bail!(
+      "ingress node {} has no cached public_ipv4/v6 — \
+       wait for the next poll cycle (default ~5-15s), or set \
+       PERIPHERY_PUBLIC_IPV4 / _IPV6 on the Periphery host and \
+       restart it",
+      ingress_node.id
+    );
+  }
+
+  // Create DNS record(s) pointing to the ingress node, keyed by
+  // stack_id.
+  create_stack_dns_record(
+    &stack.id,
+    &http_proxy.subdomain,
+    &ingress_node.id,
+    target_ipv4.as_deref(),
+    target_ipv6.as_deref(),
+    &core_cfg,
+    60,
+  )
+  .await?;
+
+  // Build + push Caddy config (all routes, including this one).
+  let routes = build_ingress_routes(
+    base_domain,
+    &core_cfg.dns.cloudflare_api_token,
+  )
+  .await?;
+  let caddy_config = build_caddy_config(
+    &routes,
+    &core_cfg
+      .dns
+      .cloudflare_api_token
+      .clone()
+      .unwrap_or_default(),
+    DEFAULT_BRIDGE_PORT,
+  );
+
+  let periphery = periphery_client(&ingress_node).await?;
+  periphery
+    .request(periphery_client::api::ReloadCaddyConfig {
+      config: caddy_config,
+    })
+    .await?;
+
+  info!(
+    "Set up ingress for stack {}: {} -> endpoint {}:{}",
+    stack.name, fqdn, target_endpoint_id, host_port
+  );
+  Ok(())
+}
+
+/// Best-effort: delete DNS records + push updated Caddy config
+/// (without the deleted stack's route).
+///
+/// Mirrors `try_teardown_ingress` for deployments.
+async fn try_teardown_stack_ingress(
+  stack_id: &str,
+) -> anyhow::Result<()> {
+  let core_cfg = core_config().ingress.clone();
+
+  // Delete DNS records at the provider + in the database.
+  delete_stack_dns_records(stack_id, &core_cfg).await?;
+
+  // Push updated Caddy config (without the deleted route).
+  let base_domain = core_cfg
+    .dns
+    .base_domain
+    .as_deref()
+    .filter(|d| !d.is_empty())
+    .ok_or_else(|| {
+      anyhow::anyhow!(
+        "ingress.dns.base_domain not configured — cannot rebuild Caddy config"
+      )
+    })?;
+  let routes = build_ingress_routes(
+    base_domain,
+    &core_cfg.dns.cloudflare_api_token,
+  )
+  .await?;
+  let caddy_config = build_caddy_config(
+    &routes,
+    &core_cfg
+      .dns
+      .cloudflare_api_token
+      .clone()
+      .unwrap_or_default(),
+    DEFAULT_BRIDGE_PORT,
+  );
+
+  // Find the ingress node and push.
+  let ingress_node = select_new_ingress_node("").await?;
+  let periphery = periphery_client(&ingress_node).await?;
+  periphery
+    .request(periphery_client::api::ReloadCaddyConfig {
+      config: caddy_config,
+    })
+    .await?;
+
+  info!("Tore down ingress for stack {}", stack_id);
   Ok(())
 }

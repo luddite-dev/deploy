@@ -532,7 +532,7 @@ pub async fn setup_deployment_execution(
 /// traffic; Caddy reverse_proxies to it. The actual port is a
 /// periphery config value not exposed on the Core-side `Server`
 /// entity, so the default (8443) is used.
-const DEFAULT_BRIDGE_PORT: u16 = 8443;
+pub(crate) const DEFAULT_BRIDGE_PORT: u16 = 8443;
 
 /// Best-effort: set up DNS + Caddy ingress for a deployment with
 /// `http_proxy`.
@@ -726,7 +726,7 @@ async fn try_teardown_ingress(
 ///
 /// This is called on every create/delete so the pushed config always
 /// reflects the current set of proxied deployments.
-async fn build_ingress_routes(
+pub(crate) async fn build_ingress_routes(
   base_domain: &str,
   _cloudflare_api_token: &Option<String>,
 ) -> anyhow::Result<Vec<CaddyRoute>> {
@@ -803,8 +803,12 @@ async fn build_ingress_routes(
     let Some(http_proxy) = &stack.config.http_proxy else {
       continue;
     };
-    let server =
-      get_server_for_command(&stack.config.server_id).await.ok();
+    let server_id = if stack.config.server_id.is_empty() {
+      &stack.info.assigned_server
+    } else {
+      &stack.config.server_id
+    };
+    let server = get_server_for_command(server_id).await.ok();
     let Some(server) = server else {
       warn!(
         "build_ingress_routes: could not get server for stack {} (server_id={}), skipping",
