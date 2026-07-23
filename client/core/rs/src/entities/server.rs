@@ -42,6 +42,10 @@ pub struct ServerListItemInfo {
   pub err: Option<_Serror>,
   /// The server alerting thresholds.
   pub alerting_thresholds: ServerAlertingThresholds,
+  /// The server's number of physical cores.
+  pub core_count: Option<u32>,
+  /// The server's number of logical cores.
+  pub logical_core_count: Option<u32>,
   /// Region of the server.
   pub region: String,
   /// Address of the server, or null if empty.

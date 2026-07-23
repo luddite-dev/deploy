@@ -4432,6 +4432,10 @@ export interface ServerListItemInfo {
     err?: _Serror;
     /** The server alerting thresholds. */
     alerting_thresholds: ServerAlertingThresholds;
+    /** The server's number of physical cores. */
+    core_count?: number;
+    /** The server's number of logical cores. */
+    logical_core_count?: number;
     /** Region of the server. */
     region: string;
     /** Address of the server, or null if empty. */
