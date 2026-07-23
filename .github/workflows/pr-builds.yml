@@ -119,7 +119,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: delete
+      packages: write
       pull-requests: write
 
     steps:
