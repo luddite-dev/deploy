@@ -1,0 +1,167 @@
+name: PR Builds
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, closed]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: luddite-dev/core
+
+concurrency:
+  group: pr-builds-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build artifacts
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Core Docker image ──
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Core image
+        id: docker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: bin/core/aio.Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:pr-${{ github.event.number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Periphery binary (x86_64 only) ──
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: x86_64-pr-release
+
+      - name: Build periphery
+        run: cargo build --release -p komodo_periphery
+
+      - name: Strip periphery binary
+        run: strip target/release/periphery
+
+      - name: Upload periphery artifact
+        id: periphery
+        uses: actions/upload-artifact@v4
+        with:
+          name: periphery-x86_64
+          path: target/release/periphery
+          retention-days: 1
+
+      # ── PR comment ──
+      - name: Post/update PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const runId = context.runId;
+            const artifactName = 'periphery-x86_64';
+            const artifactUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}/artifacts`;
+            const imageTag = `${process.env.REGISTRY}/${process.env.IMAGE_NAME}:pr-${prNumber}`;
+            const marker = '<!-- pr-build -->';
+
+            const body = [
+              marker,
+              `🚀 **PR Build Ready**`,
+              ``,
+              `Image: \`${imageTag}\``,
+              `Periphery: ${artifactUrl}`,
+            ].join('\n');
+
+            // Find existing comment by marker
+            const comments = await github.rest.issues.listComments({
+              ...context.repo,
+              issue_number: prNumber,
+            });
+
+            const existing = comments.data.find(c => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                ...context.repo,
+                comment_id: existing.id,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: prNumber,
+                body: body,
+              });
+            }
+
+  cleanup:
+    name: Cleanup PR artifacts
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: delete
+      pull-requests: write
+
+    steps:
+      - name: Delete GHCR image tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=${{ github.event.number }}
+          IMAGE="core"
+
+          # List all package versions for the authenticated user,
+          # find the one tagged pr-{N}
+          VERSION_ID=$(gh api \
+            --paginate \
+            "/user/packages/container/${IMAGE}/versions" \
+            --jq ".[] | select(.metadata.container.tags[]? == \"pr-${PR_NUMBER}\") | .id" \
+            | head -1)
+
+          if [ -n "$VERSION_ID" ]; then
+            echo "Deleting package version $VERSION_ID (tag: pr-${PR_NUMBER})"
+            gh api -X DELETE "/user/packages/container/${IMAGE}/versions/${VERSION_ID}"
+          else
+            echo "No package version found with tag pr-${PR_NUMBER} — may have been deleted already"
+          fi
+
+      - name: Delete PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const marker = '<!-- pr-build -->';
+
+            const comments = await github.rest.issues.listComments({
+              ...context.repo,
+              issue_number: prNumber,
+            });
+
+            const existing = comments.data.find(c => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.deleteComment({
+                ...context.repo,
+                comment_id: existing.id,
+              });
+            }
