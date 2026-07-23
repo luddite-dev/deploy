@@ -152,9 +152,7 @@ function onUpdate(
   // Invalidate these every time
   invalidate(["ListUpdates"]);
   invalidate(["GetUpdate", { id: update.id }]);
-  if (update.target.type === "Swarm") {
-    invalidate(["GetSwarmActionState", { swarm: update.target.id }]);
-  } else if (update.target.type === "Server") {
+  if (update.target.type === "Server") {
     invalidate(["GetServerActionState", { server: update.target.id }]);
   } else if (update.target.type === "Stack") {
     invalidate(["GetStackActionState", { stack: update.target.id }]);
@@ -209,27 +207,6 @@ function onUpdate(
         ["ListDockerVolumes"],
         ["InspectDockerVolume"],
         ["GetResourceMatchingContainer"],
-      );
-    }
-
-    if (update.target.type === "Swarm") {
-      invalidate(
-        ["ListSwarms"],
-        ["ListFullSwarms"],
-        ["GetSwarmsSummary"],
-        ["GetSwarm"],
-        ["ListSwarmNodes"],
-        ["InspectSwarmNode"],
-        ["ListSwarmStacks"],
-        ["InspectSwarmStack"],
-        ["ListSwarmServices"],
-        ["InspectSwarmService"],
-        ["ListSwarmTasks"],
-        ["InspectSwarmTask"],
-        ["ListSwarmConfigs"],
-        ["InspectSwarmConfig"],
-        ["ListSwarmSecrets"],
-        ["InspectSwarmSecret"],
       );
     }
 

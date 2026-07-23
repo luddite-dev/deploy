@@ -353,7 +353,7 @@ pub struct StackConfig {
   /// Ensured latest images are deployed.
   /// Will fail if the compose file specifies a locally build image.
   ///
-  /// Note. Not used in Swarm mode.
+  /// Note. Not used in Compose mode.
   #[serde(default = "default_auto_pull")]
   #[builder(default = "default_auto_pull()")]
   #[partial_default(default_auto_pull())]
@@ -362,7 +362,7 @@ pub struct StackConfig {
   /// Whether to `docker compose build` before `compose down` / `compose up`.
   /// Combine with build_extra_args for custom behaviors.
   ///
-  /// Note. Not used in Swarm mode.
+  /// Note. Not used in Compose mode.
   #[serde(default)]
   #[builder(default)]
   pub run_build: bool,
@@ -510,7 +510,7 @@ pub struct StackConfig {
   /// Relative to the run directory root.
   /// Default: .env
   ///
-  /// Note. Not used in Swarm mode.
+  /// Note. Not used in Compose mode.
   #[serde(default = "default_env_file_path")]
   #[builder(default = "default_env_file_path()")]
   #[partial_default(default_env_file_path())]
@@ -560,6 +560,13 @@ pub struct StackConfig {
   #[builder(default)]
   pub backup: Option<BackupConfig>,
 
+  /// Optional HTTP proxy ingress config for the stack. Selects one
+  /// compose service to receive proxied traffic at a subdomain.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[partial_attr(serde(default))]
+  #[builder(default)]
+  pub http_proxy: Option<StackHttpProxyConfig>,
+
   /// The optional command to run before the Stack is deployed.
   #[serde(default)]
   #[builder(default)]
@@ -573,7 +580,6 @@ pub struct StackConfig {
   /// The extra arguments to pass to the deploy command.
   ///
   /// - For Compose stack, uses `docker compose up -d [EXTRA_ARGS]`.
-  /// - For Swarm mode. `docker stack deploy [EXTRA_ARGS] STACK_NAME`
   ///
   /// If empty, no extra arguments will be passed.
   #[serde(default, deserialize_with = "string_list_deserializer")]
@@ -588,7 +594,7 @@ pub struct StackConfig {
   /// If empty, no extra build arguments will be passed.
   /// Only used if `run_build: true`
   ///
-  /// Note. Not used in Swarm mode.
+  /// Note. Not used in Compose mode.
   #[serde(default, deserialize_with = "string_list_deserializer")]
   #[partial_attr(serde(
     default,
@@ -610,8 +616,7 @@ pub struct StackConfig {
 
   /// Which compose subcommands should use the wrapper.
   /// Valid values for Compose: "config", "build", "pull", "up", "run"
-  /// Valid values for Swarm: "config", "deploy"
-  /// Default: [] (empty). If empty and wrapper is set, defaults to ["up"] (Compose) or ["deploy"] (Swarm).
+  /// Default: [] (empty). If empty and wrapper is set, defaults to ["up"].
   /// Set to ["config", "build", "pull", "up"] for sops exec-file with {} placeholder.
   #[serde(
     default = "default_wrapper_include",
@@ -653,7 +658,7 @@ pub struct StackConfig {
   ///
   /// If it is empty, no file will be written.
   ///
-  /// Note. Not used in Swarm mode.
+  /// Note. Not used in Compose mode.
   #[serde(default, deserialize_with = "env_vars_deserializer")]
   #[partial_attr(serde(
     default,
@@ -751,6 +756,7 @@ impl Default for StackConfig {
       send_alerts: default_send_alerts(),
       links: Default::default(),
       backup: Default::default(),
+      http_proxy: Default::default(),
     }
   }
 }
@@ -802,9 +808,6 @@ pub struct StackServiceNames {
   ///
   /// This stores only 1. and 2., ie stacko-mongo.
   /// Containers will be matched via regex like `^container_name-?[0-9]*$``
-  ///
-  /// Note. Setting container_name is not supported by Swarm,
-  /// so will always be 1. and 2. in Swarm mode.
   pub container_name: String,
   /// The services image.
   #[serde(default)]
@@ -837,7 +840,7 @@ pub struct StackService {
 }
 
 /// Combined state options for
-/// both Server and Swarm based Stacks.
+/// Server based Stacks.
 #[typeshare]
 #[derive(
   Debug,
@@ -854,11 +857,8 @@ pub struct StackService {
 )]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub enum StackServiceState {
-  /// (Swarm) All tasks OK
   Healthy,
-  /// (Swarm) Some tasks don't match desired state
   Unhealthy,
-  /// (Swarm) All tasks down.
   Down,
   /// (Container) Container is running
   Running,
@@ -1056,6 +1056,27 @@ pub struct AdditionalEnvFile {
 
 fn default_true() -> bool {
   true
+}
+
+/// Per-stack HTTP proxy ingress configuration.
+///
+/// Selects a single compose service to receive proxied traffic at a
+/// subdomain under the ingress DNS base domain.
+#[typeshare]
+#[derive(
+  Debug, Clone, Default, PartialEq, Serialize, Deserialize,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub struct StackHttpProxyConfig {
+  /// Which compose service to proxy to. Must match a service name
+  /// declared in the compose file. Resolved to a container name via
+  /// `StackServiceNames.container_name` returned by `ComposeUp`.
+  pub service: String,
+  /// Subdomain. FQDN = "{subdomain}.{ingress.dns.base_domain}".
+  pub subdomain: String,
+  /// Which container port on that service receives proxied traffic.
+  pub container_port: u16,
 }
 
 /// Used with custom de/serializer for [AdditionalEnvFile]

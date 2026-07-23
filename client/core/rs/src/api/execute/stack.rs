@@ -37,7 +37,7 @@ pub struct DeployStack {
   /// Filter to only deploy specific services.
   /// If empty, will deploy all services.
   ///
-  /// Note. For Swarm mode Stacks, this field is not supported and will be ignored.
+  /// Note. This field is not supported for Compose Stacks and will be ignored.
   #[serde(default)]
   pub services: Vec<String>,
   /// Override the default termination max time.

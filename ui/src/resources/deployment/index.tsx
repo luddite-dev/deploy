@@ -14,13 +14,11 @@ import {
   RestartDeployment,
   StartStopDeployment,
 } from "./executions";
-import { useSwarm } from "@/resources/swarm";
 import { useServer } from "@/resources/server";
 import ResourceLink from "@/resources/link";
 import { Group, Text } from "@mantine/core";
 import { RunBuild } from "@/resources/build/executions";
 import DockerResourceLink from "@/components/docker/link";
-import SwarmResourceLink from "@/components/swarm/link";
 import ContainerPorts from "@/components/docker/container-ports";
 import DeploymentUpdateAvailable from "./update-available";
 import ResourceHeader from "../header";
@@ -91,7 +89,7 @@ export const DeploymentComponents: RequiredResourceComponents<
     ];
   },
 
-  Description: () => <>Deploy individual containers and swarm services.</>,
+  Description: () => <>Deploy individual containers.</>,
 
   New: (props) => <NewResourceWithDeployTarget type="Deployment" {...props} />,
 
@@ -155,11 +153,8 @@ export const DeploymentComponents: RequiredResourceComponents<
   Info: {
     DeployTarget: ({ id }) => {
       const info = useDeployment(id)?.info;
-      const swarm = useSwarm(info?.swarm_id);
       const server = useServer(info?.server_id);
-      return swarm?.id ? (
-        <ResourceLink type="Swarm" id={swarm?.id} />
-      ) : server?.id ? (
+      return server?.id ? (
         <ResourceLink type="Server" id={server?.id} />
       ) : (
         <Group gap="xs">
@@ -191,11 +186,6 @@ export const DeploymentComponents: RequiredResourceComponents<
     },
     DockerResource: ({ id }) => {
       const deployment = useDeployment(id);
-      const service = useRead(
-        "ListSwarmServices",
-        { swarm: deployment?.info.swarm_id! },
-        { enabled: !!deployment?.info.swarm_id },
-      ).data?.find((service) => service.Name === deployment?.name);
       if (
         !deployment ||
         [
@@ -205,44 +195,13 @@ export const DeploymentComponents: RequiredResourceComponents<
       ) {
         return null;
       }
-      if (deployment.info.swarm_id) {
-        return (
-          <>
-            <SwarmResourceLink
-              type="Service"
-              swarmId={deployment.info.swarm_id}
-              resourceId={deployment.name}
-              name={deployment.name}
-            />
-            {service?.Configs.map((config) => (
-              <SwarmResourceLink
-                key={config}
-                type="Config"
-                swarmId={deployment.info.swarm_id}
-                resourceId={config}
-                name={config}
-              />
-            ))}
-            {service?.Secrets.map((secret) => (
-              <SwarmResourceLink
-                key={secret}
-                type="Secret"
-                swarmId={deployment.info.swarm_id}
-                resourceId={secret}
-                name={secret}
-              />
-            ))}
-          </>
-        );
-      } else {
-        return (
-          <DockerResourceLink
-            type="Container"
-            name={deployment.name}
-            serverId={deployment.info.server_id}
-          />
-        );
-      }
+      return (
+        <DockerResourceLink
+          type="Container"
+          name={deployment.name}
+          serverId={deployment.info.server_id}
+        />
+      );
     },
     Ports: ({ id }) => {
       const deployment = useDeployment(id);
@@ -259,6 +218,27 @@ export const DeploymentComponents: RequiredResourceComponents<
           ports={container?.ports ?? []}
           serverId={deployment?.info.server_id}
         />
+      );
+    },
+    HttpProxyUrl: ({ id }) => {
+      const config = useFullDeployment(id)?.config;
+      const coreInfo = useRead("GetCoreInfo", {}).data;
+      const httpProxy = config?.http_proxy;
+      const baseDomain = coreInfo?.ingress_base_domain;
+      if (!httpProxy || !baseDomain) return null;
+      const url = `https://${httpProxy.subdomain || ""}.${baseDomain}`;
+      return (
+        <Group gap="xs">
+          <ICONS.Network size="1rem" />
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary hover:underline"
+          >
+            {url}
+          </a>
+        </Group>
       );
     },
     UpdateAvailable: DeploymentUpdateAvailable,

@@ -17,6 +17,7 @@ use komodo_client::entities::{
   },
   resource::Resource,
   server::Server,
+  stack::Stack,
   to_container_compatible_name,
   update::Update,
   user::User,
@@ -531,7 +532,7 @@ pub async fn setup_deployment_execution(
 /// traffic; Caddy reverse_proxies to it. The actual port is a
 /// periphery config value not exposed on the Core-side `Server`
 /// entity, so the default (8443) is used.
-const DEFAULT_BRIDGE_PORT: u16 = 8443;
+pub(crate) const DEFAULT_BRIDGE_PORT: u16 = 8443;
 
 /// Best-effort: set up DNS + Caddy ingress for a deployment with
 /// `http_proxy`.
@@ -575,17 +576,25 @@ pub async fn try_setup_ingress(
   }
 
   // Find the target host port matching http_proxy.container_port.
+  // If container_port is None (auto-detect), pick the first available port mapping.
   let host_port = deployment
     .info
     .host_ports
     .iter()
-    .find(|p| p.container == http_proxy.container_port)
+    .find(|p| {
+      http_proxy
+        .container_port
+        .map_or(true, |cp| p.container == cp)
+    })
     .map(|p| p.host)
     .ok_or_else(|| {
       anyhow::anyhow!(
         "No host port found for container port {} on deployment {}. \
          ReadContainerPorts readback may not have completed.",
-        http_proxy.container_port,
+        http_proxy
+          .container_port
+          .map(|cp| cp.to_string())
+          .unwrap_or_else(|| "(auto)".to_string()),
         deployment.name
       )
     })?;
@@ -717,7 +726,7 @@ async fn try_teardown_ingress(
 ///
 /// This is called on every create/delete so the pushed config always
 /// reflects the current set of proxied deployments.
-async fn build_ingress_routes(
+pub(crate) async fn build_ingress_routes(
   base_domain: &str,
   _cloudflare_api_token: &Option<String>,
 ) -> anyhow::Result<Vec<CaddyRoute>> {
@@ -752,16 +761,79 @@ async fn build_ingress_routes(
       continue;
     }
     // Find the host port matching the container_port.
+    // If container_port is None (auto-detect), pick the first available port mapping.
     let host_port = dep
       .info
       .host_ports
       .iter()
-      .find(|p| p.container == http_proxy.container_port)
+      .find(|p| {
+        http_proxy
+          .container_port
+          .map_or(true, |cp| p.container == cp)
+      })
       .map(|p| p.host);
     let Some(host_port) = host_port else {
       warn!(
         "build_ingress_routes: no host port for container port {} on deployment {}, skipping",
-        http_proxy.container_port, dep.name
+        http_proxy
+          .container_port
+          .map(|cp| cp.to_string())
+          .unwrap_or_else(|| "(auto)".to_string()),
+        dep.name
+      );
+      continue;
+    };
+    routes.push(CaddyRoute {
+      hostname: format!("{}.{}", http_proxy.subdomain, base_domain),
+      target_endpoint_id: endpoint_id,
+      target_port: host_port,
+    });
+  }
+
+  // Query all stacks that have http_proxy set.
+  let stacks: Vec<Stack> = find_collect(
+    &db_client().stacks,
+    doc! { "config.http_proxy": { "$ne": null } },
+    None,
+  )
+  .await
+  .context("failed to query stacks with http_proxy")?;
+
+  for stack in stacks {
+    let Some(http_proxy) = &stack.config.http_proxy else {
+      continue;
+    };
+    let server_id = if stack.config.server_id.is_empty() {
+      &stack.info.assigned_server
+    } else {
+      &stack.config.server_id
+    };
+    let server = get_server_for_command(server_id).await.ok();
+    let Some(server) = server else {
+      warn!(
+        "build_ingress_routes: could not get server for stack {} (server_id={}), skipping",
+        stack.name, stack.config.server_id
+      );
+      continue;
+    };
+    let endpoint_id = server.info.endpoint_id.clone();
+    if endpoint_id.is_empty() {
+      continue;
+    }
+    let host_port = stack
+      .info
+      .host_ports
+      .get(&http_proxy.service)
+      .and_then(|ports| {
+        ports
+          .iter()
+          .find(|p| p.container == http_proxy.container_port)
+      })
+      .map(|p| p.host);
+    let Some(host_port) = host_port else {
+      warn!(
+        "build_ingress_routes: no host port for service {} container port {} on stack {}, skipping",
+        http_proxy.service, http_proxy.container_port, stack.name
       );
       continue;
     };

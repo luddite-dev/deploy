@@ -36,16 +36,6 @@ export default function AlerterConfigResources({
           : false,
       };
     }) ?? []),
-    ...(resourcesMap.Swarm?.map((swarm) => {
-      return {
-        type: "Swarm",
-        id: swarm.id,
-        name: swarm.name.toLowerCase(),
-        enabled: resources.find((r) => r.type === "Swarm" && r.id === swarm.id)
-          ? true
-          : false,
-      };
-    }) ?? []),
     ...(resourcesMap.Stack?.map((stack) => {
       return {
         type: "Stack",

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Context;
 use database::mungos::mongodb::Collection;
 use formatting::format_serror;
@@ -6,14 +8,16 @@ use komodo_client::{
   api::write::RefreshStackCache,
   entities::{
     Operation, ResourceTarget, ResourceTargetVariant,
+    deployment::AssignedPort,
     permission::{PermissionLevel, SpecificPermission},
     repo::Repo,
     resource::Resource,
     server::Server,
     stack::{
       PartialStackConfig, Stack, StackConfig, StackConfigDiff,
-      StackInfo, StackListItem, StackListItemInfo,
-      StackQuerySpecifics, StackServiceWithUpdate, StackState,
+      StackHttpProxyConfig, StackInfo, StackListItem,
+      StackListItemInfo, StackQuerySpecifics, StackServiceNames,
+      StackServiceWithUpdate, StackState,
     },
     to_docker_compatible_name,
     update::Update,
@@ -21,7 +25,9 @@ use komodo_client::{
   },
 };
 use mogh_resolver::Resolve;
-use periphery_client::api::compose::ComposeExecution;
+use periphery_client::api::{
+  compose::ComposeExecution, placement::ReadContainerPorts,
+};
 
 use crate::{
   api::write::WriteArgs,
@@ -31,7 +37,13 @@ use crate::{
     query::{get_server_for_command, get_stack_state},
     repo_link,
   },
+  ingress::{
+    config::build_caddy_config,
+    failover::select_new_ingress_node,
+    management::{create_stack_dns_record, delete_stack_dns_records},
+  },
   monitor::refresh_server_cache,
+  resource::deployment::{DEFAULT_BRIDGE_PORT, build_ingress_routes},
   state::{
     action_states, all_resources_cache, db_client,
     server_status_cache, stack_status_cache,
@@ -260,7 +272,7 @@ impl super::KomodoResource for Stack {
     config: &mut Self::PartialConfig,
     user: &User,
   ) -> anyhow::Result<()> {
-    validate_config(config, user).await
+    validate_config(config, None, user).await
   }
 
   async fn post_create(
@@ -283,20 +295,14 @@ impl super::KomodoResource for Stack {
       .await
       .context("Failed to set info.assigned_server")?;
     }
-    // TODO(Task 8): ReadContainerPorts readback to populate info.host_ports.
+    // Host-port readback for stacks happens in `DeployStack::resolve`
+    // (after ComposeUp returns `StackServiceNames` with container names),
+    // not here in `post_create` — at create time no containers are running
+    // yet. See `read_back_stack_host_ports` in this module.
     //
-    // DEFERRED: The stack host_ports field is a HashMap<String,
-    // Vec<AssignedPort>> keyed by compose service name. Unlike deployments
-    // (where the container name == stack.name), stack service containers use
-    // a compose project naming convention that is not trivially available
-    // at post_create time — the services list is populated by the
-    // RefreshStackCache call above, but resolving per-service container
-    // names and iterating ReadContainerPorts for each is a larger change.
-    //
-    // The drain migration path (`bin/core/src/server/drain.rs:553`) also
-    // skips host_ports for stacks, confirming there is no existing pattern
-    // to mirror. Stack HTTP proxying (via Caddy) can be added in a future
-    // task once service-name discovery is implemented.
+    // Stack HTTP proxying (via Caddy + DNS) is also wired in
+    // `DeployStack::resolve` via `try_setup_stack_ingress`, and torn down
+    // in `post_delete` via `try_teardown_stack_ingress`.
     if let Err(e) = (RefreshStackCache {
       stack: created.name.clone(),
     })
@@ -336,11 +342,11 @@ impl super::KomodoResource for Stack {
   }
 
   async fn validate_update_config(
-    _id: &str,
+    id: &str,
     config: &mut Self::PartialConfig,
     user: &User,
   ) -> anyhow::Result<()> {
-    validate_config(config, user).await
+    validate_config(config, Some(id), user).await
   }
 
   async fn post_update(
@@ -438,6 +444,17 @@ impl super::KomodoResource for Stack {
     resource: &Resource<Self::Config, Self::Info>,
     _update: &mut Update,
   ) -> anyhow::Result<()> {
+    // Best-effort: tear down DNS + Caddy ingress for stacks that had
+    // http_proxy configured. Done first so the route is removed even
+    // if later cleanup steps were to fail.
+    if resource.config.http_proxy.is_some() {
+      if let Err(e) = try_teardown_stack_ingress(&resource.id).await {
+        warn!(
+          "Failed to tear down ingress for stack {} | {e:#}",
+          resource.id
+        );
+      }
+    }
     stack_status_cache().remove(&resource.id).await;
     Ok(())
   }
@@ -446,6 +463,7 @@ impl super::KomodoResource for Stack {
 #[instrument("ValidateStackConfig", skip_all)]
 async fn validate_config(
   config: &mut PartialStackConfig,
+  id: Option<&str>,
   user: &User,
 ) -> anyhow::Result<()> {
   if let Some(server_id) = &config.server_id
@@ -469,6 +487,83 @@ async fn validate_config(
       file_contents,
     )
     .context("Invalid compose file")?;
+  }
+  // Validate http_proxy if set. Run before the server_id early-return
+  // below so a partial update that only touches http_proxy is still
+  // validated. Stacks and deployments share the same DNS namespace
+  // (base_domain), so uniqueness is checked across both collections.
+  if let Some(http_proxy) = &config.http_proxy {
+    use database::mungos::{find::find_collect, mongodb::bson::doc};
+    use komodo_client::entities::deployment::Deployment;
+
+    if http_proxy.service.is_empty() {
+      anyhow::bail!("http_proxy.service must not be empty");
+    }
+    if http_proxy.subdomain.is_empty() {
+      anyhow::bail!("http_proxy.subdomain must not be empty");
+    }
+    if !is_valid_subdomain(&http_proxy.subdomain) {
+      anyhow::bail!(
+        "http_proxy.subdomain must contain only letters, digits, and hyphens, \
+         and must start and end with a letter or digit"
+      );
+    }
+    if http_proxy.container_port == 0 {
+      anyhow::bail!(
+        "http_proxy.container_port must be greater than 0"
+      );
+    }
+
+    // Subdomain uniqueness: no other stack may use the same subdomain.
+    // On update, exclude the stack being updated from the match. The
+    // stack's `_id` is stored as an ObjectId in MongoDB, so the self_id
+    // string must be parsed to ObjectId first — otherwise the `$ne` is
+    // a cross-type comparison that always evaluates to true and the
+    // stack matches itself, causing a false "already in use" bail on
+    // any update that keeps the same subdomain.
+    let stack_filter = match id {
+      Some(self_id) => {
+        let self_oid =
+          database::mungos::mongodb::bson::oid::ObjectId::parse_str(
+            self_id,
+          )
+          .map_err(|e| anyhow::anyhow!("invalid id: {e}"))?;
+        doc! {
+          "config.http_proxy.subdomain": &http_proxy.subdomain,
+          "_id": { "$ne": self_oid },
+        }
+      }
+      None => doc! {
+        "config.http_proxy.subdomain": &http_proxy.subdomain,
+      },
+    };
+    let existing_stacks: Vec<Stack> =
+      find_collect(&db_client().stacks, stack_filter, None)
+        .await
+        .context("failed to query stacks for subdomain uniqueness")?;
+    if !existing_stacks.is_empty() {
+      anyhow::bail!(
+        "http_proxy.subdomain '{}' is already in use by another stack",
+        http_proxy.subdomain
+      );
+    }
+
+    // Deployments share the same DNS namespace / base_domain.
+    let existing_deployments: Vec<Deployment> = find_collect(
+      &db_client().deployments,
+      doc! { "config.http_proxy.subdomain": &http_proxy.subdomain },
+      None,
+    )
+    .await
+    .context(
+      "failed to query deployments for subdomain uniqueness",
+    )?;
+    if !existing_deployments.is_empty() {
+      anyhow::bail!(
+        "http_proxy.subdomain '{}' is already in use by a deployment",
+        http_proxy.subdomain
+      );
+    }
   }
   // Only run the placement scheduler when server_id was explicitly part
   // of this partial config (Some). If it's None the caller didn't touch
@@ -499,5 +594,293 @@ async fn validate_config(
     // in case it comes in as name
     config.linked_repo = Some(repo.id);
   }
+  Ok(())
+}
+
+/// Validates a DNS subdomain label per RFC 1035: non-empty, ≤ 63
+/// chars, only ASCII letters/digits/hyphens, must start and end with
+/// an alphanumeric, and no consecutive hyphens.
+fn is_valid_subdomain(s: &str) -> bool {
+  !s.is_empty()
+    && s.len() <= 63
+    && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    && !s.starts_with('-')
+    && !s.ends_with('-')
+    && !s.contains("--")
+}
+
+/// Queries the periphery for each service container's host port
+/// bindings and writes them into `info.host_ports` in the database.
+/// Best-effort: per-service failures are logged at warn-level and
+/// skipped, so a transient periphery error never fails an
+/// otherwise-successful deploy.
+///
+/// Mirrors `read_back_host_ports` for deployments
+/// (`bin/core/src/resource/deployment.rs:453`), but iterates over
+/// every compose service and keys results by service name
+/// (`HashMap<String, Vec<AssignedPort>>`).
+pub async fn read_back_stack_host_ports(
+  stack: &Stack,
+  service_names: &[StackServiceNames],
+) -> HashMap<String, Vec<AssignedPort>> {
+  // Resolve the stack's server (same fallback as try_setup_stack_ingress).
+  let server_id = if !stack.config.server_id.is_empty() {
+    &stack.config.server_id
+  } else {
+    &stack.info.assigned_server
+  };
+  let server = match get_server_for_command(server_id).await {
+    Ok(s) => s,
+    Err(e) => {
+      warn!(
+        "ReadContainerPorts: failed to resolve server for Stack {} | {e:#}",
+        stack.name
+      );
+      return HashMap::new();
+    }
+  };
+  let periphery = match periphery_client(&server).await {
+    Ok(p) => p,
+    Err(e) => {
+      warn!(
+        "ReadContainerPorts: failed to connect to periphery for Stack {} | {e:#}",
+        stack.name
+      );
+      return HashMap::new();
+    }
+  };
+
+  let mut host_ports: HashMap<String, Vec<AssignedPort>> =
+    HashMap::new();
+  for svc in service_names {
+    match periphery
+      .request(ReadContainerPorts {
+        container_name: svc.container_name.clone(),
+      })
+      .await
+    {
+      Ok(r) => {
+        host_ports.insert(svc.service_name.clone(), r.ports);
+      }
+      Err(e) => {
+        warn!(
+          "ReadContainerPorts: query failed for Stack service {} ({}) | {e:#}",
+          svc.service_name, svc.container_name
+        );
+      }
+    }
+  }
+
+  let host_ports_bson =
+    database::mungos::mongodb::bson::to_bson(&host_ports)
+      .unwrap_or(database::mungos::mongodb::bson::Bson::Null);
+  if let Err(e) = database::mungos::by_id::update_one_by_id(
+    &db_client().stacks,
+    &stack.id,
+    database::mungos::update::Update::Set(
+      database::mungos::mongodb::bson::doc! {
+        "info.host_ports": host_ports_bson
+      },
+    ),
+    None,
+  )
+  .await
+  {
+    warn!(
+      "ReadContainerPorts: failed to persist host_ports for Stack {} | {e:#}",
+      stack.name
+    );
+  }
+
+  host_ports
+}
+
+/// Best-effort: set up DNS + Caddy ingress for a stack with
+/// `http_proxy`.
+///
+/// Mirrors `try_setup_ingress` for deployments:
+/// 1. Resolve the stack's assigned server → endpoint_id.
+/// 2. Find the proxied service's host port from
+///    `info.host_ports[http_proxy.service]`.
+/// 3. Select a healthy ingress-enabled node and read its cached
+///    public IPs.
+/// 4. Create a DNS record keyed by stack_id pointing at the ingress
+///    node's public IPs.
+/// 5. Build the complete Caddy JSON config (all http_proxy routes,
+///    deployments + stacks) and push it to the ingress Periphery via
+///    `ReloadCaddyConfig`.
+pub async fn try_setup_stack_ingress(
+  stack: &Stack,
+  http_proxy: &StackHttpProxyConfig,
+) -> anyhow::Result<()> {
+  let core_cfg = core_config().ingress.clone();
+  let base_domain = core_cfg
+    .dns
+    .base_domain
+    .as_deref()
+    .filter(|d| !d.is_empty())
+    .ok_or_else(|| {
+      anyhow::anyhow!(
+        "ingress.dns.base_domain not configured — cannot set up ingress"
+      )
+    })?;
+  let fqdn = format!("{}.{}", http_proxy.subdomain, base_domain);
+
+  // Find the stack's server for the Iroh endpoint_id. Prefer
+  // config.server_id, fall back to the assigned_server populated by
+  // the placement scheduler.
+  let server_id = if !stack.config.server_id.is_empty() {
+    &stack.config.server_id
+  } else {
+    &stack.info.assigned_server
+  };
+  let server = get_server_for_command(server_id).await?;
+  let target_endpoint_id = server.info.endpoint_id.clone();
+  if target_endpoint_id.is_empty() {
+    anyhow::bail!(
+      "Server {} has no endpoint_id — cannot route ingress traffic",
+      server.id
+    );
+  }
+
+  // Find the target host port matching http_proxy.container_port on
+  // the proxied compose service. Stack host_ports are keyed by
+  // service name (HashMap<String, Vec<AssignedPort>>), unlike
+  // deployments which use a flat Vec.
+  let host_port = stack
+    .info
+    .host_ports
+    .get(&http_proxy.service)
+    .and_then(|ports| {
+      ports
+        .iter()
+        .find(|p| p.container == http_proxy.container_port)
+    })
+    .map(|p| p.host)
+    .ok_or_else(|| {
+      anyhow::anyhow!(
+        "No host port found for container port {} on service {} of \
+         stack {}. ReadContainerPorts readback may not have \
+         completed.",
+        http_proxy.container_port,
+        http_proxy.service,
+        stack.name
+      )
+    })?;
+
+  // Select a healthy ingress node.
+  let ingress_node = select_new_ingress_node("").await?;
+
+  // Read the ingress node's public IPs from its cached
+  // PeripheryInformation (populated on every PollStatus cycle —
+  // ~stats_polling_rate cadence, default 5-15s).
+  let cache_entry = server_status_cache().get(&ingress_node.id).await;
+  let (target_ipv4, target_ipv6) = cache_entry
+    .as_ref()
+    .and_then(|s| s.periphery_info.as_ref())
+    .map(|info| (info.public_ipv4.clone(), info.public_ipv6.clone()))
+    .unwrap_or((None, None));
+
+  if target_ipv4.is_none() && target_ipv6.is_none() {
+    anyhow::bail!(
+      "ingress node {} has no cached public_ipv4/v6 — \
+       wait for the next poll cycle (default ~5-15s), or set \
+       PERIPHERY_PUBLIC_IPV4 / _IPV6 on the Periphery host and \
+       restart it",
+      ingress_node.id
+    );
+  }
+
+  // Create DNS record(s) pointing to the ingress node, keyed by
+  // stack_id.
+  create_stack_dns_record(
+    &stack.id,
+    &http_proxy.subdomain,
+    &ingress_node.id,
+    target_ipv4.as_deref(),
+    target_ipv6.as_deref(),
+    &core_cfg,
+    60,
+  )
+  .await?;
+
+  // Build + push Caddy config (all routes, including this one).
+  let routes = build_ingress_routes(
+    base_domain,
+    &core_cfg.dns.cloudflare_api_token,
+  )
+  .await?;
+  let caddy_config = build_caddy_config(
+    &routes,
+    &core_cfg
+      .dns
+      .cloudflare_api_token
+      .clone()
+      .unwrap_or_default(),
+    DEFAULT_BRIDGE_PORT,
+  );
+
+  let periphery = periphery_client(&ingress_node).await?;
+  periphery
+    .request(periphery_client::api::ReloadCaddyConfig {
+      config: caddy_config,
+    })
+    .await?;
+
+  info!(
+    "Set up ingress for stack {}: {} -> endpoint {}:{}",
+    stack.name, fqdn, target_endpoint_id, host_port
+  );
+  Ok(())
+}
+
+/// Best-effort: delete DNS records + push updated Caddy config
+/// (without the deleted stack's route).
+///
+/// Mirrors `try_teardown_ingress` for deployments.
+async fn try_teardown_stack_ingress(
+  stack_id: &str,
+) -> anyhow::Result<()> {
+  let core_cfg = core_config().ingress.clone();
+
+  // Delete DNS records at the provider + in the database.
+  delete_stack_dns_records(stack_id, &core_cfg).await?;
+
+  // Push updated Caddy config (without the deleted route).
+  let base_domain = core_cfg
+    .dns
+    .base_domain
+    .as_deref()
+    .filter(|d| !d.is_empty())
+    .ok_or_else(|| {
+      anyhow::anyhow!(
+        "ingress.dns.base_domain not configured — cannot rebuild Caddy config"
+      )
+    })?;
+  let routes = build_ingress_routes(
+    base_domain,
+    &core_cfg.dns.cloudflare_api_token,
+  )
+  .await?;
+  let caddy_config = build_caddy_config(
+    &routes,
+    &core_cfg
+      .dns
+      .cloudflare_api_token
+      .clone()
+      .unwrap_or_default(),
+    DEFAULT_BRIDGE_PORT,
+  );
+
+  // Find the ingress node and push.
+  let ingress_node = select_new_ingress_node("").await?;
+  let periphery = periphery_client(&ingress_node).await?;
+  periphery
+    .request(periphery_client::api::ReloadCaddyConfig {
+      config: caddy_config,
+    })
+    .await?;
+
+  info!("Tore down ingress for stack {}", stack_id);
   Ok(())
 }

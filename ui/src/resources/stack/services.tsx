@@ -6,7 +6,7 @@ import { Section } from "mogh_ui";
 import { DataTable, SortableHeader } from "mogh_ui";
 import StackServiceLink from "@/components/stack-service-link";
 import { StatusBadge } from "mogh_ui";
-import { containerStateIntention, swarmStateIntention } from "@/lib/color";
+import { containerStateIntention } from "@/lib/color";
 import DockerResourceLink from "@/components/docker/link";
 import { Group } from "@mantine/core";
 import ContainerPorts from "@/components/docker/container-ports";
@@ -37,9 +37,7 @@ export default function StackServices({
 
   return (
     <Section titleOther={titleOther} mb="md">
-      {info?.swarm_id ? (
-        <StackServicesSwarm stackId={id} services={services} />
-      ) : info?.server_id ? (
+      {info?.server_id ? (
         <StackServicesServer
           stackId={id}
           serverId={info.server_id}
@@ -49,71 +47,6 @@ export default function StackServices({
         <></>
       )}
     </Section>
-  );
-}
-
-function StackServicesSwarm({
-  stackId,
-  services,
-}: {
-  stackId: string;
-  services: Types.ListStackServicesResponse;
-}) {
-  return (
-    <DataTable
-      tableKey="StackServices"
-      data={services}
-      columns={[
-        {
-          accessorKey: "service",
-          size: 200,
-          header: ({ column }) => (
-            <SortableHeader column={column} title="Service" />
-          ),
-          cell: ({ row }) => (
-            <StackServiceLink id={stackId} service={row.original.service} />
-          ),
-        },
-        {
-          accessorKey: "swarm_service.State",
-          size: 160,
-          header: ({ column }) => (
-            <SortableHeader column={column} title="State" />
-          ),
-          cell: ({ row }) => {
-            const state = row.original.swarm_service?.State;
-            return (
-              <StatusBadge text={state} intent={swarmStateIntention(state)} />
-            );
-          },
-        },
-        {
-          accessorKey: "swarm_service.Runtime",
-          size: 300,
-          header: ({ column }) => (
-            <SortableHeader column={column} title="Runtime" />
-          ),
-        },
-        {
-          accessorKey: "swarm_service.Image",
-          size: 300,
-          header: ({ column }) => (
-            <SortableHeader column={column} title="Image" />
-          ),
-          cell: ({ row }) => {
-            // It usually returns the image hash after the @, its very long so removed here
-            return row.original.swarm_service?.Image?.split("@")?.[0];
-          },
-        },
-        {
-          accessorKey: "swarm_service.Replicas",
-          size: 300,
-          header: ({ column }) => (
-            <SortableHeader column={column} title="Replicas" />
-          ),
-        },
-      ]}
-    />
   );
 }
 
@@ -203,7 +136,7 @@ function StackServicesServer({
                 <DockerResourceLink
                   type="Network"
                   serverId={serverId}
-                  name={row.original.container.network_mode}
+                  name={row.original.container!.network_mode}
                 />
               )
             ),

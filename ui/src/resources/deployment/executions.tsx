@@ -148,7 +148,7 @@ export function PullDeployment({ id }: DeploymentId) {
     { refetchInterval: 5000 },
   ).data;
 
-  if (!deployment || deployment.info.swarm_id) return null;
+  if (!deployment) return null;
 
   return (
     <ConfirmButton
@@ -175,7 +175,7 @@ export function RestartDeployment({ id }: DeploymentId) {
     { refetchInterval: 5000 },
   ).data;
 
-  if (!deployment || deployment.info.swarm_id) return null;
+  if (!deployment) return null;
 
   if (state !== Types.DeploymentState.Running) {
     return null;
@@ -207,7 +207,7 @@ export function StartStopDeployment({ id }: DeploymentId) {
     { refetchInterval: 5000 },
   ).data;
 
-  if (!deployment || deployment.info.swarm_id) return null;
+  if (!deployment) return null;
 
   if (state === Types.DeploymentState.Exited) {
     return (
@@ -320,7 +320,7 @@ export function PauseUnpauseDeployment({ id }: DeploymentId) {
     { refetchInterval: 5000 },
   ).data;
 
-  if (!deployment || deployment.info.swarm_id) return null;
+  if (!deployment) return null;
 
   if (state === Types.DeploymentState.Paused) {
     return (

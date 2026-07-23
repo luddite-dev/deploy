@@ -20,7 +20,7 @@ import { TemplateMarker } from "@/components/template-marker";
 import { DOCKER_LINK_ICONS } from "@/components/docker/link";
 import { Types } from "komodo_client";
 import { hexColorByIntention, useDebounce } from "mogh_ui";
-import { containerStateIntention, swarmStateIntention } from "@/lib/color";
+import { containerStateIntention } from "@/lib/color";
 
 const ITEM_LIMIT = 7;
 let count = 0;
@@ -192,7 +192,6 @@ export function useOmniSearch(): {
               })
               .map((resource) => {
                 const info = resource.info as {
-                  swarm_id: string;
                   server_id: string;
                 };
                 return {
@@ -206,17 +205,12 @@ export function useOmniSearch(): {
                   rightSection: resource.template && (
                     <TemplateMarker type={_type} />
                   ),
-                  description: info.swarm_id
-                    ? "Swarm: " +
-                      resources.Swarm?.find(
-                        (swarm) => info.swarm_id === swarm.id,
+                  description: info.server_id
+                    ? "Server: " +
+                      resources.Server?.find(
+                        (server) => info.server_id === server.id,
                       )?.name
-                    : info.server_id
-                      ? "Server: " +
-                        resources.Server?.find(
-                          (server) => info.server_id === server.id,
-                        )?.name
-                      : undefined,
+                    : undefined,
                 };
               }) ?? [],
         };
@@ -251,9 +245,7 @@ export function useOmniSearch(): {
         group: "Services",
         actions:
           services?.map((service) => {
-            const intention = service?.swarm_service?.State
-              ? swarmStateIntention(service?.swarm_service?.State)
-              : containerStateIntention(service?.container?.state);
+            const intention = containerStateIntention(service?.container?.state);
             const color = hexColorByIntention(intention);
             return {
               id: service.stack_id + " " + service.service,

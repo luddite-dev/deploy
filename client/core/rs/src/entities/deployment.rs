@@ -15,7 +15,7 @@ use crate::{
     string_list_deserializer, term_labels_deserializer,
   },
   entities::{
-    EnvironmentVar, ImageDigest, environment_vars_from_str,
+    EnvironmentVar, I64, ImageDigest, U64, environment_vars_from_str,
     optional_str,
   },
   parsers::parse_key_value_list,
@@ -182,8 +182,6 @@ pub struct DeploymentConfig {
   pub command: String,
 
   /// The number of replicas for the Service.
-  ///
-  /// Note. Only used in Swarm mode.
   #[serde(default = "default_replicas")]
   #[builder(default = "default_replicas()")]
   #[partial_default(default_replicas())]
@@ -205,7 +203,6 @@ pub struct DeploymentConfig {
   /// and affect the container configuration.
   ///
   /// - Container ref: https://docs.docker.com/reference/cli/docker/container/run/#options
-  /// - Swarm Service ref: https://docs.docker.com/reference/cli/docker/service/create/#options
   #[serde(default, deserialize_with = "string_list_deserializer")]
   #[partial_attr(serde(
     default,
@@ -456,11 +453,10 @@ pub enum DeploymentState {
   Exited,
   /// Server mode only. Container is dead
   Dead,
-  /// Swarm mode only. Some tasks don't match their desired state.
   Unhealthy,
   /// The deployment is not deployed (no matching Container / Service)
   NotDeployed,
-  /// Server / Swarm not reachable for status
+  /// Server not reachable for status
   #[default]
   Unknown,
 }
@@ -644,8 +640,8 @@ pub struct PortMapping {
 pub struct HttpProxyConfig {
   /// Subdomain for this app (e.g. "myapp" → "myapp.example.com")
   pub subdomain: String,
-  /// Which container port to proxy HTTP traffic to
-  pub container_port: u16,
+  /// Which container port to proxy HTTP traffic to. If None, auto-detect from the deployment's port mappings.
+  pub container_port: Option<u16>,
 }
 
 #[typeshare]
@@ -698,8 +694,8 @@ pub struct AssignedPort {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct VolumeBackupInfo {
   pub s3_key: String,
-  pub timestamp: i64,
-  pub size_bytes: u64,
+  pub timestamp: I64,
+  pub size_bytes: U64,
 }
 
 #[typeshare]
@@ -710,8 +706,8 @@ pub struct VolumeBackupInfo {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct VolumeBackupRecord {
   pub s3_key: String,
-  pub timestamp: i64,
-  pub size_bytes: u64,
+  pub timestamp: I64,
+  pub size_bytes: U64,
   pub checksum: String,
 }
 
@@ -737,7 +733,7 @@ pub struct BackupDestination {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct BackupResult {
   pub s3_key: String,
-  pub size_bytes: u64,
+  pub size_bytes: U64,
   pub checksum: String,
 }
 
@@ -748,7 +744,7 @@ pub struct BackupResult {
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct RestoreResult {
-  pub bytes_restored: u64,
+  pub bytes_restored: U64,
 }
 
 #[typeshare]
@@ -759,10 +755,10 @@ pub struct RestoreResult {
 pub enum MigrationState {
   Migrating {
     target_server_id: String,
-    started_at: i64,
+    started_at: I64,
   },
   Failed {
     reason: String,
-    at: i64,
+    at: I64,
   },
 }

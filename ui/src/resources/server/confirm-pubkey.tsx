@@ -13,38 +13,38 @@ export default function ConfirmServerPubkey({ id }: { id: string }) {
     {
       onSuccess: () => {
         notifications.show({
-          message: "Confirmed Server public key",
+          message: "Confirmed Server endpoint ID",
           color: "green",
         });
       },
     },
   );
 
-  if (!server?.info.attempted_public_key) return null;
+  if (!server?.info.attempted_endpoint_id) return null;
 
   return (
     <ConfirmModal
       disabled={!canWrite}
-      title="Confirm Public Key"
+      title="Confirm Endpoint ID"
       confirmButtonContent="Confirm"
       confirmText={server.name}
       icon={<CircleOff size="1rem" />}
       targetProps={{ color: "red" }}
       topAdditonal={
         <Group gap="xs">
-          <Text c="dimmed">Public Key:</Text>
-          {server.info.attempted_public_key}
+          <Text c="dimmed">Endpoint ID:</Text>
+          {server.info.attempted_endpoint_id}
         </Group>
       }
       additional={
         <Text>Note. May take a few moments for status to update.</Text>
       }
       onConfirm={() =>
-        confirm({ server: id, public_key: server.info.attempted_public_key! })
+        confirm({ server: id, public_key: server.info.attempted_endpoint_id! })
       }
       loading={isPending}
     >
-      Invalid Pubkey
+      Unknown Endpoint ID
     </ConfirmModal>
   );
 }

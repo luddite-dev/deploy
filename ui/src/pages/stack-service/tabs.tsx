@@ -11,17 +11,15 @@ import {
 import { Tabs } from "@mantine/core";
 import { useLocalStorage } from "@mantine/hooks";
 import { Types } from "komodo_client";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import StackServiceInspect from "./inspect";
-import SwarmServiceTasksSection from "../swarm/service/tasks";
 
-export type StackServiceTabsView = "Tasks" | "Log" | "Inspect" | "Terminals";
+export type StackServiceTabsView = "Log" | "Inspect" | "Terminals";
 
 export interface StackServiceTabsProps {
   stack: Types.StackListItem;
   service: string;
   container: Types.ContainerListItem | undefined;
-  swarmService: Types.SwarmServiceListItem | undefined;
   intention: ColorIntention;
 }
 
@@ -29,7 +27,6 @@ export default function StackServiceTabs({
   stack,
   service,
   container,
-  swarmService,
   intention,
 }: StackServiceTabsProps) {
   const [_view, setView] = useLocalStorage<StackServiceTabsView>({
@@ -41,7 +38,7 @@ export default function StackServiceTabs({
     id: stack.id,
   });
 
-  const down = !swarmService && !container;
+  const down = !container;
 
   const containerTerminalsDisabled =
     useServer(stack.info.server_id)?.info.container_terminals_disabled ?? false;
@@ -55,7 +52,6 @@ export default function StackServiceTabs({
     container?.state !== Types.ContainerStateStatusEnum.Running;
 
   const view =
-    (!stack.info.swarm_id && _view === "Tasks") ||
     (inspectDisabled && _view === "Inspect") ||
     (terminalDisabled && _view === "Terminals")
       ? "Log"
@@ -63,11 +59,6 @@ export default function StackServiceTabs({
 
   const tabs = useMemo<TabNoContent[]>(
     () => [
-      {
-        value: "Tasks",
-        hidden: !swarmService,
-        icon: ICONS.SwarmTask,
-      },
       {
         value: "Log",
         disabled: logDisabled,
@@ -85,7 +76,7 @@ export default function StackServiceTabs({
         icon: ICONS.Terminal,
       },
     ],
-    [!swarmService, logDisabled, inspectDisabled, terminalDisabled],
+    [logDisabled, inspectDisabled, terminalDisabled],
   );
 
   const Selector = (
@@ -107,20 +98,8 @@ export default function StackServiceTabs({
     [stack.id, service],
   );
 
-  const _search = useState("");
-
   let View = Selector;
   switch (view) {
-    case "Tasks":
-      View = (
-        <SwarmServiceTasksSection
-          id={stack.info.swarm_id}
-          serviceId={swarmService?.ID}
-          titleOther={Selector}
-          _search={_search}
-        />
-      );
-      break;
     case "Log":
       View = (
         <LogSection
@@ -135,7 +114,6 @@ export default function StackServiceTabs({
         <StackServiceInspect
           stackId={stack.id}
           service={service}
-          useSwarm={!!swarmService}
           titleOther={Selector}
         />
       );

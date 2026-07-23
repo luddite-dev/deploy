@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
+use crate::entities::I64;
+
 /// The DNS record types supported by the ingress layer.
 /// Currently only A / AAAA are needed for node endpoint routing.
 #[typeshare]
@@ -48,12 +50,15 @@ pub struct DnsRecord {
   /// The deployment this record is attached to, if any.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub deployment_id: Option<String>,
+  /// The stack this record is attached to, if any.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub stack_id: Option<String>,
   /// TTL in seconds.
   pub ttl: u32,
   /// Unix timestamp (ms) the record was created.
-  pub created_at: i64,
+  pub created_at: I64,
   /// Unix timestamp (ms) the record was last updated.
-  pub updated_at: i64,
+  pub updated_at: I64,
 }
 
 /// Provider-specific DNS configuration. Currently only Cloudflare

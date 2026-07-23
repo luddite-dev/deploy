@@ -65,20 +65,6 @@ export var MaintenanceScheduleType;
 export var Operation;
 (function (Operation) {
     Operation["None"] = "None";
-    Operation["CreateSwarm"] = "CreateSwarm";
-    Operation["UpdateSwarm"] = "UpdateSwarm";
-    Operation["RenameSwarm"] = "RenameSwarm";
-    Operation["DeleteSwarm"] = "DeleteSwarm";
-    Operation["RemoveSwarmNodes"] = "RemoveSwarmNodes";
-    Operation["UpdateSwarmNode"] = "UpdateSwarmNode";
-    Operation["RemoveSwarmStacks"] = "RemoveSwarmStacks";
-    Operation["RemoveSwarmServices"] = "RemoveSwarmServices";
-    Operation["CreateSwarmConfig"] = "CreateSwarmConfig";
-    Operation["RotateSwarmConfig"] = "RotateSwarmConfig";
-    Operation["RemoveSwarmConfigs"] = "RemoveSwarmConfigs";
-    Operation["CreateSwarmSecret"] = "CreateSwarmSecret";
-    Operation["RotateSwarmSecret"] = "RotateSwarmSecret";
-    Operation["RemoveSwarmSecrets"] = "RemoveSwarmSecrets";
     Operation["CreateServer"] = "CreateServer";
     Operation["UpdateServer"] = "UpdateServer";
     Operation["UpdateServerKey"] = "UpdateServerKey";
@@ -349,6 +335,29 @@ export var Timelength;
     /** `30-day` */
     Timelength["ThirtyDays"] = "30-day";
 })(Timelength || (Timelength = {}));
+/**
+ * Operator-set desired state for a server. Set to `Drain` to gracefully
+ * migrate workloads off; the drain controller transitions `ServerState`
+ * to `Draining` then `Drained`. Default: `Run`.
+ */
+export var ServerDesiredState;
+(function (ServerDesiredState) {
+    ServerDesiredState["Run"] = "Run";
+    ServerDesiredState["Drain"] = "Drain";
+})(ServerDesiredState || (ServerDesiredState = {}));
+export var ServerState;
+(function (ServerState) {
+    /** Server health check passing. */
+    ServerState["Ok"] = "Ok";
+    /** Server is unreachable. */
+    ServerState["NotOk"] = "NotOk";
+    /** Server is disabled. */
+    ServerState["Disabled"] = "Disabled";
+    /** Server is being drained — deployments are being migrated off. */
+    ServerState["Draining"] = "Draining";
+    /** Server has been fully drained — no deployments remain. */
+    ServerState["Drained"] = "Drained";
+})(ServerState || (ServerState = {}));
 export var StackFileRequires;
 (function (StackFileRequires) {
     /** Diff requires service redeploy. */
@@ -475,124 +484,6 @@ export var HostConfigIsolationEnum;
     HostConfigIsolationEnum["Process"] = "process";
     HostConfigIsolationEnum["Hyperv"] = "hyperv";
 })(HostConfigIsolationEnum || (HostConfigIsolationEnum = {}));
-/** The service mode. */
-export var SwarmServiceMode;
-(function (SwarmServiceMode) {
-    /**
-     * Replicated service
-     * - Run desired number of replicas
-     */
-    SwarmServiceMode["Replicated"] = "Replicated";
-    /**
-     * Global service
-     * - Run once per node
-     */
-    SwarmServiceMode["Global"] = "Global";
-    /**
-     * Replicated job
-     * - Scheduled tasks which run to completion
-     * - Run desired number of job replicas
-     */
-    SwarmServiceMode["ReplicatedJob"] = "ReplicatedJob";
-    /**
-     * Global job
-     * - Scheduled tasks which run to completion
-     * - Run one job per node
-     */
-    SwarmServiceMode["GlobalJob"] = "GlobalJob";
-})(SwarmServiceMode || (SwarmServiceMode = {}));
-export var SwarmState;
-(function (SwarmState) {
-    /** All nodes /tasks OK */
-    SwarmState["Healthy"] = "Healthy";
-    /** Some nodes / tasks don't match desired state */
-    SwarmState["Unhealthy"] = "Unhealthy";
-    /** All nodes / tasks down. */
-    SwarmState["Down"] = "Down";
-    /** Unknown case */
-    SwarmState["Unknown"] = "Unknown";
-})(SwarmState || (SwarmState = {}));
-export var TaskSpecContainerSpecPrivilegesSeccompModeEnum;
-(function (TaskSpecContainerSpecPrivilegesSeccompModeEnum) {
-    TaskSpecContainerSpecPrivilegesSeccompModeEnum["EMPTY"] = "";
-    TaskSpecContainerSpecPrivilegesSeccompModeEnum["DEFAULT"] = "default";
-    TaskSpecContainerSpecPrivilegesSeccompModeEnum["UNCONFINED"] = "unconfined";
-    TaskSpecContainerSpecPrivilegesSeccompModeEnum["CUSTOM"] = "custom";
-})(TaskSpecContainerSpecPrivilegesSeccompModeEnum || (TaskSpecContainerSpecPrivilegesSeccompModeEnum = {}));
-export var TaskSpecContainerSpecPrivilegesAppArmorModeEnum;
-(function (TaskSpecContainerSpecPrivilegesAppArmorModeEnum) {
-    TaskSpecContainerSpecPrivilegesAppArmorModeEnum["EMPTY"] = "";
-    TaskSpecContainerSpecPrivilegesAppArmorModeEnum["DEFAULT"] = "default";
-    TaskSpecContainerSpecPrivilegesAppArmorModeEnum["DISABLED"] = "disabled";
-})(TaskSpecContainerSpecPrivilegesAppArmorModeEnum || (TaskSpecContainerSpecPrivilegesAppArmorModeEnum = {}));
-export var TaskSpecContainerSpecIsolationEnum;
-(function (TaskSpecContainerSpecIsolationEnum) {
-    TaskSpecContainerSpecIsolationEnum["DEFAULT"] = "default";
-    TaskSpecContainerSpecIsolationEnum["PROCESS"] = "process";
-    TaskSpecContainerSpecIsolationEnum["HYPERV"] = "hyperv";
-    TaskSpecContainerSpecIsolationEnum["EMPTY"] = "";
-})(TaskSpecContainerSpecIsolationEnum || (TaskSpecContainerSpecIsolationEnum = {}));
-export var TaskSpecRestartPolicyConditionEnum;
-(function (TaskSpecRestartPolicyConditionEnum) {
-    TaskSpecRestartPolicyConditionEnum["EMPTY"] = "";
-    TaskSpecRestartPolicyConditionEnum["NONE"] = "none";
-    TaskSpecRestartPolicyConditionEnum["ON_FAILURE"] = "on-failure";
-    TaskSpecRestartPolicyConditionEnum["ANY"] = "any";
-})(TaskSpecRestartPolicyConditionEnum || (TaskSpecRestartPolicyConditionEnum = {}));
-export var ServiceSpecUpdateConfigFailureActionEnum;
-(function (ServiceSpecUpdateConfigFailureActionEnum) {
-    ServiceSpecUpdateConfigFailureActionEnum["EMPTY"] = "";
-    ServiceSpecUpdateConfigFailureActionEnum["CONTINUE"] = "continue";
-    ServiceSpecUpdateConfigFailureActionEnum["PAUSE"] = "pause";
-    ServiceSpecUpdateConfigFailureActionEnum["ROLLBACK"] = "rollback";
-})(ServiceSpecUpdateConfigFailureActionEnum || (ServiceSpecUpdateConfigFailureActionEnum = {}));
-export var ServiceSpecUpdateConfigOrderEnum;
-(function (ServiceSpecUpdateConfigOrderEnum) {
-    ServiceSpecUpdateConfigOrderEnum["EMPTY"] = "";
-    ServiceSpecUpdateConfigOrderEnum["STOP_FIRST"] = "stop-first";
-    ServiceSpecUpdateConfigOrderEnum["START_FIRST"] = "start-first";
-})(ServiceSpecUpdateConfigOrderEnum || (ServiceSpecUpdateConfigOrderEnum = {}));
-export var ServiceSpecRollbackConfigFailureActionEnum;
-(function (ServiceSpecRollbackConfigFailureActionEnum) {
-    ServiceSpecRollbackConfigFailureActionEnum["EMPTY"] = "";
-    ServiceSpecRollbackConfigFailureActionEnum["CONTINUE"] = "continue";
-    ServiceSpecRollbackConfigFailureActionEnum["PAUSE"] = "pause";
-})(ServiceSpecRollbackConfigFailureActionEnum || (ServiceSpecRollbackConfigFailureActionEnum = {}));
-export var ServiceSpecRollbackConfigOrderEnum;
-(function (ServiceSpecRollbackConfigOrderEnum) {
-    ServiceSpecRollbackConfigOrderEnum["EMPTY"] = "";
-    ServiceSpecRollbackConfigOrderEnum["STOP_FIRST"] = "stop-first";
-    ServiceSpecRollbackConfigOrderEnum["START_FIRST"] = "start-first";
-})(ServiceSpecRollbackConfigOrderEnum || (ServiceSpecRollbackConfigOrderEnum = {}));
-export var EndpointSpecModeEnum;
-(function (EndpointSpecModeEnum) {
-    EndpointSpecModeEnum["EMPTY"] = "";
-    EndpointSpecModeEnum["VIP"] = "vip";
-    EndpointSpecModeEnum["DNSRR"] = "dnsrr";
-})(EndpointSpecModeEnum || (EndpointSpecModeEnum = {}));
-export var EndpointPortConfigProtocolEnum;
-(function (EndpointPortConfigProtocolEnum) {
-    EndpointPortConfigProtocolEnum["EMPTY"] = "";
-    EndpointPortConfigProtocolEnum["TCP"] = "tcp";
-    EndpointPortConfigProtocolEnum["UDP"] = "udp";
-    EndpointPortConfigProtocolEnum["SCTP"] = "sctp";
-})(EndpointPortConfigProtocolEnum || (EndpointPortConfigProtocolEnum = {}));
-export var EndpointPortConfigPublishModeEnum;
-(function (EndpointPortConfigPublishModeEnum) {
-    EndpointPortConfigPublishModeEnum["EMPTY"] = "";
-    EndpointPortConfigPublishModeEnum["INGRESS"] = "ingress";
-    EndpointPortConfigPublishModeEnum["HOST"] = "host";
-})(EndpointPortConfigPublishModeEnum || (EndpointPortConfigPublishModeEnum = {}));
-export var ServiceUpdateStatusStateEnum;
-(function (ServiceUpdateStatusStateEnum) {
-    ServiceUpdateStatusStateEnum["EMPTY"] = "";
-    ServiceUpdateStatusStateEnum["UPDATING"] = "updating";
-    ServiceUpdateStatusStateEnum["PAUSED"] = "paused";
-    ServiceUpdateStatusStateEnum["COMPLETED"] = "completed";
-    ServiceUpdateStatusStateEnum["ROLLBACK_STARTED"] = "rollback_started";
-    ServiceUpdateStatusStateEnum["ROLLBACK_PAUSED"] = "rollback_paused";
-    ServiceUpdateStatusStateEnum["ROLLBACK_COMPLETED"] = "rollback_completed";
-})(ServiceUpdateStatusStateEnum || (ServiceUpdateStatusStateEnum = {}));
 export var ImageManifestSummaryKindEnum;
 (function (ImageManifestSummaryKindEnum) {
     ImageManifestSummaryKindEnum["Empty"] = "";
@@ -635,57 +526,6 @@ export var ClusterVolumePublishStatusStateEnum;
     ClusterVolumePublishStatusStateEnum["PendingNodeUnpublish"] = "pending-node-unpublish";
     ClusterVolumePublishStatusStateEnum["PendingControllerUnpublish"] = "pending-controller-unpublish";
 })(ClusterVolumePublishStatusStateEnum || (ClusterVolumePublishStatusStateEnum = {}));
-export var TaskState;
-(function (TaskState) {
-    TaskState["NEW"] = "new";
-    TaskState["ALLOCATED"] = "allocated";
-    TaskState["PENDING"] = "pending";
-    TaskState["ASSIGNED"] = "assigned";
-    TaskState["ACCEPTED"] = "accepted";
-    TaskState["PREPARING"] = "preparing";
-    TaskState["READY"] = "ready";
-    TaskState["STARTING"] = "starting";
-    TaskState["RUNNING"] = "running";
-    TaskState["COMPLETE"] = "complete";
-    TaskState["SHUTDOWN"] = "shutdown";
-    TaskState["FAILED"] = "failed";
-    TaskState["REJECTED"] = "rejected";
-    TaskState["REMOVE"] = "remove";
-    TaskState["ORPHANED"] = "orphaned";
-})(TaskState || (TaskState = {}));
-export var NodeSpecRoleEnum;
-(function (NodeSpecRoleEnum) {
-    NodeSpecRoleEnum["EMPTY"] = "";
-    NodeSpecRoleEnum["WORKER"] = "worker";
-    NodeSpecRoleEnum["MANAGER"] = "manager";
-})(NodeSpecRoleEnum || (NodeSpecRoleEnum = {}));
-export var NodeSpecAvailabilityEnum;
-(function (NodeSpecAvailabilityEnum) {
-    NodeSpecAvailabilityEnum["EMPTY"] = "";
-    NodeSpecAvailabilityEnum["ACTIVE"] = "active";
-    NodeSpecAvailabilityEnum["PAUSE"] = "pause";
-    NodeSpecAvailabilityEnum["DRAIN"] = "drain";
-})(NodeSpecAvailabilityEnum || (NodeSpecAvailabilityEnum = {}));
-/** NodeState represents the state of a node. */
-export var NodeState;
-(function (NodeState) {
-    NodeState["UNKNOWN"] = "unknown";
-    NodeState["DOWN"] = "down";
-    NodeState["READY"] = "ready";
-    NodeState["DISCONNECTED"] = "disconnected";
-})(NodeState || (NodeState = {}));
-/** Reachability represents the reachability of a node. */
-export var NodeReachability;
-(function (NodeReachability) {
-    NodeReachability["UNKNOWN"] = "unknown";
-    NodeReachability["UNREACHABLE"] = "unreachable";
-    NodeReachability["REACHABLE"] = "reachable";
-})(NodeReachability || (NodeReachability = {}));
-export var SwarmSpecCaConfigExternalCasProtocolEnum;
-(function (SwarmSpecCaConfigExternalCasProtocolEnum) {
-    SwarmSpecCaConfigExternalCasProtocolEnum["EMPTY"] = "";
-    SwarmSpecCaConfigExternalCasProtocolEnum["CFSSL"] = "cfssl";
-})(SwarmSpecCaConfigExternalCasProtocolEnum || (SwarmSpecCaConfigExternalCasProtocolEnum = {}));
 export var PortTypeEnum;
 (function (PortTypeEnum) {
     PortTypeEnum["EMPTY"] = "";
@@ -763,15 +603,6 @@ export var ResourceSyncState;
     /** Other case */
     ResourceSyncState["Unknown"] = "Unknown";
 })(ResourceSyncState || (ResourceSyncState = {}));
-export var ServerState;
-(function (ServerState) {
-    /** Server health check passing. */
-    ServerState["Ok"] = "Ok";
-    /** Server is unreachable. */
-    ServerState["NotOk"] = "NotOk";
-    /** Server is disabled. */
-    ServerState["Disabled"] = "Disabled";
-})(ServerState || (ServerState = {}));
 export var StackState;
 (function (StackState) {
     /** The stack is currently re/deploying */
@@ -819,6 +650,28 @@ export var ContainerTerminalMode;
     ContainerTerminalMode["Exec"] = "exec";
     ContainerTerminalMode["Attach"] = "attach";
 })(ContainerTerminalMode || (ContainerTerminalMode = {}));
+/**
+ * The DNS record types supported by the ingress layer.
+ * Currently only A / AAAA are needed for node endpoint routing.
+ */
+export var DnsRecordType;
+(function (DnsRecordType) {
+    DnsRecordType["A"] = "A";
+    DnsRecordType["AAAA"] = "AAAA";
+})(DnsRecordType || (DnsRecordType = {}));
+export var EndpointPortConfigProtocolEnum;
+(function (EndpointPortConfigProtocolEnum) {
+    EndpointPortConfigProtocolEnum["EMPTY"] = "";
+    EndpointPortConfigProtocolEnum["TCP"] = "tcp";
+    EndpointPortConfigProtocolEnum["UDP"] = "udp";
+    EndpointPortConfigProtocolEnum["SCTP"] = "sctp";
+})(EndpointPortConfigProtocolEnum || (EndpointPortConfigProtocolEnum = {}));
+export var EndpointPortConfigPublishModeEnum;
+(function (EndpointPortConfigPublishModeEnum) {
+    EndpointPortConfigPublishModeEnum["EMPTY"] = "";
+    EndpointPortConfigPublishModeEnum["INGRESS"] = "ingress";
+    EndpointPortConfigPublishModeEnum["HOST"] = "host";
+})(EndpointPortConfigPublishModeEnum || (EndpointPortConfigPublishModeEnum = {}));
 export var ServiceUserQueryBehavior;
 (function (ServiceUserQueryBehavior) {
     /** Include service users in results. Default. */

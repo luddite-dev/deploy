@@ -9,102 +9,6 @@ export function themeAdditionalColors() {
   );
 }
 
-export function swarmStateIntention(state?: Types.SwarmState): ColorIntention {
-  switch (state) {
-    case Types.SwarmState.Healthy:
-      return "Good";
-    case Types.SwarmState.Unhealthy:
-      return "Critical";
-    case Types.SwarmState.Down:
-      return "Neutral";
-    case Types.SwarmState.Unknown:
-      return "Unknown";
-    case undefined:
-      return "None";
-  }
-}
-
-export function swarmNodeStateIntention(
-  state?: Types.NodeState,
-): ColorIntention {
-  switch (state) {
-    case Types.NodeState.READY:
-      return "Good";
-    case Types.NodeState.DOWN:
-      return "Critical";
-    case Types.NodeState.DISCONNECTED:
-      return "Critical";
-    case Types.NodeState.UNKNOWN:
-      return "Neutral";
-    case undefined:
-      return "None";
-  }
-}
-
-export function swarmNodeAvailabilityIntention(
-  state?: Types.NodeSpecAvailabilityEnum,
-): ColorIntention {
-  switch (state) {
-    case Types.NodeSpecAvailabilityEnum.ACTIVE:
-      return "Good";
-    case Types.NodeSpecAvailabilityEnum.DRAIN:
-      return "Warning";
-    case Types.NodeSpecAvailabilityEnum.PAUSE:
-      return "Critical";
-    case Types.NodeSpecAvailabilityEnum.EMPTY:
-      return "Neutral";
-    case undefined:
-      return "None";
-  }
-}
-
-export function swarmNodeRoleIntention(
-  state?: Types.NodeSpecRoleEnum,
-): ColorIntention {
-  switch (state) {
-    case Types.NodeSpecRoleEnum.MANAGER:
-      return "Good";
-    case Types.NodeSpecRoleEnum.WORKER:
-      return "Neutral";
-    case Types.NodeSpecRoleEnum.EMPTY:
-      return "None";
-    case undefined:
-      return "None";
-  }
-}
-
-export function swarmTaskStateIntention(
-  state?: Types.TaskState,
-  desired?: Types.TaskState,
-): ColorIntention {
-  // Case when its desired running
-  if (desired === Types.TaskState.RUNNING) {
-    if (state === Types.TaskState.RUNNING) {
-      return "Good";
-    } else {
-      return "Critical";
-    }
-  }
-
-  // Case when its desired shutdown
-  if (desired === Types.TaskState.SHUTDOWN) {
-    // If you want it shutdown, then running is critical.
-    if (state === Types.TaskState.RUNNING) {
-      return "Critical";
-    } else {
-      // Otherwise, it is "Down", give neutral color
-      return "Neutral";
-    }
-  }
-
-  // Others
-  if (state === desired) {
-    return "Good";
-  } else {
-    return "Critical";
-  }
-}
-
 export function serverStateIntention(
   state: Types.ServerState | undefined,
   versionMismatch: boolean,
@@ -118,6 +22,8 @@ export function serverStateIntention(
     case Types.ServerState.Disabled:
       return "Neutral";
     case undefined:
+      return "None";
+    default:
       return "None";
   }
 }

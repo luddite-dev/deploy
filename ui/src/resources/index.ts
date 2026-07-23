@@ -4,7 +4,6 @@ import { PieChartItem } from "@/components/dashboard-summary";
 import React from "react";
 import { ServerComponents } from "./server";
 import { StackComponents } from "./stack";
-import { SwarmComponents } from "./swarm";
 import { DeploymentComponents } from "./deployment";
 import { BuildComponents } from "./build";
 import { RepoComponents } from "./repo";
@@ -22,7 +21,6 @@ export type UsableResource = Exclude<Types.ResourceTarget["type"], "System">;
 
 export const RESOURCE_TARGETS = [
   "Server",
-  "Swarm",
   "Stack",
   "Deployment",
   "Build",
@@ -44,7 +42,6 @@ export const ResourceComponents: {
   [key in UsableResource]: RequiredResourceComponents;
 } = {
   Server: ServerComponents,
-  Swarm: SwarmComponents,
   Stack: StackComponents,
   Deployment: DeploymentComponents,
   Build: BuildComponents,
@@ -84,7 +81,6 @@ export interface RequiredResourceComponents<
 
   /** New resource button / dialog */
   New: React.FC<{
-    swarmId?: string;
     serverId?: string;
     builderId?: string;
     buildId?: string;
@@ -125,3 +121,4 @@ export interface RequiredResourceComponents<
   /** Resource specific sections */
   Page: { [section: string]: IdComponent };
 }
+

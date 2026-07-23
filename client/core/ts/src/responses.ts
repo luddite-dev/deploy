@@ -7,29 +7,6 @@ export type ReadResponses = {
   ListGitProvidersFromConfig: Types.ListGitProvidersFromConfigResponse;
   ListDockerRegistriesFromConfig: Types.ListDockerRegistriesFromConfigResponse;
 
-  // ==== SWARM ====
-  GetSwarmsSummary: Types.GetSwarmsSummaryResponse;
-  GetSwarm: Types.GetSwarmResponse;
-  GetSwarmActionState: Types.GetSwarmActionStateResponse;
-  ListSwarms: Types.ListSwarmsResponse;
-  ListFullSwarms: Types.ListFullSwarmsResponse;
-  InspectSwarm: Types.InspectSwarmResponse;
-  ListSwarmNodes: Types.ListSwarmNodesResponse;
-  InspectSwarmNode: Types.InspectSwarmNodeResponse;
-  ListSwarmConfigs: Types.ListSwarmConfigsResponse;
-  InspectSwarmConfig: Types.InspectSwarmConfigResponse;
-  ListSwarmSecrets: Types.ListSwarmSecretsResponse;
-  InspectSwarmSecret: Types.InspectSwarmSecretResponse;
-  ListSwarmStacks: Types.ListSwarmStacksResponse;
-  InspectSwarmStack: Types.InspectSwarmStackResponse;
-  ListSwarmTasks: Types.ListSwarmTasksResponse;
-  InspectSwarmTask: Types.InspectSwarmTaskResponse;
-  ListSwarmServices: Types.ListSwarmServicesResponse;
-  InspectSwarmService: Types.InspectSwarmServiceResponse;
-  GetSwarmServiceLog: Types.GetSwarmServiceLogResponse;
-  SearchSwarmServiceLog: Types.SearchSwarmServiceLogResponse;
-  ListSwarmNetworks: Types.ListSwarmNetworksResponse;
-
   // ==== SERVER ====
   GetServersSummary: Types.GetServersSummaryResponse;
   GetServer: Types.GetServerResponse;
@@ -72,7 +49,6 @@ export type ReadResponses = {
   GetStackLog: Types.GetStackLogResponse;
   SearchStackLog: Types.SearchStackLogResponse;
   InspectStackContainer: Types.InspectStackContainerResponse;
-  InspectStackSwarmService: Types.InspectStackSwarmServiceResponse;
   ListStacks: Types.ListStacksResponse;
   ListFullStacks: Types.ListFullStacksResponse;
   ListStackServices: Types.ListStackServicesResponse;
@@ -89,7 +65,6 @@ export type ReadResponses = {
   GetDeploymentLog: Types.GetDeploymentLogResponse;
   SearchDeploymentLog: Types.SearchDeploymentLogResponse;
   InspectDeploymentContainer: Types.InspectDeploymentContainerResponse;
-  InspectDeploymentSwarmService: Types.InspectDeploymentSwarmServiceResponse;
   ListDeployments: Types.ListDeploymentsResponse;
   ListFullDeployments: Types.ListFullDeploymentsResponse;
   ListCommonDeploymentExtraArgs: Types.ListCommonDeploymentExtraArgsResponse;
@@ -194,13 +169,6 @@ export type ReadResponses = {
 export type WriteResponses = {
   // ==== RESOURCE ====
   UpdateResourceMeta: Types.UpdateResourceMetaResponse;
-
-  // ==== SWARM ====
-  CreateSwarm: Types.Swarm;
-  CopySwarm: Types.Swarm;
-  DeleteSwarm: Types.Swarm;
-  UpdateSwarm: Types.Swarm;
-  RenameSwarm: Types.Update;
 
   // ==== SERVER ====
   CreateServer: Types.Server;
@@ -433,18 +401,6 @@ export type ExecuteResponses = {
   PruneDockerBuilders: Types.Update;
   PruneBuildx: Types.Update;
   PruneSystem: Types.Update;
-
-  // ==== SWARM ====
-  RemoveSwarmNodes: Types.Update;
-  UpdateSwarmNode: Types.Update;
-  RemoveSwarmStacks: Types.Update;
-  RemoveSwarmServices: Types.Update;
-  CreateSwarmConfig: Types.Update;
-  RotateSwarmConfig: Types.Update;
-  RemoveSwarmConfigs: Types.Update;
-  CreateSwarmSecret: Types.Update;
-  RotateSwarmSecret: Types.Update;
-  RemoveSwarmSecrets: Types.Update;
 
   // ==== MAINTENANCE ====
   ClearRepoCache: Types.Update;

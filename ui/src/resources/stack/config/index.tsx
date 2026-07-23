@@ -11,11 +11,13 @@ import {
   ConfigGroupArgs,
   ConfigProps,
   ConfigItem,
+  ConfigInput,
   ConfigList,
   ConfigSwitch,
 } from "mogh_ui";
 import {
   ActionIcon,
+  Autocomplete,
   Button,
   Group,
   MultiSelect,
@@ -87,7 +89,6 @@ export default function StackConfig({
   const name = stack?.name;
   const global_disabled =
     useRead("GetCoreInfo", {}).data?.ui_write_disabled ?? false;
-  const swarmsExist = useRead("ListSwarms", {}).data?.length ? true : false;
   const [update, setUpdate] = useLocalStorage<Partial<Types.StackConfig>>({
     key: `stack-${id}-update-v1`,
     defaultValue: {},
@@ -141,51 +142,10 @@ export default function StackConfig({
 
   let groups: ConfigProps<Types.StackConfig>["groups"] = {};
 
-  const currSwarmId = update.swarm_id ?? config.swarm_id;
-  const currServerId = update.server_id ?? config.server_id;
-
-  const swarmServerGroup: ConfigGroupArgs<Types.StackConfig>[] = [
-    {
-      label: "Swarm",
-      labelHidden: true,
-      hidden: !swarmsExist || !!currServerId,
-      fields: {
-        swarm_id: (swarm_id, set) => {
-          return (
-            <ConfigItem
-              label={
-                swarm_id ? (
-                  <Group fz="h3" fw="bold">
-                    Swarm:
-                    <ResourceLink
-                      type="Swarm"
-                      id={swarm_id}
-                      fz="h3"
-                      iconSize="1.2rem"
-                    />
-                  </Group>
-                ) : (
-                  "Select Swarm"
-                )
-              }
-              description="Select the Swarm to deploy on."
-            >
-              <ResourceSelector
-                type="Swarm"
-                selected={swarm_id}
-                onSelect={(swarm_id) => set({ swarm_id, server_id: "" })}
-                disabled={disabled}
-                clearable
-              />
-            </ConfigItem>
-          );
-        },
-      },
-    },
+  const serverGroup: ConfigGroupArgs<Types.StackConfig>[] = [
     {
       label: "Server",
       labelHidden: true,
-      hidden: swarmsExist && !!currSwarmId,
       fields: {
         server_id: (server_id, set) => {
           return (
@@ -210,7 +170,7 @@ export default function StackConfig({
               <ResourceSelector
                 type="Server"
                 selected={server_id}
-                onSelect={(server_id) => set({ server_id, swarm_id: "" })}
+                onSelect={(server_id) => set({ server_id })}
                 disabled={disabled}
                 clearable
               />
@@ -247,7 +207,7 @@ export default function StackConfig({
 
   const environment: ConfigGroupArgs<Types.StackConfig> = {
     label: "Environment",
-    description: `Pass these variables to the docker ${currSwarmId ? "stack" : "compose"} command`,
+    description: `Pass these variables to the docker compose command`,
     actions: (
       <ShowHideButton
         show={show.env}
@@ -383,6 +343,89 @@ export default function StackConfig({
 
   const auto_update = update.auto_update ?? config.auto_update ?? false;
 
+  // Known service names from the last deploy's host port mappings. Empty
+  // before first deploy; the Autocomplete Service field still accepts
+  // free-text input in that case.
+  const httpProxyServices = stack?.info?.host_ports
+    ? Object.keys(stack.info.host_ports)
+    : [];
+
+  const httpProxyGroup: ConfigGroupArgs<Types.StackConfig> = {
+    label: "HTTP Proxy",
+    labelHidden: true,
+    fields: {
+      http_proxy: (proxy, set) => (
+        <ConfigItem
+          label="HTTP Proxy"
+          description="Expose a service over HTTP with automatic DNS and HTTPS via Caddy."
+        >
+          <Stack>
+            <ConfigSwitch
+              label="Enable HTTP Proxy"
+              value={!!proxy}
+              onCheckedChange={(on) =>
+                set({
+                  http_proxy: on
+                    ? {
+                        service: "",
+                        subdomain: "",
+                        container_port: 0,
+                      }
+                    : undefined,
+                })
+              }
+              disabled={disabled}
+            />
+            {proxy && (
+              <Stack>
+                <ConfigItem
+                  label="Service"
+                  description="The compose service to proxy to. Known services are suggested after the first deploy."
+                >
+                  <Autocomplete
+                    value={proxy.service}
+                    onChange={(service) =>
+                      set({ http_proxy: { ...proxy, service } })
+                    }
+                    data={httpProxyServices}
+                    disabled={disabled}
+                    placeholder="Select or enter a service"
+                  />
+                </ConfigItem>
+                <ConfigInput
+                  label="Subdomain"
+                  description="DNS subdomain. FQDN = '{subdomain}.{base_domain}'."
+                  value={proxy.subdomain}
+                  onValueChange={(subdomain) =>
+                    set({ http_proxy: { ...proxy, subdomain } })
+                  }
+                  disabled={disabled}
+                  placeholder="myapp"
+                />
+                <ConfigInput
+                  label="Container Port"
+                  description="Container port on the service receiving proxied traffic."
+                  value={proxy.container_port}
+                  onValueChange={(port) =>
+                    set({
+                      http_proxy: {
+                        ...proxy,
+                        container_port: Number(port) || 0,
+                      },
+                    })
+                  }
+                  disabled={disabled}
+                  placeholder="8080"
+                  inputProps={{ type: "number" }}
+                />
+              </Stack>
+            )}
+          </Stack>
+        </ConfigItem>
+      ),
+    },
+  };
+
   const generalCommon: ConfigGroupArgs<Types.StackConfig>[] = [
     {
       label: "Auto Update",
@@ -458,6 +501,7 @@ export default function StackConfig({
         ),
       },
     },
+    httpProxyGroup,
   ];
 
   const advanced: ConfigGroupArgs<Types.StackConfig>[] = [
@@ -525,16 +569,14 @@ export default function StackConfig({
           />
         ),
         compose_cmd_wrapper_include: (values, set) => {
-          const commands = currSwarmId
-            ? ["config", "deploy"]
-            : ["config", "build", "pull", "up", "run"];
+          const commands = ["config", "build", "pull", "up", "run"];
           const filtered = (values ?? []).filter((v: string) =>
             commands.includes(v),
           );
           return (
             <ConfigItem
               label="Apply To"
-              description={`Select which docker ${currSwarmId ? "stack" : "compose"} subcommands to wrap.`}
+              description={`Select which docker compose subcommands to wrap.`}
             >
               <MultiSelect
                 placeholder={
@@ -565,7 +607,7 @@ export default function StackConfig({
               <Group gap="xs">
                 <Text>
                   Pass extra arguments to docker '
-                  {currSwarmId ? "stack deploy" : "compose up"}
+                  compose up
                   '.
                 </Text>
                 <Text
@@ -573,9 +615,7 @@ export default function StackConfig({
                   fw="bold"
                   component={Link}
                   to={
-                    currSwarmId
-                      ? "https://docs.docker.com/reference/cli/docker/stack/deploy/#options"
-                      : "https://docs.docker.com/reference/cli/docker/service/create/#options"
+                    "https://docs.docker.com/reference/cli/docker/service/create/#options"
                   }
                   target="_blank"
                 >
@@ -669,7 +709,6 @@ export default function StackConfig({
         },
         auto_pull: {
           label: "Pre Pull Images",
-          hidden: !!currSwarmId,
           description:
             "Ensure 'docker compose pull' is run before redeploying the Stack. Otherwise, use 'pull_policy' in docker compose file.",
         },
@@ -677,7 +716,6 @@ export default function StackConfig({
     },
     {
       label: "Build Images",
-      hidden: !!currSwarmId,
       labelHidden: true,
       fields: {
         run_build: {
@@ -724,9 +762,7 @@ export default function StackConfig({
       fields: {
         destroy_before_deploy: {
           label: "Destroy Before Deploy",
-          description: `Ensure '${
-            currSwarmId ? "docker stack rm" : "docker compose down"
-          }' is run before redeploying the Stack.`,
+          description: `Ensure 'docker compose down' is run before redeploying the Stack.`,
         },
       },
     },
@@ -734,12 +770,12 @@ export default function StackConfig({
 
   if (mode === undefined) {
     groups = {
-      "": [...swarmServerGroup, chooseMode],
+      "": [...serverGroup, chooseMode],
     };
   } else if (mode === "Files On Server") {
     groups = {
       "": [
-        ...swarmServerGroup,
+        ...serverGroup,
         {
           label: "Files",
           labelHidden: true,
@@ -772,7 +808,7 @@ export default function StackConfig({
     const repoLinked = !!(update.linked_repo ?? config.linked_repo);
     groups = {
       "": [
-        ...swarmServerGroup,
+        ...serverGroup,
         {
           label: "Source",
           labelHidden: true,
@@ -933,7 +969,7 @@ export default function StackConfig({
   } else if (mode === "UI Defined") {
     groups = {
       "": [
-        ...swarmServerGroup,
+        ...serverGroup,
         {
           label: "Compose File",
           description: "Manage the compose file contents here.",

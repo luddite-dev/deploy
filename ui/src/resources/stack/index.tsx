@@ -14,7 +14,6 @@ import {
   RestartStack,
   StartStopStack,
 } from "./executions";
-import { useSwarm } from "@/resources/swarm";
 import { useServer } from "@/resources/server";
 import {
   ActionIcon,
@@ -170,11 +169,8 @@ export const StackComponents: RequiredResourceComponents<
   Info: {
     DeployTarget: ({ id }) => {
       const info = useStack(id)?.info;
-      const swarm = useSwarm(info?.swarm_id);
       const server = useServer(info?.server_id);
-      return swarm?.id ? (
-        <ResourceLink type="Swarm" id={swarm?.id} />
-      ) : server?.id ? (
+      return server?.id ? (
         <ResourceLink type="Server" id={server?.id} />
       ) : (
         <Group gap="xs">

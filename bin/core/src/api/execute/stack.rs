@@ -197,6 +197,33 @@ impl Resolve<ExecuteArgs> for DeployStack {
 
     update.logs.extend(logs);
 
+    // Read back host port bindings for every service container and
+    // store them in stack.info.host_ports. Best-effort: per-service
+    // failures are logged, not fatal. Done before the info refresh
+    // below so the updated host_ports are included in that write.
+    let host_ports =
+      crate::resource::stack::read_back_stack_host_ports(
+        &stack, &services,
+      )
+      .await;
+    stack.info.host_ports = host_ports;
+
+    // Best-effort: set up DNS + Caddy ingress if http_proxy is
+    // configured. Reads stack.info.host_ports (populated above).
+    if let Some(http_proxy) = stack.config.http_proxy.clone() {
+      if let Err(e) = crate::resource::stack::try_setup_stack_ingress(
+        &stack,
+        &http_proxy,
+      )
+      .await
+      {
+        warn!(
+          "Failed to set up ingress for stack {} | {e:#}",
+          stack.name
+        );
+      }
+    }
+
     let update_info = async {
       let latest_services = if services.is_empty() {
         // maybe better to do something else here for services.
