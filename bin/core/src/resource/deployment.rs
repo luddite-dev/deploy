@@ -17,6 +17,7 @@ use komodo_client::entities::{
   },
   resource::Resource,
   server::Server,
+  stack::Stack,
   to_container_compatible_name,
   update::Update,
   user::User,
@@ -779,6 +780,56 @@ async fn build_ingress_routes(
           .map(|cp| cp.to_string())
           .unwrap_or_else(|| "(auto)".to_string()),
         dep.name
+      );
+      continue;
+    };
+    routes.push(CaddyRoute {
+      hostname: format!("{}.{}", http_proxy.subdomain, base_domain),
+      target_endpoint_id: endpoint_id,
+      target_port: host_port,
+    });
+  }
+
+  // Query all stacks that have http_proxy set.
+  let stacks: Vec<Stack> = find_collect(
+    &db_client().stacks,
+    doc! { "config.http_proxy": { "$ne": null } },
+    None,
+  )
+  .await
+  .context("failed to query stacks with http_proxy")?;
+
+  for stack in stacks {
+    let Some(http_proxy) = &stack.config.http_proxy else {
+      continue;
+    };
+    let server =
+      get_server_for_command(&stack.config.server_id).await.ok();
+    let Some(server) = server else {
+      warn!(
+        "build_ingress_routes: could not get server for stack {} (server_id={}), skipping",
+        stack.name, stack.config.server_id
+      );
+      continue;
+    };
+    let endpoint_id = server.info.endpoint_id.clone();
+    if endpoint_id.is_empty() {
+      continue;
+    }
+    let host_port = stack
+      .info
+      .host_ports
+      .get(&http_proxy.service)
+      .and_then(|ports| {
+        ports
+          .iter()
+          .find(|p| p.container == http_proxy.container_port)
+      })
+      .map(|p| p.host);
+    let Some(host_port) = host_port else {
+      warn!(
+        "build_ingress_routes: no host port for service {} container port {} on stack {}, skipping",
+        http_proxy.service, http_proxy.container_port, stack.name
       );
       continue;
     };
