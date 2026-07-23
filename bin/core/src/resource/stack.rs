@@ -272,7 +272,7 @@ impl super::KomodoResource for Stack {
     config: &mut Self::PartialConfig,
     user: &User,
   ) -> anyhow::Result<()> {
-    validate_config(config, user).await
+    validate_config(config, None, user).await
   }
 
   async fn post_create(
@@ -348,11 +348,11 @@ impl super::KomodoResource for Stack {
   }
 
   async fn validate_update_config(
-    _id: &str,
+    id: &str,
     config: &mut Self::PartialConfig,
     user: &User,
   ) -> anyhow::Result<()> {
-    validate_config(config, user).await
+    validate_config(config, Some(id), user).await
   }
 
   async fn post_update(
@@ -469,6 +469,7 @@ impl super::KomodoResource for Stack {
 #[instrument("ValidateStackConfig", skip_all)]
 async fn validate_config(
   config: &mut PartialStackConfig,
+  id: Option<&str>,
   user: &User,
 ) -> anyhow::Result<()> {
   if let Some(server_id) = &config.server_id
@@ -492,6 +493,83 @@ async fn validate_config(
       file_contents,
     )
     .context("Invalid compose file")?;
+  }
+  // Validate http_proxy if set. Run before the server_id early-return
+  // below so a partial update that only touches http_proxy is still
+  // validated. Stacks and deployments share the same DNS namespace
+  // (base_domain), so uniqueness is checked across both collections.
+  if let Some(http_proxy) = &config.http_proxy {
+    use database::mungos::{find::find_collect, mongodb::bson::doc};
+    use komodo_client::entities::deployment::Deployment;
+
+    if http_proxy.service.is_empty() {
+      anyhow::bail!("http_proxy.service must not be empty");
+    }
+    if http_proxy.subdomain.is_empty() {
+      anyhow::bail!("http_proxy.subdomain must not be empty");
+    }
+    if !is_valid_subdomain(&http_proxy.subdomain) {
+      anyhow::bail!(
+        "http_proxy.subdomain must contain only letters, digits, and hyphens, \
+         and must start and end with a letter or digit"
+      );
+    }
+    if http_proxy.container_port == 0 {
+      anyhow::bail!(
+        "http_proxy.container_port must be greater than 0"
+      );
+    }
+
+    // Subdomain uniqueness: no other stack may use the same subdomain.
+    // On update, exclude the stack being updated from the match. The
+    // stack's `_id` is stored as an ObjectId in MongoDB, so the self_id
+    // string must be parsed to ObjectId first — otherwise the `$ne` is
+    // a cross-type comparison that always evaluates to true and the
+    // stack matches itself, causing a false "already in use" bail on
+    // any update that keeps the same subdomain.
+    let stack_filter = match id {
+      Some(self_id) => {
+        let self_oid =
+          database::mungos::mongodb::bson::oid::ObjectId::parse_str(
+            self_id,
+          )
+          .map_err(|e| anyhow::anyhow!("invalid id: {e}"))?;
+        doc! {
+          "config.http_proxy.subdomain": &http_proxy.subdomain,
+          "_id": { "$ne": self_oid },
+        }
+      }
+      None => doc! {
+        "config.http_proxy.subdomain": &http_proxy.subdomain,
+      },
+    };
+    let existing_stacks: Vec<Stack> =
+      find_collect(&db_client().stacks, stack_filter, None)
+        .await
+        .context("failed to query stacks for subdomain uniqueness")?;
+    if !existing_stacks.is_empty() {
+      anyhow::bail!(
+        "http_proxy.subdomain '{}' is already in use by another stack",
+        http_proxy.subdomain
+      );
+    }
+
+    // Deployments share the same DNS namespace / base_domain.
+    let existing_deployments: Vec<Deployment> = find_collect(
+      &db_client().deployments,
+      doc! { "config.http_proxy.subdomain": &http_proxy.subdomain },
+      None,
+    )
+    .await
+    .context(
+      "failed to query deployments for subdomain uniqueness",
+    )?;
+    if !existing_deployments.is_empty() {
+      anyhow::bail!(
+        "http_proxy.subdomain '{}' is already in use by a deployment",
+        http_proxy.subdomain
+      );
+    }
   }
   // Only run the placement scheduler when server_id was explicitly part
   // of this partial config (Some). If it's None the caller didn't touch
@@ -523,6 +601,18 @@ async fn validate_config(
     config.linked_repo = Some(repo.id);
   }
   Ok(())
+}
+
+/// Validates a DNS subdomain label per RFC 1035: non-empty, ≤ 63
+/// chars, only ASCII letters/digits/hyphens, must start and end with
+/// an alphanumeric, and no consecutive hyphens.
+fn is_valid_subdomain(s: &str) -> bool {
+  !s.is_empty()
+    && s.len() <= 63
+    && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    && !s.starts_with('-')
+    && !s.ends_with('-')
+    && !s.contains("--")
 }
 
 /// Queries the periphery for each service container's host port
