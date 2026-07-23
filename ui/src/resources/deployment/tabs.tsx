@@ -13,9 +13,8 @@ import LogSection from "@/components/log-section";
 import TerminalSection from "@/components/terminal/section";
 import { MonacoEditor } from "mogh_ui";
 import { Section } from "mogh_ui";
-import DeploymentTasksSection from "./tasks";
 
-type DeploymentTabsView = "Config" | "Tasks" | "Log" | "Inspect" | "Terminals";
+type DeploymentTabsView = "Config" | "Log" | "Inspect" | "Terminals";
 
 export default function DeploymentTabs({ id }: { id: string }) {
   const [_view, setView] = useLocalStorage<DeploymentTabsView>({
@@ -42,12 +41,10 @@ export default function DeploymentTabs({ id }: { id: string }) {
   const terminalDisabled =
     !specificTerminal ||
     containerTerminalsDisabled ||
-    state !== Types.DeploymentState.Running ||
-    !!info?.swarm_id;
+    state !== Types.DeploymentState.Running;
 
   const view =
     (logsDisabled && _view === "Log") ||
-    ((downOrUnknown || !info?.swarm_id) && _view === "Tasks") ||
     (inspectDisabled && _view === "Inspect") ||
     (terminalDisabled && _view === "Terminals")
       ? "Config"
@@ -58,12 +55,6 @@ export default function DeploymentTabs({ id }: { id: string }) {
       {
         value: "Config",
         icon: ICONS.Config,
-      },
-      {
-        value: "Tasks",
-        icon: ICONS.SwarmTask,
-        disabled: downOrUnknown,
-        hidden: !info?.swarm_id,
       },
       {
         value: "Log",
@@ -81,7 +72,7 @@ export default function DeploymentTabs({ id }: { id: string }) {
         disabled: terminalDisabled,
       },
     ],
-    [logsDisabled, inspectDisabled, terminalDisabled, info?.swarm_id],
+    [logsDisabled, inspectDisabled, terminalDisabled],
   );
 
   const Selector = (
@@ -106,9 +97,6 @@ export default function DeploymentTabs({ id }: { id: string }) {
   switch (view) {
     case "Config":
       View = <DeploymentConfig id={id} titleOther={Selector} />;
-      break;
-    case "Tasks":
-      View = <DeploymentTasksSection deploymentId={id} titleOther={Selector} />;
       break;
     case "Log":
       View = (
@@ -144,9 +132,8 @@ function InspectDeploymentContainer({
   titleOther: ReactNode;
 }) {
   const deployment = useDeployment(id);
-  const useSwarm = !!deployment?.info.swarm_id;
   const inspect = useRead(
-    useSwarm ? "InspectDeploymentSwarmService" : "InspectDeploymentContainer",
+    "InspectDeploymentContainer",
     {
       deployment: id,
     },

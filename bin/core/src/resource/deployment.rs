@@ -575,17 +575,25 @@ pub async fn try_setup_ingress(
   }
 
   // Find the target host port matching http_proxy.container_port.
+  // If container_port is None (auto-detect), pick the first available port mapping.
   let host_port = deployment
     .info
     .host_ports
     .iter()
-    .find(|p| p.container == http_proxy.container_port)
+    .find(|p| {
+      http_proxy
+        .container_port
+        .map_or(true, |cp| p.container == cp)
+    })
     .map(|p| p.host)
     .ok_or_else(|| {
       anyhow::anyhow!(
         "No host port found for container port {} on deployment {}. \
          ReadContainerPorts readback may not have completed.",
-        http_proxy.container_port,
+        http_proxy
+          .container_port
+          .map(|cp| cp.to_string())
+          .unwrap_or_else(|| "(auto)".to_string()),
         deployment.name
       )
     })?;
@@ -752,16 +760,25 @@ async fn build_ingress_routes(
       continue;
     }
     // Find the host port matching the container_port.
+    // If container_port is None (auto-detect), pick the first available port mapping.
     let host_port = dep
       .info
       .host_ports
       .iter()
-      .find(|p| p.container == http_proxy.container_port)
+      .find(|p| {
+        http_proxy
+          .container_port
+          .map_or(true, |cp| p.container == cp)
+      })
       .map(|p| p.host);
     let Some(host_port) = host_port else {
       warn!(
         "build_ingress_routes: no host port for container port {} on deployment {}, skipping",
-        http_proxy.container_port, dep.name
+        http_proxy
+          .container_port
+          .map(|cp| cp.to_string())
+          .unwrap_or_else(|| "(auto)".to_string()),
+        dep.name
       );
       continue;
     };

@@ -8,21 +8,19 @@ import { ReactNode } from "react";
 export interface StackServiceInspectProps {
   stackId: string;
   service: string;
-  useSwarm: boolean;
   titleOther: ReactNode;
 }
 
 export default function StackServiceInspect({
   stackId,
   service,
-  useSwarm,
   titleOther,
 }: StackServiceInspectProps) {
   const { specific } = usePermissions({ type: "Stack", id: stackId });
   const canInspect = specific.includes(Types.SpecificPermission.Inspect);
 
   const { data: inspect } = useRead(
-    `InspectStack${useSwarm ? "SwarmService" : "Container"}`,
+    "InspectStackContainer",
     {
       stack: stackId,
       service,

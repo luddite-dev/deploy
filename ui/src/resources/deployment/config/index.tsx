@@ -1,5 +1,5 @@
 import { usePermissions, useRead, useWrite } from "@/lib/hooks";
-import { Config, ConfigItem, ConfigList, ConfigSwitch } from "mogh_ui";
+import { Config, ConfigInput, ConfigItem, ConfigList, ConfigSwitch } from "mogh_ui";
 import { Group, Stack, Text } from "@mantine/core";
 import { useLocalStorage } from "@mantine/hooks";
 import { Types } from "komodo_client";
@@ -90,7 +90,9 @@ export default function DeploymentConfig({
   const builds = useRead("ListBuilds", {}).data;
   const globalDisabled =
     useRead("GetCoreInfo", {}).data?.ui_write_disabled ?? false;
-  const swarmsExist = useRead("ListSwarms", {}).data?.length ? true : false;
+  const coreInfo = useRead("GetCoreInfo", {}).data;
+  const ingressEnabled = coreInfo?.ingress_enabled ?? false;
+  const ingressBaseDomain = coreInfo?.ingress_base_domain ?? "";
   const [update, setUpdate] = useLocalStorage<Partial<Types.DeploymentConfig>>({
     key: `deployment-${id}-update-v1`,
     defaultValue: {},
@@ -105,8 +107,7 @@ export default function DeploymentConfig({
 
   const disabled = globalDisabled || !canWrite;
 
-  const currSwarmId = update.swarm_id ?? config.swarm_id;
-  const currServerId = update.server_id ?? config.server_id;
+  const httpProxy = update.http_proxy ?? config.http_proxy;
 
   return (
     <Config
@@ -119,46 +120,8 @@ export default function DeploymentConfig({
       groups={{
         "": [
           {
-            label: "Swarm",
-            labelHidden: true,
-            hidden: !swarmsExist || !!currServerId,
-            fields: {
-              swarm_id: (swarm_id, set) => {
-                return (
-                  <ConfigItem
-                    label={
-                      swarm_id ? (
-                        <Group fz="h3" fw="bold">
-                          Swarm:
-                          <ResourceLink
-                            type="Swarm"
-                            id={swarm_id}
-                            fz="h3"
-                            iconSize="1.2rem"
-                          />
-                        </Group>
-                      ) : (
-                        "Select Swarm"
-                      )
-                    }
-                    description="Select the Swarm to deploy on."
-                  >
-                    <ResourceSelector
-                      type="Swarm"
-                      selected={swarm_id}
-                      onSelect={(swarm_id) => set({ swarm_id, server_id: "" })}
-                      disabled={disabled}
-                      clearable
-                    />
-                  </ConfigItem>
-                );
-              },
-            },
-          },
-          {
             label: "Server",
             labelHidden: true,
-            hidden: swarmsExist && !!currSwarmId,
             fields: {
               server_id: (server_id, set) => {
                 return (
@@ -183,7 +146,7 @@ export default function DeploymentConfig({
                     <ResourceSelector
                       type="Server"
                       selected={server_id}
-                      onSelect={(server_id) => set({ server_id, swarm_id: "" })}
+                      onSelect={(server_id) => set({ server_id })}
                       disabled={disabled}
                       clearable
                     />
@@ -250,7 +213,6 @@ export default function DeploymentConfig({
             fields: {
               network: (value, set) => (
                 <DeploymentNetworkSelector
-                  swarmId={update.swarm_id ?? config.swarm_id}
                   serverId={update.server_id ?? config.server_id}
                   selected={value}
                   onSelect={(network) => set({ network })}
@@ -285,6 +247,105 @@ export default function DeploymentConfig({
                   placeholder="Input link"
                 />
               ),
+            },
+          },
+          {
+            label: "HTTP Proxy",
+            description:
+              "Expose this deployment through the Core ingress (Caddy reverse proxy). Requires ingress to be configured on Core.",
+            hidden: !ingressEnabled,
+            fields: {
+              http_proxy: (_httpProxy, set) => {
+                const enabled = !!httpProxy;
+                return (
+                  <ConfigItem
+                    label="HTTP Proxy"
+                    description={
+                      <Group justify="space-between">
+                        <Text>
+                          Route external traffic to this deployment through a
+                          Caddy reverse proxy.
+                        </Text>
+                        <ConfigSwitch
+                          label={enabled ? "Enabled" : "Disabled"}
+                          value={enabled}
+                          onCheckedChange={(checked) =>
+                            set({
+                              http_proxy: checked
+                                ? {
+                                    subdomain: "",
+                                    container_port: undefined,
+                                  }
+                                : undefined,
+                            })
+                          }
+                          disabled={disabled}
+                        />
+                      </Group>
+                    }
+                  >
+                    {enabled && (
+                      <Stack>
+                        <ConfigInput
+                          label="Subdomain"
+                          description={
+                            ingressBaseDomain ? (
+                              <Text size="sm" c="dimmed">
+                                Full URL:{" "}
+                                <Text inherit fw={500} component="span">
+                                  https://
+                                  {(update.http_proxy ?? httpProxy)?.subdomain}
+                                  .{ingressBaseDomain}
+                                </Text>
+                              </Text>
+                            ) : (
+                              "The subdomain to expose this deployment on."
+                            )
+                          }
+                          value={
+                            (update.http_proxy ?? httpProxy)?.subdomain ?? ""
+                          }
+                          onValueChange={(value) =>
+                            set({
+                              http_proxy: {
+                                ...(update.http_proxy ?? httpProxy)!,
+                                subdomain: value,
+                              },
+                            })
+                          }
+                          disabled={disabled}
+                          placeholder="my-app"
+                        />
+                        <ConfigInput
+                          label="Container Port"
+                          description="The port on the container that receives the proxied traffic. Leave empty to auto-detect."
+                          value={
+                            (update.http_proxy ?? httpProxy)?.container_port
+                              ? String(
+                                  (update.http_proxy ?? httpProxy)
+                                    ?.container_port,
+                                )
+                              : ""
+                          }
+                          onValueChange={(value) => {
+                            const parsed = parseInt(value, 10);
+                            set({
+                              http_proxy: {
+                                ...(update.http_proxy ?? httpProxy)!,
+                                container_port: isNaN(parsed)
+                                  ? undefined
+                                  : parsed,
+                              },
+                            });
+                          }}
+                          disabled={disabled}
+                          placeholder="auto"
+                        />
+                      </Stack>
+                    )}
+                  </ConfigItem>
+                );
+              },
             },
           },
           {
@@ -325,7 +386,6 @@ export default function DeploymentConfig({
           },
           {
             label: "Restart",
-            hidden: !!currSwarmId,
             labelHidden: true,
             fields: {
               restart: (value, set) => (
@@ -372,11 +432,7 @@ export default function DeploymentConfig({
                     <Group>
                       <Text>Replace the CMD, or extend the ENTRYPOINT.</Text>
                       <Link
-                        to={
-                          currSwarmId
-                            ? "https://docs.docker.com/reference/cli/docker/service/create/#create-a-service"
-                            : "https://docs.docker.com/engine/reference/run/#commands-and-arguments"
-                        }
+                        to="https://docs.docker.com/engine/reference/run/#commands-and-arguments"
                         target="_blank"
                       >
                         See docker docs.
@@ -418,16 +474,10 @@ export default function DeploymentConfig({
                   description={
                     <div className="flex flex-row flex-wrap gap-2">
                       <div>
-                        Pass extra arguments to '
-                        {currSwarmId ? "docker service create" : "docker run"}
-                        '.
+                        Pass extra arguments to 'docker run'.
                       </div>
                       <Link
-                        to={
-                          currSwarmId
-                            ? "https://docs.docker.com/reference/cli/docker/service/create/#options"
-                            : "https://docs.docker.com/reference/cli/docker/container/run/#options"
-                        }
+                        to="https://docs.docker.com/reference/cli/docker/container/run/#options"
                         target="_blank"
                         className="text-primary"
                       >
@@ -463,7 +513,6 @@ export default function DeploymentConfig({
           },
           {
             label: "Termination",
-            hidden: !!currSwarmId,
             description:
               "Configure the signals used to 'docker stop' the container. Options are SIGTERM, SIGQUIT, SIGINT, and SIGHUP.",
             fields: {

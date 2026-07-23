@@ -7,11 +7,6 @@ import { useState } from "react";
 const ALL_PERMISSIONS_BY_TYPE: {
   [type: string]: Types.SpecificPermission[] | undefined;
 } = {
-  Swarm: [
-    Types.SpecificPermission.Attach,
-    Types.SpecificPermission.Inspect,
-    Types.SpecificPermission.Logs,
-  ],
   Server: [
     Types.SpecificPermission.Attach,
     Types.SpecificPermission.Inspect,

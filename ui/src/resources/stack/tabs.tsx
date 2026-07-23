@@ -42,8 +42,6 @@ export default function StackTabs({ id }: { id: string }) {
   const terminalDisabled =
     !specificTerminal ||
     containerTerminalsDisabled ||
-    // Not attached to swarm
-    !!info?.swarm_id ||
     // All services are not running
     services?.every(
       (service) =>

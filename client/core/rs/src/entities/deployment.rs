@@ -644,8 +644,8 @@ pub struct PortMapping {
 pub struct HttpProxyConfig {
   /// Subdomain for this app (e.g. "myapp" → "myapp.example.com")
   pub subdomain: String,
-  /// Which container port to proxy HTTP traffic to
-  pub container_port: u16,
+  /// Which container port to proxy HTTP traffic to. If None, auto-detect from the deployment's port mappings.
+  pub container_port: Option<u16>,
 }
 
 #[typeshare]

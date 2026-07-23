@@ -1,4 +1,4 @@
-import { containerStateIntention, swarmStateIntention } from "@/lib/color";
+import { containerStateIntention } from "@/lib/color";
 import { useRead } from "@/lib/hooks";
 import { ICONS } from "@/lib/icons";
 import { Group, Text } from "@mantine/core";
@@ -20,9 +20,7 @@ export default function StackServiceLink({
     { refetchInterval: 10_000 },
   ).data;
   const service = services?.find((s) => s.service === _service);
-  const intention = service?.swarm_service?.State
-    ? swarmStateIntention(service?.swarm_service?.State)
-    : containerStateIntention(service?.container?.state);
+  const intention = containerStateIntention(service?.container?.state);
   const color = hexColorByIntention(intention);
   return (
     <Group

@@ -4,7 +4,6 @@ import { Select, TextInput } from "@mantine/core";
 import { useState } from "react";
 
 export interface DeploymentNetworkSelectorProps {
-  swarmId: string | undefined;
   serverId: string | undefined;
   selected: string | undefined;
   onSelect: (type: string) => void;
@@ -12,18 +11,15 @@ export interface DeploymentNetworkSelectorProps {
 }
 
 export default function DeploymentNetworkSelector({
-  swarmId,
   serverId,
   selected,
   onSelect,
   disabled,
 }: DeploymentNetworkSelectorProps) {
   const _networks =
-    useRead(
-      swarmId ? "ListSwarmNetworks" : "ListDockerNetworks",
-      { swarm: swarmId, server: serverId! },
-      { enabled: !!swarmId || !!serverId },
-    )
+    useRead("ListDockerNetworks", { server: serverId! }, {
+      enabled: !!serverId,
+    })
       .data?.filter((network) => network.name)
       .map((network) => network.name as string) ?? [];
 

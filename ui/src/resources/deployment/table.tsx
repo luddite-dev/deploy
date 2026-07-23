@@ -14,7 +14,6 @@ export default function DeploymentTable({
 }: {
   resources: Types.DeploymentListItem[];
 } & BoxProps) {
-  const swarmName = useResourceName("Swarm");
   const serverName = useResourceName("Server");
 
   const [_, setSelectedResources] = useSelectedResources("Deployment");
@@ -62,12 +61,8 @@ export default function DeploymentTable({
           ),
           accessorKey: "info.server_id",
           sortingFn: (a, b) => {
-            const name_a = a.original.info.swarm_id
-              ? swarmName(a.original.info.swarm_id)
-              : serverName(a.original.info.server_id);
-            const name_b = b.original.info.swarm_id
-              ? swarmName(b.original.info.swarm_id)
-              : serverName(b.original.info.server_id);
+            const name_a = serverName(a.original.info.server_id);
+            const name_b = serverName(b.original.info.server_id);
 
             if (!name_a && !name_b) return 0;
             if (!name_a) return 1;
@@ -77,12 +72,9 @@ export default function DeploymentTable({
             else if (name_a < name_b) return -1;
             else return 0;
           },
-          cell: ({ row }) =>
-            row.original.info.swarm_id ? (
-              <ResourceLink type="Swarm" id={row.original.info.swarm_id} />
-            ) : (
-              <ResourceLink type="Server" id={row.original.info.server_id} />
-            ),
+          cell: ({ row }) => (
+            <ResourceLink type="Server" id={row.original.info.server_id} />
+          ),
           size: 200,
         },
         {

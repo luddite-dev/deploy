@@ -4167,7 +4167,6 @@ dependencies = [
  "futures-util",
  "git",
  "hex",
- "hickory-resolver",
  "interpolate",
  "iroh",
  "komodo_client",

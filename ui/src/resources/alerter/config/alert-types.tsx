@@ -11,8 +11,6 @@ const ALERT_TYPES: Types.AlertData["type"][] = [
   "ServerCpu",
   "ServerMem",
   "ServerDisk",
-  // Swarm
-  "SwarmUnhealthy",
   // Stack
   "StackStateChange",
   "StackImageUpdateAvailable",
