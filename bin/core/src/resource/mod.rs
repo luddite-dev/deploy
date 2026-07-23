@@ -62,7 +62,7 @@ mod procedure;
 mod refresh;
 mod repo;
 mod server;
-mod stack;
+pub mod stack;
 pub mod stack_validation;
 mod sync;
 

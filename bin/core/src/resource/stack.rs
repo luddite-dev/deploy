@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Context;
 use database::mungos::mongodb::Collection;
 use formatting::format_serror;
@@ -6,6 +8,7 @@ use komodo_client::{
   api::write::RefreshStackCache,
   entities::{
     Operation, ResourceTarget, ResourceTargetVariant,
+    deployment::AssignedPort,
     permission::{PermissionLevel, SpecificPermission},
     repo::Repo,
     resource::Resource,
@@ -13,8 +16,8 @@ use komodo_client::{
     stack::{
       PartialStackConfig, Stack, StackConfig, StackConfigDiff,
       StackHttpProxyConfig, StackInfo, StackListItem,
-      StackListItemInfo, StackQuerySpecifics, StackServiceWithUpdate,
-      StackState,
+      StackListItemInfo, StackQuerySpecifics, StackServiceNames,
+      StackServiceWithUpdate, StackState,
     },
     to_docker_compatible_name,
     update::Update,
@@ -22,7 +25,9 @@ use komodo_client::{
   },
 };
 use mogh_resolver::Resolve;
-use periphery_client::api::compose::ComposeExecution;
+use periphery_client::api::{
+  compose::ComposeExecution, placement::ReadContainerPorts,
+};
 
 use crate::{
   api::write::WriteArgs,
@@ -445,6 +450,17 @@ impl super::KomodoResource for Stack {
     resource: &Resource<Self::Config, Self::Info>,
     _update: &mut Update,
   ) -> anyhow::Result<()> {
+    // Best-effort: tear down DNS + Caddy ingress for stacks that had
+    // http_proxy configured. Done first so the route is removed even
+    // if later cleanup steps were to fail.
+    if resource.config.http_proxy.is_some() {
+      if let Err(e) = try_teardown_stack_ingress(&resource.id).await {
+        warn!(
+          "Failed to tear down ingress for stack {} | {e:#}",
+          resource.id
+        );
+      }
+    }
     stack_status_cache().remove(&resource.id).await;
     Ok(())
   }
@@ -507,6 +523,92 @@ async fn validate_config(
     config.linked_repo = Some(repo.id);
   }
   Ok(())
+}
+
+/// Queries the periphery for each service container's host port
+/// bindings and writes them into `info.host_ports` in the database.
+/// Best-effort: per-service failures are logged at warn-level and
+/// skipped, so a transient periphery error never fails an
+/// otherwise-successful deploy.
+///
+/// Mirrors `read_back_host_ports` for deployments
+/// (`bin/core/src/resource/deployment.rs:453`), but iterates over
+/// every compose service and keys results by service name
+/// (`HashMap<String, Vec<AssignedPort>>`).
+pub async fn read_back_stack_host_ports(
+  stack: &Stack,
+  service_names: &[StackServiceNames],
+) -> HashMap<String, Vec<AssignedPort>> {
+  // Resolve the stack's server (same fallback as try_setup_stack_ingress).
+  let server_id = if !stack.config.server_id.is_empty() {
+    &stack.config.server_id
+  } else {
+    &stack.info.assigned_server
+  };
+  let server = match get_server_for_command(server_id).await {
+    Ok(s) => s,
+    Err(e) => {
+      warn!(
+        "ReadContainerPorts: failed to resolve server for Stack {} | {e:#}",
+        stack.name
+      );
+      return HashMap::new();
+    }
+  };
+  let periphery = match periphery_client(&server).await {
+    Ok(p) => p,
+    Err(e) => {
+      warn!(
+        "ReadContainerPorts: failed to connect to periphery for Stack {} | {e:#}",
+        stack.name
+      );
+      return HashMap::new();
+    }
+  };
+
+  let mut host_ports: HashMap<String, Vec<AssignedPort>> =
+    HashMap::new();
+  for svc in service_names {
+    match periphery
+      .request(ReadContainerPorts {
+        container_name: svc.container_name.clone(),
+      })
+      .await
+    {
+      Ok(r) => {
+        host_ports.insert(svc.service_name.clone(), r.ports);
+      }
+      Err(e) => {
+        warn!(
+          "ReadContainerPorts: query failed for Stack service {} ({}) | {e:#}",
+          svc.service_name, svc.container_name
+        );
+      }
+    }
+  }
+
+  let host_ports_bson =
+    database::mungos::mongodb::bson::to_bson(&host_ports)
+      .unwrap_or(database::mungos::mongodb::bson::Bson::Null);
+  if let Err(e) = database::mungos::by_id::update_one_by_id(
+    &db_client().stacks,
+    &stack.id,
+    database::mungos::update::Update::Set(
+      database::mungos::mongodb::bson::doc! {
+        "info.host_ports": host_ports_bson
+      },
+    ),
+    None,
+  )
+  .await
+  {
+    warn!(
+      "ReadContainerPorts: failed to persist host_ports for Stack {} | {e:#}",
+      stack.name
+    );
+  }
+
+  host_ports
 }
 
 /// Best-effort: set up DNS + Caddy ingress for a stack with
