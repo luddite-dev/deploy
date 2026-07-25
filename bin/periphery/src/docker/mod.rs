@@ -8,6 +8,7 @@ use command::{
 use komodo_client::entities::{
   TerminationSignal, docker::*, update::Log,
 };
+use shell_escape::unix::escape;
 
 pub mod compose;
 pub mod image;
@@ -121,9 +122,15 @@ pub async fn docker_login(
   };
 
   let cli = container_cli();
-  let log = run_shell_command(&format!(
-    "echo {registry_token} | {cli} login {domain} --username '{account}' --password-stdin",
-  ), CommandOptions::default())
+  let log = run_shell_command(
+    &format!(
+      "echo {} | {cli} login {} --username {} --password-stdin",
+      escape(registry_token.into()),
+      escape(domain.into()),
+      escape(account.into()),
+    ),
+    CommandOptions::default(),
+  )
   .await;
 
   if log.success() {
