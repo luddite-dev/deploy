@@ -60,12 +60,14 @@ pub async fn get_container_stats(
                            \"Name\":\"{{ .Name }}\", \
                            \"NetIO\":\"{{ .NetIO }}\",\
                            \"PIDs\":\"{{ .PIDs }}\"}'";
+  // `--` follows the flags, so a name beginning with `-` is not
+  // parsed as a flag and the flags are not parsed as container names.
   let container_name = match container_name {
-    Some(name) => format!(" {name}"),
+    Some(name) => format!(" -- {name}"),
     None => "".to_string(),
   };
   let command = format!(
-    "{} stats{container_name} --no-stream {format}",
+    "{} stats --no-stream {format}{container_name}",
     container_cli()
   );
   let output = run_standard_command(
