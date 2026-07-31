@@ -2379,6 +2379,22 @@ export interface ServerConfig {
 	ingress_enabled?: boolean;
 }
 
+/** Just the server alerting thresholds. */
+export interface ServerAlertingThresholds {
+	/** The percentage threshold which triggers WARNING state for CPU. */
+	cpu_warning: number;
+	/** The percentage threshold which triggers CRITICAL state for CPU. */
+	cpu_critical: number;
+	/** The percentage threshold which triggers WARNING state for MEM. */
+	mem_warning: number;
+	/** The percentage threshold which triggers CRITICAL state for MEM. */
+	mem_critical: number;
+	/** The percentage threshold which triggers WARNING state for DISK. */
+	disk_warning: number;
+	/** The percentage threshold which triggers CRITICAL state for DISK. */
+	disk_critical: number;
+}
+
 export enum ServerState {
 	/** Server health check passing. */
 	Ok = "Ok",
@@ -4439,6 +4455,8 @@ export interface ServerListItemInfo {
 	 * the server, message will be given here.
 	 */
 	err?: _Serror;
+	/** The server alerting thresholds. */
+	alerting_thresholds: ServerAlertingThresholds;
 	/** Region of the server. */
 	region: string;
 	/** Address of the server, or null if empty. */

@@ -96,6 +96,7 @@ impl super::KomodoResource for Server {
       info: ServerListItemInfo {
         state: status.as_ref().map(|s| s.state).unwrap_or_default(),
         err: status.as_ref().and_then(|s| s.err.clone()),
+        alerting_thresholds: (&server.config).into(),
         region: server.config.region,
         address: None,
         external_address: optional_string(
