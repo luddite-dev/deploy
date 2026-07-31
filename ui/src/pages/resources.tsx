@@ -127,7 +127,7 @@ export default function Resources({ _type }: { _type?: UsableResource }) {
       oppositeTitle={
         <Group w={{ base: "100%", xs: "fit-content" }}>
           {type === "Server" && <ServerShowStats />}
-          <ExportToml listQuery={{ type, query }} />
+          <ExportToml listQuery={{ type, query }} tags={tags} />
         </Group>
       }
     >
