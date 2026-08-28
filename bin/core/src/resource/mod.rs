@@ -58,13 +58,13 @@ mod action;
 mod alerter;
 mod build;
 mod builder;
-mod deployment;
+pub mod deployment;
 mod procedure;
 mod refresh;
 mod repo;
 mod server;
-mod stack;
-mod swarm;
+pub mod stack;
+pub mod stack_validation;
 mod sync;
 
 pub use action::{
@@ -833,7 +833,6 @@ pub async fn update<T: KomodoResource>(
 fn resource_target<T: KomodoResource>(id: String) -> ResourceTarget {
   match T::resource_type() {
     ResourceTargetVariant::System => ResourceTarget::System(id),
-    ResourceTargetVariant::Swarm => ResourceTarget::Swarm(id),
     ResourceTargetVariant::Server => ResourceTarget::Server(id),
     ResourceTargetVariant::Stack => ResourceTarget::Stack(id),
     ResourceTargetVariant::Deployment => {
@@ -1132,7 +1131,6 @@ where
 {
   let resource: ResourceTarget = resource.into();
   let (recent_field, id) = match resource {
-    ResourceTarget::Swarm(id) => ("recents.Swarm", id),
     ResourceTarget::Server(id) => ("recents.Server", id),
     ResourceTarget::Stack(id) => ("recents.Stack", id),
     ResourceTarget::Deployment(id) => ("recents.Deployment", id),
