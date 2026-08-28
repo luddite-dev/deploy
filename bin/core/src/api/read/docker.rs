@@ -243,24 +243,12 @@ impl Resolve<ReadArgs> for GetResourceMatchingContainer {
     )
     .await?;
 
-    // First check deployments with a matching custom container name.
-    // The empty check is required to avoid matching
-    // deployments with no custom name configured.
+    // Fork: no Deployment custom_name feature — check deployments by
+    // name/id only. The empty check is required to avoid matching
+    // deployments with an empty name when no container is passed.
     if !self.container.is_empty()
-      && let Ok(Some(deployment)) = db_client()
-        .deployments
-        .find_one(doc! { "config.custom_name": &self.container })
-        .await
-    {
-      return Ok(GetResourceMatchingContainerResponse {
-        resource: ResourceTarget::Deployment(deployment.id).into(),
-      });
-    }
-
-    // Then check deployments matching by name
-    if let Ok(deployment) =
-      resource::get::<Deployment>(&self.container).await
-      && deployment.custom_name() == self.container
+      && let Ok(deployment) =
+        resource::get::<Deployment>(&self.container).await
     {
       return Ok(GetResourceMatchingContainerResponse {
         resource: ResourceTarget::Deployment(deployment.id).into(),

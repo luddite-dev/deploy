@@ -74,17 +74,11 @@ impl Resolve<ReadArgs> for ListStacks {
         }
         StackSortBy::Host => {
           resource::ListItemSort::InMemory(Box::new(|a, b| {
-            let host_a = if a.info.swarm_id.is_empty() {
-              &a.info.server_name
-            } else {
-              &a.info.swarm_name
-            };
-            let host_b = if b.info.swarm_id.is_empty() {
-              &b.info.server_name
-            } else {
-              &b.info.swarm_name
-            };
-            host_a.cmp(host_b).then_with(|| a.name.cmp(&b.name))
+            // Fork: swarm support removed — host is always the server name.
+            a.info
+              .server_name
+              .cmp(&b.info.server_name)
+              .then_with(|| a.name.cmp(&b.name))
           }))
         }
         StackSortBy::State => {
