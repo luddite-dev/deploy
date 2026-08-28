@@ -23,7 +23,7 @@ use crate::{
   },
 };
 
-use super::{GitProvider, ImageRegistry, empty_or_redacted};
+use super::{DockerRegistry, GitProvider, empty_or_redacted};
 
 /// # Komodo Core Environment Variables
 ///
@@ -744,7 +744,7 @@ pub struct CoreConfig {
     alias = "docker_registries",
     skip_serializing_if = "Vec::is_empty"
   )]
-  pub image_registries: Vec<ImageRegistry>,
+  pub image_registries: Vec<DockerRegistry>,
 
   // ===========
   // = Secrets =
