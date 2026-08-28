@@ -22,6 +22,7 @@ export type ReadResponses = {
   // ==== DOCKER ====
   GetDockerContainersSummary: Types.GetDockerContainersSummaryResponse;
   ListAllDockerContainers: Types.ListAllDockerContainersResponse;
+  ListAllContainers: Types.ListAllContainersResponse;
   ListDockerContainers: Types.ListDockerContainersResponse;
   InspectDockerContainer: Types.InspectDockerContainerResponse;
   GetResourceMatchingContainer: Types.GetResourceMatchingContainerResponse;

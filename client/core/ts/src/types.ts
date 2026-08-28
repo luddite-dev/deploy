@@ -2850,10 +2850,14 @@ export interface SystemInformation {
 	kernel?: string;
 	/** Physical core count */
 	core_count?: number;
+	/** Logical core count. */
+	logical_core_count?: number;
 	/** System hostname based off DNS */
 	host_name?: string;
 	/** The CPU's brand */
 	cpu_brand: string;
+	/** CPU architecture (eg. x86_64, aarch64, arm64) */
+	cpu_arch: string;
 }
 
 export type GetSystemInformationResponse = SystemInformation;
@@ -4021,6 +4025,9 @@ export interface ContainerListItem {
 }
 
 export type ListAllDockerContainersResponse = ContainerListItem[];
+
+/** Current name for the all-server container listing response. */
+export type ListAllContainersResponse = ContainerListItem[];
 
 /**
  * Combined state options for
@@ -7434,6 +7441,15 @@ export interface LatestCommit {
 }
 
 /** List actions matching optional query. Response: [ListActionsResponse]. */
+export enum ActionSortBy {
+	/** Sort by name. Default. */
+	Name = "Name",
+	/** Sort by state. */
+	State = "State",
+	/** Sort by next scheduled run. */
+	NextRun = "NextRun",
+}
+
 export interface ListActions {
 	/** optional structured query to filter actions. */
 	query?: ActionQuery;
@@ -7453,9 +7469,22 @@ export interface ListActions {
 	 * across queries for more pages.
 	 */
 	limit?: U64;
+	/** Sort the results by this field. */
+	sort_by?: ActionSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
 }
 
 /** List alerters matching optional query. Response: [ListAlertersResponse]. */
+export enum AlerterSortBy {
+	/** Sort by name. Default. */
+	Name = "Name",
+	/** Sort by endpoint type. */
+	Type = "Type",
+	/** Sort by enabled. */
+	Enabled = "Enabled",
+}
+
 export interface ListAlerters {
 	/** Structured query to filter alerters. */
 	query?: AlerterQuery;
@@ -7475,6 +7504,10 @@ export interface ListAlerters {
 	 * across queries for more pages.
 	 */
 	limit?: U64;
+	/** Sort the results by this field. */
+	sort_by?: AlerterSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
 }
 
 /**
@@ -7583,6 +7616,26 @@ export interface ListAllDockerContainers {
 	sort_desc?: boolean;
 }
 
+/** Current name for listing containers across target servers. */
+export interface ListAllContainers {
+	/** Filter by server id or name. */
+	servers?: string[];
+	/** Filter servers by tag. */
+	tags?: string[];
+	/** Filter by container name. Returned names contain all terms. */
+	terms?: string[];
+	/** Filter by container state. */
+	state?: ContainerStateStatusEnum[];
+	/** Retrieve more results by incrementing the page. */
+	page?: U64;
+	/** Set the limit for number of containers per-page. */
+	limit?: U64;
+	/** Sort the results by this field. */
+	sort_by?: ContainerSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
+}
+
 /**
  * List all stack services part of the target stacks.
  * Response: [ListStackServicesResponse].
@@ -7653,6 +7706,15 @@ export interface ListBuildVersions {
 }
 
 /** List builders matching structured query. Response: [ListBuildersResponse]. */
+export enum BuilderSortBy {
+	/** Sort by name. Default. */
+	Name = "Name",
+	/** Sort by builder provider type. */
+	Provider = "Provider",
+	/** Sort by instance type. */
+	InstanceType = "InstanceType",
+}
+
 export interface ListBuilders {
 	query?: BuilderQuery;
 	/**
@@ -7671,9 +7733,22 @@ export interface ListBuilders {
 	 * across queries for more pages.
 	 */
 	limit?: U64;
+	/** Sort the results by this field. */
+	sort_by?: BuilderSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
 }
 
 /** List builds matching optional query. Response: [ListBuildsResponse]. */
+export enum BuildSortBy {
+	/** Sort by name. Default. */
+	Name = "Name",
+	/** Sort by source repo. */
+	Source = "Source",
+	/** Sort by state. */
+	State = "State",
+}
+
 export interface ListBuilds {
 	/** optional structured query to filter builds. */
 	query?: BuildQuery;
@@ -7693,6 +7768,10 @@ export interface ListBuilds {
 	 * across queries for more pages.
 	 */
 	limit?: U64;
+	/** Sort the results by this field. */
+	sort_by?: BuildSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
 }
 
 /**
@@ -7744,6 +7823,17 @@ export interface ListComposeProjects {
  * List deployments matching optional query.
  * Response: [ListDeploymentsResponse].
  */
+export enum DeploymentSortBy {
+	/** Sort by name. Default. */
+	Name = "Name",
+	/** Sort by image. */
+	Image = "Image",
+	/** Sort by host Server / Swarm name. */
+	Host = "Host",
+	/** Sort by state. */
+	State = "State",
+}
+
 export interface ListDeployments {
 	/** optional structured query to filter deployments. */
 	query?: DeploymentQuery;
@@ -7763,6 +7853,10 @@ export interface ListDeployments {
 	 * across queries for more pages.
 	 */
 	limit?: U64;
+	/** Sort the results by this field. */
+	sort_by?: DeploymentSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
 }
 
 /**
@@ -8056,6 +8150,10 @@ export interface ListFullStacks {
 	 * across queries for more pages.
 	 */
 	limit?: U64;
+	/** Sort the results by this field. */
+	sort_by?: StackSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
 }
 
 /**
@@ -8102,6 +8200,15 @@ export interface ListPermissions {
 }
 
 /** List procedures matching optional query. Response: [ListProceduresResponse]. */
+export enum ProcedureSortBy {
+	/** Sort by name. Default. */
+	Name = "Name",
+	/** Sort by state. */
+	State = "State",
+	/** Sort by next scheduled run. */
+	NextRun = "NextRun",
+}
+
 export interface ListProcedures {
 	/** optional structured query to filter procedures. */
 	query?: ProcedureQuery;
@@ -8121,9 +8228,24 @@ export interface ListProcedures {
 	 * across queries for more pages.
 	 */
 	limit?: U64;
+	/** Sort the results by this field. */
+	sort_by?: ProcedureSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
 }
 
 /** List repos matching optional query. Response: [ListReposResponse]. */
+export enum RepoSortBy {
+	/** Sort by name. Default. */
+	Name = "Name",
+	/** Sort by the git repo. */
+	Repo = "Repo",
+	/** Sort by branch. */
+	Branch = "Branch",
+	/** Sort by state. */
+	State = "State",
+}
+
 export interface ListRepos {
 	/** optional structured query to filter repos. */
 	query?: RepoQuery;
@@ -8143,9 +8265,24 @@ export interface ListRepos {
 	 * across queries for more pages.
 	 */
 	limit?: U64;
+	/** Sort the results by this field. */
+	sort_by?: RepoSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
 }
 
 /** List syncs matching optional query. Response: [ListResourceSyncsResponse]. */
+export enum ResourceSyncSortBy {
+	/** Sort by name. Default. */
+	Name = "Name",
+	/** Sort by source repo. */
+	Source = "Source",
+	/** Sort by branch. */
+	Branch = "Branch",
+	/** Sort by state. */
+	State = "State",
+}
+
 export interface ListResourceSyncs {
 	/** optional structured query to filter syncs. */
 	query?: ResourceSyncQuery;
@@ -8165,6 +8302,10 @@ export interface ListResourceSyncs {
 	 * across queries for more pages.
 	 */
 	limit?: U64;
+	/** Sort the results by this field. */
+	sort_by?: ResourceSyncSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
 }
 
 export enum ScheduleSortBy {
@@ -8230,6 +8371,17 @@ export interface ListSecrets {
 }
 
 /** List servers matching optional query. Response: [ListServersResponse]. */
+export enum ServerSortBy {
+	/** Sort by name. Default. */
+	Name = "Name",
+	/** Sort by region. */
+	Region = "Region",
+	/** Sort by periphery version. */
+	Version = "Version",
+	/** Sort by state. */
+	State = "State",
+}
+
 export interface ListServers {
 	/** optional structured query to filter servers. */
 	query?: ServerQuery;
@@ -8249,6 +8401,10 @@ export interface ListServers {
 	 * across queries for more pages.
 	 */
 	limit?: U64;
+	/** Sort the results by this field. */
+	sort_by?: ServerSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
 }
 
 /** Lists a specific stacks services (the containers). Response: [ListStackServicesResponse]. */
@@ -8258,6 +8414,17 @@ export interface ListStackServices {
 }
 
 /** List stacks matching optional query. Response: [ListStacksResponse]. */
+export enum StackSortBy {
+	/** Sort by name. Default. */
+	Name = "Name",
+	/** Sort by source repo. */
+	Source = "Source",
+	/** Sort by host Server / Swarm name. */
+	Host = "Host",
+	/** Sort by state. */
+	State = "State",
+}
+
 export interface ListStacks {
 	/** optional structured query to filter stacks. */
 	query?: StackQuery;
@@ -8277,6 +8444,10 @@ export interface ListStacks {
 	 * across queries for more pages.
 	 */
 	limit?: U64;
+	/** Sort the results by this field. */
+	sort_by?: StackSortBy;
+	/** Reverse the sort direction. */
+	sort_desc?: boolean;
 }
 
 /**
