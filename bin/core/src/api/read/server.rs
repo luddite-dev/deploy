@@ -73,7 +73,9 @@ impl Resolve<ReadArgs> for GetServersSummary {
         ServerState::NotOk => {
           res.unhealthy += 1;
         }
-        ServerState::Disabled => {
+        ServerState::Draining
+        | ServerState::Drained
+        | ServerState::Disabled => {
           if !server.template {
             res.disabled += 1;
           }

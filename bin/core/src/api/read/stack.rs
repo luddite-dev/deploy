@@ -19,7 +19,10 @@ use periphery_client::api::{
 };
 
 use crate::{
-  helpers::{periphery_client, query::get_all_tags},
+  helpers::{
+    periphery_client,
+    query::{get_all_tags, get_cached_stack_state},
+  },
   permission::get_check_permissions,
   resource,
   stack::setup_stack_execution,
@@ -97,12 +100,10 @@ impl Resolve<ReadArgs> for ListStacks {
       };
     let stacks = resource::list_items_for_user::<Stack>(
       self.query,
-      resource::ListItemsQueryOptions {
-        limit,
-        page: self.page,
-        sort_desc: self.sort_desc,
-        sort_by,
-      },
+      limit,
+      self.page,
+      self.sort_desc,
+      sort_by,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
@@ -432,78 +433,6 @@ impl Resolve<ReadArgs> for ListCommonStackBuildExtraArgs {
     let mut res = res.into_iter().collect::<Vec<_>>();
     res.sort();
     Ok(res)
-  }
-}
-
-impl Resolve<ReadArgs> for ListStacks {
-  async fn resolve(
-    self,
-    ReadArgs { user }: &ReadArgs,
-  ) -> mogh_error::Result<Vec<StackListItem>> {
-    let all_tags = if self.query.tags.is_empty() {
-      vec![]
-    } else {
-      get_all_tags(None).await?
-    };
-    let only_update_available = self.query.specific.update_available;
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    let stacks = resource::list_items_for_user::<Stack>(
-      self.query,
-      limit,
-      self.page,
-      user,
-      PermissionLevel::Read.into(),
-      &all_tags,
-      |stack| {
-        !only_update_available
-          || stack
-            .info
-            .services
-            .iter()
-            .any(|service| service.update_available)
-      },
-    )
-    .await?;
-    Ok(stacks)
-  }
-}
-
-impl Resolve<ReadArgs> for ListFullStacks {
-  async fn resolve(
-    self,
-    ReadArgs { user }: &ReadArgs,
-  ) -> mogh_error::Result<ListFullStacksResponse> {
-    let all_tags = if self.query.tags.is_empty() {
-      vec![]
-    } else {
-      get_all_tags(None).await?
-    };
-    let states = self.query.specific.states.clone();
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    Ok(
-      resource::list_full_for_user_filtered::<Stack, _>(
-        self.query,
-        limit,
-        self.page,
-        user,
-        PermissionLevel::Read.into(),
-        &all_tags,
-        |stack| {
-          let states = states.clone();
-          async move {
-            if states.is_empty()
-              || states
-                .contains(&get_cached_stack_state(&stack.id).await)
-            {
-              Some(stack)
-            } else {
-              None
-            }
-          }
-        },
-      )
-      .await?,
-    )
   }
 }
 
