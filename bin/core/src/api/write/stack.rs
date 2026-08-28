@@ -19,7 +19,6 @@ use komodo_client::{
     all_logs_success, komodo_timestamp,
     permission::PermissionLevel,
     repo::Repo,
-    resource::ResourceQuery,
     server::Server,
     stack::{
       Stack, StackInfo, StackServiceNames, StackServiceWithUpdate,

@@ -31,7 +31,7 @@ use crate::{
   permission::{get_check_permissions, list_resources_for_user},
   resource,
   stack::compose_container_match_regex,
-  state::{db_client, server_status_cache},
+  state::server_status_cache,
 };
 
 impl Resolve<ReadArgs> for GetContainersSummary {
