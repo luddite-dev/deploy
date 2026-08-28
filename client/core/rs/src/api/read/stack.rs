@@ -4,12 +4,10 @@ use typeshare::typeshare;
 
 use crate::entities::{
   SearchCombinator, U64,
-  docker::{
-    container::Container, service::SwarmService, stack::SwarmStack,
-  },
+  docker::container::Container,
   stack::{
     Stack, StackActionState, StackListItem, StackQuery, StackService,
-    StackServiceState, StackSortBy,
+    StackServiceState,
   },
   update::Log,
 };
@@ -208,9 +206,9 @@ pub struct ListAllStackServices {
   pub tags: Vec<String>,
 
   /// Filter by service name.
-  /// Returned services have names which contain all terms.
+  /// Supports wildcard matching syntax.
   #[serde(default)]
-  pub terms: Vec<String>,
+  pub services: Vec<String>,
 
   /// Filter by service state.
   #[serde(default)]
@@ -222,8 +220,7 @@ pub struct ListAllStackServices {
   pub page: U64,
 
   /// Set the limit for number of services per-page.
-  /// If not provided, uses the Core config
-  /// `default_pagination_limit` (default: 30).
+  /// `limit: 300` is default.
   ///
   /// Passing `limit: 0` returns all results (unlimited).
   ///
@@ -267,70 +264,6 @@ pub struct InspectStackContainer {
 
 #[typeshare]
 pub type InspectStackContainerResponse = Container;
-
-//
-
-#[cfg(feature = "utoipa")]
-#[utoipa::path(
-  post,
-  path = "/InspectStackSwarmService",
-  description = "Inspect a swarm service associated with a Stack.",
-  request_body(content = InspectStackSwarmService),
-  responses(
-    (status = 200, description = "The swarm service", body = InspectStackSwarmServiceResponse),
-  ),
-)]
-pub fn inspect_stack_swarm_service() {}
-
-/// Inspect a swarm service associated with a Stack.
-/// Response: [SwarmService].
-#[typeshare]
-#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
-#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
-#[empty_traits(KomodoReadRequest)]
-#[response(InspectStackSwarmServiceResponse)]
-#[error(mogh_error::Error)]
-pub struct InspectStackSwarmService {
-  /// Id or name
-  #[serde(alias = "id", alias = "name")]
-  pub stack: String,
-  /// The service name to inspect
-  pub service: String,
-}
-
-#[typeshare]
-pub type InspectStackSwarmServiceResponse = SwarmService;
-
-//
-
-#[cfg(feature = "utoipa")]
-#[utoipa::path(
-  post,
-  path = "/InspectStackSwarmInfo",
-  description = "Inspect swarm info associated with a Stack.",
-  request_body(content = InspectStackSwarmInfo),
-  responses(
-    (status = 200, description = "The swarm info", body = InspectStackSwarmInfoResponse),
-  ),
-)]
-pub fn inspect_stack_swarm_info() {}
-
-/// Inspect swarm info associated with a Stack.
-/// Response: [SwarmStack].
-#[typeshare]
-#[derive(Serialize, Deserialize, Debug, Clone, Resolve)]
-#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
-#[empty_traits(KomodoReadRequest)]
-#[response(InspectStackSwarmInfoResponse)]
-#[error(mogh_error::Error)]
-pub struct InspectStackSwarmInfo {
-  /// Id or name
-  #[serde(alias = "id", alias = "name")]
-  pub stack: String,
-}
-
-#[typeshare]
-pub type InspectStackSwarmInfoResponse = SwarmStack;
 
 //
 
@@ -490,6 +423,104 @@ pub struct ListCommonStackBuildExtraArgs {
 
 #[typeshare]
 pub type ListCommonStackBuildExtraArgsResponse = Vec<String>;
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/ListStacks",
+  description = "List stacks matching optional query.",
+  request_body(content = ListStacks),
+  responses(
+    (status = 200, description = "The list of stacks", body = ListStacksResponse),
+  ),
+)]
+pub fn list_stacks() {}
+
+/// List stacks matching optional query. Response: [ListStacksResponse].
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(ListStacksResponse)]
+#[error(mogh_error::Error)]
+pub struct ListStacks {
+  /// optional structured query to filter stacks.
+  #[serde(default)]
+  pub query: StackQuery,
+
+  /// Retrieve more results by incrementing the page.
+  /// `page: 0` is default.
+  #[serde(default)]
+  pub page: U64,
+
+  /// Set the limit for number of resources per-page.
+  /// `limit: 100` is default.
+  ///
+  /// Passing `limit: 0` returns all results (unlimited).
+  ///
+  /// Note: the page logic relies on this being consistent
+  /// across queries for more pages.
+  pub limit: Option<U64>,
+}
+
+#[typeshare]
+pub type ListStacksResponse = Vec<StackListItem>;
+
+//
+
+#[cfg(feature = "utoipa")]
+#[utoipa::path(
+  post,
+  path = "/ListFullStacks",
+  description = "List stacks matching optional query.",
+  request_body(content = ListFullStacks),
+  responses(
+    (status = 200, description = "The list of stacks", body = ListFullStacksResponse),
+  ),
+)]
+pub fn list_full_stacks() {}
+
+/// List stacks matching optional query. Response: [ListFullStacksResponse].
+#[typeshare]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Resolve)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[empty_traits(KomodoReadRequest)]
+#[response(ListFullStacksResponse)]
+#[error(mogh_error::Error)]
+pub struct ListFullStacks {
+  /// optional structured query to filter stacks.
+  #[serde(default)]
+  pub query: StackQuery,
+
+  /// Retrieve more results by incrementing the page.
+  /// `page: 0` is default.
+  #[serde(default)]
+  pub page: U64,
+
+  /// Set the limit for number of resources per-page.
+  /// `limit: 100` is default.
+  ///
+  /// Passing `limit: 0` returns all results (unlimited).
+  ///
+  /// Note: the page logic relies on this being consistent
+  /// across queries for more pages.
+  pub limit: Option<U64>,
+
+  /// Sort the results by this field.
+  /// Defaults to Name. Non-Name sorts are applied in memory
+  /// after querying all matching resources.
+  #[serde(default)]
+  pub sort_by: StackSortBy,
+
+  /// Reverse the sort direction.
+  #[serde(default)]
+  pub sort_desc: bool,
+}
+
+#[typeshare]
+pub type ListFullStacksResponse = Vec<Stack>;
 
 //
 
