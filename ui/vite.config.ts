@@ -17,8 +17,8 @@ export default defineConfig({
       // monaco-editor >= 0.53 has an exports map ("./*.js": "./esm/vs/*.js"),
       // so legacy deep imports from monaco-worker-manager no longer resolve.
       {
-        find: /^monaco-editor\/esm\/vs\/(.*)$/,
-        replacement: "monaco-editor/$1",
+        find: /^monaco-editor\/(?:esm\/vs\/)?(.*)$/,
+        replacement: `${path.dirname(require.resolve("monaco-editor/package.json"))}/esm/vs/$1`,
       },
     ],
     dedupe: [

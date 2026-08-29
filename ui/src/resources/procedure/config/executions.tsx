@@ -24,7 +24,6 @@ import { Types } from "komodo_client";
 import { CheckCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { quote as shellQuote, parse as shellParse } from "shell-quote";
-import TagMultiSelector from "@/components/tags/multi-selector";
 
 export type ExecutionType = Types.Execution["type"];
 
@@ -85,7 +84,7 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     ),
   },
   BatchRunProcedure: {
-    params: { pattern: "", tags: [] },
+    params: { pattern: "" },
     Component: ({ params, setParams, disabled }) => (
       <Group>
         <TextUpdateModal
@@ -100,13 +99,6 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
           disabled={disabled}
           useMonaco
           monacoLanguage="string_list"
-        />
-        <TagMultiSelector
-          title="Match Tags"
-          value={params.tags ?? []}
-          onChange={(tags) => setParams({ ...params, tags })}
-          disabled={disabled}
-          useName
         />
       </Group>
     ),
@@ -136,7 +128,7 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     ),
   },
   BatchRunAction: {
-    params: { pattern: "", tags: [] },
+    params: { pattern: "" },
     Component: ({ params, setParams, disabled }) => (
       <Group>
         <TextUpdateModal
@@ -151,13 +143,6 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
           disabled={disabled}
           useMonaco
           monacoLanguage="string_list"
-        />
-        <TagMultiSelector
-          title="Match Tags"
-          value={params.tags ?? []}
-          onChange={(tags) => setParams({ ...params, tags })}
-          disabled={disabled}
-          useName
         />
       </Group>
     ),
@@ -175,7 +160,7 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     ),
   },
   BatchRunBuild: {
-    params: { pattern: "", tags: [] },
+    params: { pattern: "" },
     Component: ({ params, setParams, disabled }) => (
       <Group>
         <TextUpdateModal
@@ -190,13 +175,6 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
           disabled={disabled}
           useMonaco
           monacoLanguage="string_list"
-        />
-        <TagMultiSelector
-          title="Match Tags"
-          value={params.tags ?? []}
-          onChange={(tags) => setParams({ ...params, tags })}
-          disabled={disabled}
-          useName
         />
       </Group>
     ),
@@ -227,7 +205,7 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     },
   },
   BatchDeploy: {
-    params: { pattern: "", tags: [] },
+    params: { pattern: "" },
     Component: ({ params, setParams, disabled }) => (
       <Group>
         <TextUpdateModal
@@ -242,13 +220,6 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
           disabled={disabled}
           useMonaco
           monacoLanguage="string_list"
-        />
-        <TagMultiSelector
-          title="Match Tags"
-          value={params.tags ?? []}
-          onChange={(tags) => setParams({ ...params, tags })}
-          disabled={disabled}
-          useName
         />
       </Group>
     ),
@@ -331,7 +302,7 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     ),
   },
   BatchDestroyDeployment: {
-    params: { pattern: "", tags: [] },
+    params: { pattern: "" },
     Component: ({ params, setParams, disabled }) => (
       <Group>
         <TextUpdateModal
@@ -346,13 +317,6 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
           disabled={disabled}
           useMonaco
           monacoLanguage="string_list"
-        />
-        <TagMultiSelector
-          title="Match Tags"
-          value={params.tags ?? []}
-          onChange={(tags) => setParams({ ...params, tags })}
-          disabled={disabled}
-          useName
         />
       </Group>
     ),
@@ -391,7 +355,7 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     },
   },
   BatchDeployStack: {
-    params: { pattern: "", tags: [] },
+    params: { pattern: "" },
     Component: ({ params, setParams, disabled }) => (
       <Group>
         <TextUpdateModal
@@ -406,13 +370,6 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
           disabled={disabled}
           useMonaco
           monacoLanguage="string_list"
-        />
-        <TagMultiSelector
-          title="Match Tags"
-          value={params.tags ?? []}
-          onChange={(tags) => setParams({ ...params, tags })}
-          disabled={disabled}
-          useName
         />
       </Group>
     ),
@@ -429,7 +386,7 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     ),
   },
   BatchDeployStackIfChanged: {
-    params: { pattern: "", tags: [] },
+    params: { pattern: "" },
     Component: ({ params, setParams, disabled }) => (
       <Group>
         <TextUpdateModal
@@ -444,13 +401,6 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
           disabled={disabled}
           useMonaco
           monacoLanguage="string_list"
-        />
-        <TagMultiSelector
-          title="Match Tags"
-          value={params.tags ?? []}
-          onChange={(tags) => setParams({ ...params, tags })}
-          disabled={disabled}
-          useName
         />
       </Group>
     ),
@@ -488,7 +438,7 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     },
   },
   BatchPullStack: {
-    params: { pattern: "", tags: [] },
+    params: { pattern: "" },
     Component: ({ params, setParams, disabled }) => (
       <Group>
         <TextUpdateModal
@@ -503,13 +453,6 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
           disabled={disabled}
           useMonaco
           monacoLanguage="string_list"
-        />
-        <TagMultiSelector
-          title="Match Tags"
-          value={params.tags ?? []}
-          onChange={(tags) => setParams({ ...params, tags })}
-          disabled={disabled}
-          useName
         />
       </Group>
     ),
@@ -707,7 +650,7 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     },
   },
   BatchDestroyStack: {
-    params: { pattern: "", tags: [] },
+    params: { pattern: "" },
     Component: ({ params, setParams, disabled }) => (
       <Group>
         <TextUpdateModal
@@ -722,13 +665,6 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
           disabled={disabled}
           useMonaco
           monacoLanguage="string_list"
-        />
-        <TagMultiSelector
-          title="Match Tags"
-          value={params.tags ?? []}
-          onChange={(tags) => setParams({ ...params, tags })}
-          disabled={disabled}
-          useName
         />
       </Group>
     ),
@@ -1009,7 +945,7 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     ),
   },
   BatchCloneRepo: {
-    params: { pattern: "", tags: [] },
+    params: { pattern: "" },
     Component: ({ params, setParams, disabled }) => (
       <Group>
         <TextUpdateModal
@@ -1024,13 +960,6 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
           disabled={disabled}
           useMonaco
           monacoLanguage="string_list"
-        />
-        <TagMultiSelector
-          title="Match Tags"
-          value={params.tags ?? []}
-          onChange={(tags) => setParams({ ...params, tags })}
-          disabled={disabled}
-          useName
         />
       </Group>
     ),
@@ -1047,7 +976,7 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     ),
   },
   BatchPullRepo: {
-    params: { pattern: "", tags: [] },
+    params: { pattern: "" },
     Component: ({ params, setParams, disabled }) => (
       <Group>
         <TextUpdateModal
@@ -1062,13 +991,6 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
           disabled={disabled}
           useMonaco
           monacoLanguage="string_list"
-        />
-        <TagMultiSelector
-          title="Match Tags"
-          value={params.tags ?? []}
-          onChange={(tags) => setParams({ ...params, tags })}
-          disabled={disabled}
-          useName
         />
       </Group>
     ),
@@ -1085,7 +1007,7 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
     ),
   },
   BatchBuildRepo: {
-    params: { pattern: "", tags: [] },
+    params: { pattern: "" },
     Component: ({ params, setParams, disabled }) => (
       <Group>
         <TextUpdateModal
@@ -1100,13 +1022,6 @@ export const PROCEDURE_EXECUTIONS: ProcedureExecutions = {
           disabled={disabled}
           useMonaco
           monacoLanguage="string_list"
-        />
-        <TagMultiSelector
-          title="Match Tags"
-          value={params.tags ?? []}
-          onChange={(tags) => setParams({ ...params, tags })}
-          disabled={disabled}
-          useName
         />
       </Group>
     ),
