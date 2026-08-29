@@ -27,14 +27,14 @@ export var FileFormat;
 })(FileFormat || (FileFormat = {}));
 export var ActionState;
 (function (ActionState) {
-    /** Unknown case */
-    ActionState["Unknown"] = "Unknown";
+    /** Currently running */
+    ActionState["Running"] = "Running";
     /** Last clone / pull successful (or never cloned) */
     ActionState["Ok"] = "Ok";
     /** Last clone / pull failed */
     ActionState["Failed"] = "Failed";
-    /** Currently running */
-    ActionState["Running"] = "Running";
+    /** Unknown case */
+    ActionState["Unknown"] = "Unknown";
 })(ActionState || (ActionState = {}));
 export var TagQueryBehavior;
 (function (TagQueryBehavior) {
@@ -251,11 +251,10 @@ export var DeploymentState;
     DeploymentState["Exited"] = "exited";
     /** Server mode only. Container is dead */
     DeploymentState["Dead"] = "dead";
-    /** Swarm mode only. Some tasks don't match their desired state. */
     DeploymentState["Unhealthy"] = "unhealthy";
     /** The deployment is not deployed (no matching Container / Service) */
     DeploymentState["NotDeployed"] = "not_deployed";
-    /** Server / Swarm not reachable for status */
+    /** Server not reachable for status */
     DeploymentState["Unknown"] = "unknown";
 })(DeploymentState || (DeploymentState = {}));
 /** Severity level of problem. */
@@ -428,11 +427,11 @@ export var ContainerStateStatusEnum;
 (function (ContainerStateStatusEnum) {
     ContainerStateStatusEnum["Running"] = "running";
     ContainerStateStatusEnum["Created"] = "created";
-    ContainerStateStatusEnum["Paused"] = "paused";
     ContainerStateStatusEnum["Restarting"] = "restarting";
-    ContainerStateStatusEnum["Exited"] = "exited";
     ContainerStateStatusEnum["Stopping"] = "stopping";
     ContainerStateStatusEnum["Removing"] = "removing";
+    ContainerStateStatusEnum["Paused"] = "paused";
+    ContainerStateStatusEnum["Exited"] = "exited";
     ContainerStateStatusEnum["Dead"] = "dead";
     ContainerStateStatusEnum["Empty"] = "";
 })(ContainerStateStatusEnum || (ContainerStateStatusEnum = {}));
@@ -535,15 +534,12 @@ export var PortTypeEnum;
 })(PortTypeEnum || (PortTypeEnum = {}));
 /**
  * Combined state options for
- * both Server and Swarm based Stacks.
+ * Server based Stacks.
  */
 export var StackServiceState;
 (function (StackServiceState) {
-    /** (Swarm) All tasks OK */
     StackServiceState["Healthy"] = "Healthy";
-    /** (Swarm) Some tasks don't match desired state */
     StackServiceState["Unhealthy"] = "Unhealthy";
-    /** (Swarm) All tasks down. */
     StackServiceState["Down"] = "Down";
     /** (Container) Container is running */
     StackServiceState["Running"] = "Running";
@@ -577,18 +573,18 @@ export var ProcedureState;
 })(ProcedureState || (ProcedureState = {}));
 export var RepoState;
 (function (RepoState) {
-    /** Unknown case */
-    RepoState["Unknown"] = "Unknown";
-    /** Last clone / pull successful (or never cloned) */
-    RepoState["Ok"] = "Ok";
-    /** Last clone / pull failed */
-    RepoState["Failed"] = "Failed";
     /** Currently cloning */
     RepoState["Cloning"] = "Cloning";
     /** Currently pulling */
     RepoState["Pulling"] = "Pulling";
     /** Currently building */
     RepoState["Building"] = "Building";
+    /** Last clone / pull successful (or never cloned) */
+    RepoState["Ok"] = "Ok";
+    /** Last clone / pull failed */
+    RepoState["Failed"] = "Failed";
+    /** Unknown case */
+    RepoState["Unknown"] = "Unknown";
 })(RepoState || (RepoState = {}));
 export var ResourceSyncState;
 (function (ResourceSyncState) {
@@ -672,6 +668,147 @@ export var EndpointPortConfigPublishModeEnum;
     EndpointPortConfigPublishModeEnum["INGRESS"] = "ingress";
     EndpointPortConfigPublishModeEnum["HOST"] = "host";
 })(EndpointPortConfigPublishModeEnum || (EndpointPortConfigPublishModeEnum = {}));
+export var ActionSortBy;
+(function (ActionSortBy) {
+    /** Sort by name. Default. */
+    ActionSortBy["Name"] = "Name";
+    /** Sort by state. */
+    ActionSortBy["State"] = "State";
+    /** Sort by next scheduled run. */
+    ActionSortBy["NextRun"] = "NextRun";
+})(ActionSortBy || (ActionSortBy = {}));
+export var AlerterSortBy;
+(function (AlerterSortBy) {
+    /** Sort by name. Default. */
+    AlerterSortBy["Name"] = "Name";
+    /** Sort by endpoint type. */
+    AlerterSortBy["Type"] = "Type";
+    /** Sort by enabled. */
+    AlerterSortBy["Enabled"] = "Enabled";
+})(AlerterSortBy || (AlerterSortBy = {}));
+export var ContainerSortBy;
+(function (ContainerSortBy) {
+    /** Sort by container name. Default. */
+    ContainerSortBy["Name"] = "Name";
+    /** Sort by host Server name. */
+    ContainerSortBy["Server"] = "Server";
+    /** Sort by container state. */
+    ContainerSortBy["State"] = "State";
+    /** Sort by image. */
+    ContainerSortBy["Image"] = "Image";
+    /** Sort by first network. */
+    ContainerSortBy["Networks"] = "Networks";
+    /** Sort by first port. */
+    ContainerSortBy["Ports"] = "Ports";
+    /** Sort by first volume. */
+    ContainerSortBy["Volumes"] = "Volumes";
+})(ContainerSortBy || (ContainerSortBy = {}));
+export var BuilderSortBy;
+(function (BuilderSortBy) {
+    /** Sort by name. Default. */
+    BuilderSortBy["Name"] = "Name";
+    /** Sort by builder provider type. */
+    BuilderSortBy["Provider"] = "Provider";
+    /** Sort by instance type. */
+    BuilderSortBy["InstanceType"] = "InstanceType";
+})(BuilderSortBy || (BuilderSortBy = {}));
+export var BuildSortBy;
+(function (BuildSortBy) {
+    /** Sort by name. Default. */
+    BuildSortBy["Name"] = "Name";
+    /** Sort by source repo. */
+    BuildSortBy["Source"] = "Source";
+    /** Sort by state. */
+    BuildSortBy["State"] = "State";
+})(BuildSortBy || (BuildSortBy = {}));
+export var DeploymentSortBy;
+(function (DeploymentSortBy) {
+    /** Sort by name. Default. */
+    DeploymentSortBy["Name"] = "Name";
+    /** Sort by image. */
+    DeploymentSortBy["Image"] = "Image";
+    /** Sort by host Server / Swarm name. */
+    DeploymentSortBy["Host"] = "Host";
+    /** Sort by state. */
+    DeploymentSortBy["State"] = "State";
+})(DeploymentSortBy || (DeploymentSortBy = {}));
+export var StackSortBy;
+(function (StackSortBy) {
+    /** Sort by name. Default. */
+    StackSortBy["Name"] = "Name";
+    /** Sort by source repo. */
+    StackSortBy["Source"] = "Source";
+    /** Sort by host Server / Swarm name. */
+    StackSortBy["Host"] = "Host";
+    /** Sort by state. */
+    StackSortBy["State"] = "State";
+})(StackSortBy || (StackSortBy = {}));
+export var ProcedureSortBy;
+(function (ProcedureSortBy) {
+    /** Sort by name. Default. */
+    ProcedureSortBy["Name"] = "Name";
+    /** Sort by state. */
+    ProcedureSortBy["State"] = "State";
+    /** Sort by next scheduled run. */
+    ProcedureSortBy["NextRun"] = "NextRun";
+})(ProcedureSortBy || (ProcedureSortBy = {}));
+export var RepoSortBy;
+(function (RepoSortBy) {
+    /** Sort by name. Default. */
+    RepoSortBy["Name"] = "Name";
+    /** Sort by the git repo. */
+    RepoSortBy["Repo"] = "Repo";
+    /** Sort by branch. */
+    RepoSortBy["Branch"] = "Branch";
+    /** Sort by state. */
+    RepoSortBy["State"] = "State";
+})(RepoSortBy || (RepoSortBy = {}));
+export var ResourceSyncSortBy;
+(function (ResourceSyncSortBy) {
+    /** Sort by name. Default. */
+    ResourceSyncSortBy["Name"] = "Name";
+    /** Sort by source repo. */
+    ResourceSyncSortBy["Source"] = "Source";
+    /** Sort by branch. */
+    ResourceSyncSortBy["Branch"] = "Branch";
+    /** Sort by state. */
+    ResourceSyncSortBy["State"] = "State";
+})(ResourceSyncSortBy || (ResourceSyncSortBy = {}));
+export var ScheduleSortBy;
+(function (ScheduleSortBy) {
+    /** Sort by target name. Default. */
+    ScheduleSortBy["Name"] = "Name";
+    /** Sort by the schedule expression. */
+    ScheduleSortBy["Schedule"] = "Schedule";
+    /** Sort by next scheduled run. */
+    ScheduleSortBy["NextRun"] = "NextRun";
+    /** Sort by enabled. */
+    ScheduleSortBy["Enabled"] = "Enabled";
+})(ScheduleSortBy || (ScheduleSortBy = {}));
+export var ServerSortBy;
+(function (ServerSortBy) {
+    /** Sort by name. Default. */
+    ServerSortBy["Name"] = "Name";
+    /** Sort by region. */
+    ServerSortBy["Region"] = "Region";
+    /** Sort by periphery version. */
+    ServerSortBy["Version"] = "Version";
+    /** Sort by state. */
+    ServerSortBy["State"] = "State";
+})(ServerSortBy || (ServerSortBy = {}));
+export var TerminalSortBy;
+(function (TerminalSortBy) {
+    /** Sort by name. Default. */
+    TerminalSortBy["Name"] = "Name";
+    /** Sort by target. */
+    TerminalSortBy["Target"] = "Target";
+    /** Sort by init command. */
+    TerminalSortBy["Command"] = "Command";
+    /** Sort by stored size. */
+    TerminalSortBy["Size"] = "Size";
+    /** Sort by created timestamp. */
+    TerminalSortBy["Created"] = "Created";
+})(TerminalSortBy || (TerminalSortBy = {}));
 export var ServiceUserQueryBehavior;
 (function (ServiceUserQueryBehavior) {
     /** Include service users in results. Default. */

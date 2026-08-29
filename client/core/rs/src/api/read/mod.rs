@@ -51,7 +51,7 @@ pub use user_group::*;
 pub use variable::*;
 
 use crate::entities::{
-  ResourceTarget, Timelength,
+  ResourceTarget, Timelength, U64,
   config::{DockerRegistry, GitProvider},
 };
 
@@ -59,10 +59,6 @@ use crate::entities::{
 pub mod openapi;
 
 pub trait KomodoReadRequest: HasResponse {}
-
-//
-
-pub const DEFAULT_LIST_LIMIT: u64 = 100;
 
 //
 
@@ -148,6 +144,8 @@ pub struct GetCoreInfoResponse {
   pub timezone: String,
   /// Public key for Core / Periphery authentication.
   pub public_key: String,
+  /// Default pagination limit for the UI to use.
+  pub default_pagination_limit: U64,
   /// The base domain for ingress DNS, if configured.
   pub ingress_base_domain: Option<String>,
   /// Whether the ingress DNS layer is enabled (provider is set).

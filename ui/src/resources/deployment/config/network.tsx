@@ -17,7 +17,7 @@ export default function DeploymentNetworkSelector({
   disabled,
 }: DeploymentNetworkSelectorProps) {
   const _networks =
-    useRead("ListDockerNetworks", { server: serverId! }, {
+    useRead("ListNetworks", { server: serverId! }, {
       enabled: !!serverId,
     })
       .data?.filter((network) => network.name)

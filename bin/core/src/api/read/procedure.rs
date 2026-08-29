@@ -3,19 +3,21 @@ use komodo_client::{
   api::read::*,
   entities::{
     permission::PermissionLevel,
-    procedure::{Procedure, ProcedureState},
+    procedure::{
+      Procedure, ProcedureListItem, ProcedureSortBy, ProcedureState,
+    },
   },
 };
 use mogh_resolver::Resolve;
 
 use crate::{
-  helpers::query::get_all_tags,
+  helpers::query::{get_all_tags, get_procedure_state},
   permission::get_check_permissions,
   resource,
   state::{action_states, procedure_state_cache},
 };
 
-use super::ReadArgs;
+use super::{ReadArgs, list_limit};
 
 impl Resolve<ReadArgs> for GetProcedure {
   async fn resolve(
@@ -43,15 +45,40 @@ impl Resolve<ReadArgs> for ListProcedures {
     } else {
       get_all_tags(None).await?
     };
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let states = self.query.specific.states.clone();
+    let limit = list_limit(self.limit);
+    let sort_by: resource::ListItemSort<ProcedureListItem> =
+      match self.sort_by {
+        ProcedureSortBy::Name => resource::ListItemSort::Name,
+        ProcedureSortBy::State => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .state
+              .cmp(&b.info.state)
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+        ProcedureSortBy::NextRun => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .next_scheduled_run
+              .cmp(&b.info.next_scheduled_run)
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+      };
     let procedures = resource::list_items_for_user::<Procedure>(
       self.query,
       limit,
       self.page,
+      self.sort_desc,
+      sort_by,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-      |_| true,
+      |procedure| {
+        states.is_empty() || states.contains(&procedure.info.state)
+      },
     )
     .await?;
     Ok(procedures)
@@ -68,15 +95,29 @@ impl Resolve<ReadArgs> for ListFullProcedures {
     } else {
       get_all_tags(None).await?
     };
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let states = self.query.specific.states.clone();
+    let limit = list_limit(self.limit);
     Ok(
-      resource::list_full_for_user::<Procedure>(
+      resource::list_full_for_user_filtered::<Procedure, _>(
         self.query,
-        limit as i64,
-        self.page * limit,
+        limit,
+        self.page,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
+        |procedure| {
+          let states = states.clone();
+          async move {
+            if states.is_empty()
+              || states
+                .contains(&get_procedure_state(&procedure.id).await)
+            {
+              Some(procedure)
+            } else {
+              None
+            }
+          }
+        },
       )
       .await?,
     )

@@ -12,9 +12,15 @@ export default defineConfig({
     allowedHosts: process.env.ALLOWED_HOSTS?.split(","),
   },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
+    alias: [
+      { find: "@", replacement: path.resolve(__dirname, "./src") },
+      // monaco-editor >= 0.53 has an exports map ("./*.js": "./esm/vs/*.js"),
+      // so legacy deep imports from monaco-worker-manager no longer resolve.
+      {
+        find: /^monaco-editor\/(?:esm\/vs\/)?(.*)$/,
+        replacement: `${path.dirname(require.resolve("monaco-editor/package.json"))}/esm/vs/$1`,
+      },
+    ],
     dedupe: [
       "@mantine/core",
       "@mantine/form",
@@ -31,6 +37,11 @@ export default defineConfig({
       "react-dom",
       "react-router-dom",
     ],
+  },
+  optimizeDeps: {
+    // path-browserify is a CJS dep of monaco-yaml's yaml.worker. Vite's dep
+    // scanner doesn't traverse `?worker` graphs, so force ESM prebundling.
+    include: ["path-browserify"],
   },
   css: {
     preprocessorOptions: {

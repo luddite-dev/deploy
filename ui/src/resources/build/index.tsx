@@ -1,5 +1,11 @@
 import { buildStateIntention } from "@/lib/color";
-import { useInvalidate, usePermissions, useRead, useWrite } from "@/lib/hooks";
+import {
+  useInvalidate,
+  useListItem,
+  usePermissions,
+  useRead,
+  useWrite,
+} from "@/lib/hooks";
 import { ICONS } from "@/lib/icons";
 import { RequiredResourceComponents } from "..";
 import { Types } from "komodo_client";
@@ -20,10 +26,12 @@ import { useState } from "react";
 import ResourceSelector from "../selector";
 import { hexColorByIntention } from "mogh_ui";
 
-export function useBuild(id: string | undefined, useName?: boolean) {
-  return useRead("ListBuilds", {}).data?.find((r) =>
-    useName ? r.name === id : r.id === id,
-  );
+export function useBuild(
+  id: string | undefined,
+  useName?: boolean,
+  refetchInterval?: number | false,
+) {
+  return useListItem("Build", id, useName, refetchInterval);
 }
 
 export function useFullBuild(id: string) {
@@ -33,9 +41,11 @@ export function useFullBuild(id: string) {
 export const BuildComponents: RequiredResourceComponents<
   Types.BuildConfig,
   Types.BuildInfo,
-  Types.BuildListItemInfo
+  Types.BuildListItemInfo,
+  Types.BuildQuerySpecifics
 > = {
-  useList: () => useRead("ListBuilds", {}).data,
+  useList: (query, limit, page) =>
+    useRead("ListBuilds", { query, limit, page }).data,
   useListItem: useBuild,
   useFull: useFullBuild,
 
@@ -106,8 +116,7 @@ export const BuildComponents: RequiredResourceComponents<
   Table: BuildTable,
 
   Icon: ({ id, size = "1rem", noColor }) => {
-    const state = useRead("ListBuilds", {}).data?.find((r) => r.id === id)?.info
-      .state;
+    const state = useBuild(id)?.info.state;
     const color = noColor
       ? undefined
       : state && hexColorByIntention(buildStateIntention(state));

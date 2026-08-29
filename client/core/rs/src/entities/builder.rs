@@ -256,14 +256,14 @@ impl MaybeNone for BuilderConfigDiff {
 impl From<PartialBuilderConfig> for BuilderConfig {
   fn from(value: PartialBuilderConfig) -> BuilderConfig {
     match value {
-      PartialBuilderConfig::Url(server) => {
-        BuilderConfig::Url(server.into())
+      PartialBuilderConfig::Url(config) => {
+        BuilderConfig::Url(config.into())
       }
-      PartialBuilderConfig::Server(server) => {
-        BuilderConfig::Server(server.into())
+      PartialBuilderConfig::Server(config) => {
+        BuilderConfig::Server(config.into())
       }
-      PartialBuilderConfig::Aws(builder) => {
-        BuilderConfig::Aws(builder.into())
+      PartialBuilderConfig::Aws(config) => {
+        BuilderConfig::Aws(config.into())
       }
     }
   }
@@ -440,11 +440,13 @@ pub struct ServerBuilderConfig {
     deserialize_with = "string_list_deserializer"
   )]
   #[partial_attr(serde(
+    default,
     alias = "server_id",
     alias = "server",
     alias = "servers",
     deserialize_with = "option_string_list_deserializer"
   ))]
+  #[builder(default)]
   #[cfg_attr(
     feature = "schemars",
     partial_attr(schemars(rename = "servers"))
@@ -631,6 +633,21 @@ impl utoipa::ToSchema for PartialAwsBuilderConfig {}
 
 #[typeshare]
 pub type BuilderQuery = ResourceQuery<BuilderQuerySpecifics>;
+
+#[typeshare]
+#[derive(
+  Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub enum BuilderSortBy {
+  /// Sort by name. Default.
+  #[default]
+  Name,
+  /// Sort by builder provider type.
+  Provider,
+  /// Sort by instance type.
+  InstanceType,
+}
 
 #[typeshare]
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]

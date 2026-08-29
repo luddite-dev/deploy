@@ -19,21 +19,9 @@ export default function StackServices({
   titleOther?: ReactNode;
 }) {
   const info = useStack(id)?.info;
-  const state = info?.state ?? Types.StackState.Unknown;
-  const services = useRead(
-    "ListStackServices",
-    { stack: id },
-    { refetchInterval: 10_000 },
-  ).data;
-
-  if (
-    !services ||
-    services.length === 0 ||
-    [Types.StackState.Unknown, Types.StackState.Down].includes(state)
-  ) {
-    // return <Section titleOther={titleOther}>No Services Available</Section>;
-    return null;
-  }
+  const services =
+    useRead("ListStackServices", { stack: id }, { refetchInterval: 10_000 })
+      .data ?? [];
 
   return (
     <Section titleOther={titleOther} mb="md">
@@ -50,6 +38,7 @@ export default function StackServices({
   );
 }
 
+
 function StackServicesServer({
   stackId,
   serverId,
@@ -59,6 +48,7 @@ function StackServicesServer({
   serverId: string;
   services: Types.ListStackServicesResponse;
 }) {
+  const isUnknown = useStack(stackId)?.info.state === Types.StackState.Unknown;
   return (
     <DataTable
       tableKey="StackServices"
@@ -84,8 +74,14 @@ function StackServicesServer({
             const state = row.original.container?.state;
             return (
               <StatusBadge
-                text={state}
-                intent={containerStateIntention(state)}
+                text={state ?? (isUnknown ? "Unknown" : "Down")}
+                intent={
+                  state
+                    ? containerStateIntention(state)
+                    : isUnknown
+                      ? "Unknown"
+                      : "Neutral"
+                }
               />
             );
           },

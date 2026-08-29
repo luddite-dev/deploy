@@ -6,7 +6,7 @@ use komodo_client::{
   entities::{
     deployment::{
       Deployment, DeploymentActionState, DeploymentConfig,
-      DeploymentListItem, DeploymentState,
+      DeploymentListItem, DeploymentSortBy, DeploymentState,
     },
     docker::container::{Container, ContainerStats},
     permission::PermissionLevel,
@@ -18,7 +18,10 @@ use mogh_resolver::Resolve;
 use periphery_client::api::{self, container::InspectContainer};
 
 use crate::{
-  helpers::{periphery_client, query::get_all_tags},
+  helpers::{
+    periphery_client,
+    query::{get_all_tags, get_deployment_state},
+  },
   permission::get_check_permissions,
   resource::{self, setup_deployment_execution},
   state::{
@@ -26,7 +29,7 @@ use crate::{
   },
 };
 
-use super::ReadArgs;
+use super::{ReadArgs, list_limit};
 
 impl Resolve<ReadArgs> for GetDeployment {
   async fn resolve(
@@ -55,11 +58,41 @@ impl Resolve<ReadArgs> for ListDeployments {
       get_all_tags(None).await?
     };
     let only_update_available = self.query.specific.update_available;
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let limit = list_limit(self.limit);
+    let sort_by: resource::ListItemSort<DeploymentListItem> =
+      match self.sort_by {
+        DeploymentSortBy::Name => resource::ListItemSort::Name,
+        DeploymentSortBy::Image => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .image
+              .cmp(&b.info.image)
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+        DeploymentSortBy::Host => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .server_name
+              .cmp(&b.info.server_name)
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+        DeploymentSortBy::State => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .state
+              .cmp(&b.info.state)
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+      };
     let deployments = resource::list_items_for_user::<Deployment>(
       self.query,
       limit,
       self.page,
+      self.sort_desc,
+      sort_by,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
@@ -82,15 +115,32 @@ impl Resolve<ReadArgs> for ListFullDeployments {
     } else {
       get_all_tags(None).await?
     };
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let states = self.query.specific.states.clone();
+    let limit = list_limit(self.limit);
     Ok(
-      resource::list_full_for_user::<Deployment>(
+      resource::list_full_for_user_filtered::<Deployment, _>(
         self.query,
-        limit as i64,
-        self.page * limit,
+        limit,
+        self.page,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
+        |deployment| {
+          let states = states.clone();
+          async move {
+            if states.is_empty()
+              || states.contains(
+                &get_deployment_state(&deployment.id)
+                  .await
+                  .unwrap_or_default(),
+              )
+            {
+              Some(deployment)
+            } else {
+              None
+            }
+          }
+        },
       )
       .await?,
     )

@@ -5,6 +5,7 @@ use komodo_client::{
     permission::PermissionLevel,
     sync::{
       ResourceSync, ResourceSyncActionState, ResourceSyncListItem,
+      ResourceSyncSortBy,
     },
   },
 };
@@ -15,7 +16,7 @@ use crate::{
   resource, state::action_states,
 };
 
-use super::ReadArgs;
+use super::{ReadArgs, list_limit};
 
 impl Resolve<ReadArgs> for GetResourceSync {
   async fn resolve(
@@ -43,12 +44,46 @@ impl Resolve<ReadArgs> for ListResourceSyncs {
     } else {
       get_all_tags(None).await?
     };
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let limit = list_limit(self.limit);
+    let sort_by: resource::ListItemSort<ResourceSyncListItem> =
+      match self.sort_by {
+        ResourceSyncSortBy::Name => resource::ListItemSort::Name,
+        ResourceSyncSortBy::Source => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .files_on_host
+              .cmp(&b.info.files_on_host)
+              .then_with(|| {
+                a.info.linked_repo_name.cmp(&b.info.linked_repo_name)
+              })
+              .then_with(|| a.info.repo.cmp(&b.info.repo))
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+        ResourceSyncSortBy::Branch => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .branch
+              .cmp(&b.info.branch)
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+        ResourceSyncSortBy::State => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .state
+              .cmp(&b.info.state)
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+      };
     Ok(
       resource::list_items_for_user::<ResourceSync>(
         self.query,
         limit,
         self.page,
+        self.sort_desc,
+        sort_by,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
@@ -69,7 +104,7 @@ impl Resolve<ReadArgs> for ListFullResourceSyncs {
     } else {
       get_all_tags(None).await?
     };
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let limit = list_limit(self.limit);
     Ok(
       resource::list_full_for_user::<ResourceSync>(
         self.query,

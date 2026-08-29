@@ -215,6 +215,8 @@ async fn list_terminals(
     .read(ListTerminals {
       target: None,
       use_names: true,
+      limit: Some(0),
+      ..Default::default()
     })
     .await?;
   if !terminals.is_empty() {
@@ -232,6 +234,8 @@ async fn list_schedules(
       .read(ListSchedules {
         tags: filters.tags.clone(),
         tag_behavior: Default::default(),
+        limit: Some(0),
+        ..Default::default()
       })
       .map(|res| res.map(|res| res
         .into_iter()
@@ -312,8 +316,10 @@ impl ListResources for ServerListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: Some(100),
+        limit: None,
         page: page.saturating_sub(1),
+        sort_by: Default::default(),
+        sort_desc: false,
       })
       .await?;
     let names = parse_wildcards(&filters.names);
@@ -368,8 +374,10 @@ impl ListResources for StackListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: Some(100),
+        limit: None,
         page: page.saturating_sub(1),
+        sort_by: Default::default(),
+        sort_desc: false
       })
     )?;
     stacks.iter_mut().for_each(|stack| {
@@ -445,8 +453,10 @@ impl ListResources for DeploymentListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: Some(100),
+        limit: None,
         page: page.saturating_sub(1),
+        sort_by: Default::default(),
+        sort_desc: false
       })
     )?;
     deployments.iter_mut().for_each(|deployment| {
@@ -523,8 +533,10 @@ impl ListResources for BuildListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: Some(100),
+        limit: None,
         page: page.saturating_sub(1),
+        sort_by: Default::default(),
+        sort_desc: false
       })
     )?;
     builds.iter_mut().for_each(|build| {
@@ -562,10 +574,7 @@ impl ListResources for BuildListItem {
       })
       .collect::<Vec<_>>();
     builds.sort_by(|a, b| {
-      a.name
-        .cmp(&b.name)
-        .then(a.info.builder_id.cmp(&b.info.builder_id))
-        .then(a.info.state.cmp(&b.info.state))
+      a.info.state.cmp(&b.info.state).then(a.name.cmp(&b.name))
     });
     Ok(builds)
   }
@@ -587,8 +596,10 @@ impl ListResources for RepoListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: Some(100),
+        limit: None,
         page: page.saturating_sub(1),
+        sort_by: Default::default(),
+        sort_desc: false,
       })
       .await?
       .into_iter()
@@ -638,8 +649,10 @@ impl ListResources for ProcedureListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: Some(100),
+        limit: None,
         page: page.saturating_sub(1),
+        sort_by: Default::default(),
+        sort_desc: false,
       })
       .await?
       .into_iter()
@@ -667,7 +680,7 @@ impl ListResources for ProcedureListItem {
         (Some(a), Some(b)) => return a.cmp(&b),
         (None, None) => {}
       }
-      a.name.cmp(&b.name).then(a.info.state.cmp(&b.info.state))
+      a.info.state.cmp(&b.info.state).then(a.name.cmp(&b.name))
     });
     Ok(procedures)
   }
@@ -689,8 +702,10 @@ impl ListResources for ActionListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: Some(100),
+        limit: None,
         page: page.saturating_sub(1),
+        sort_by: Default::default(),
+        sort_desc: false,
       })
       .await?
       .into_iter()
@@ -718,7 +733,7 @@ impl ListResources for ActionListItem {
         (Some(a), Some(b)) => return a.cmp(&b),
         (None, None) => {}
       }
-      a.name.cmp(&b.name).then(a.info.state.cmp(&b.info.state))
+      a.info.state.cmp(&b.info.state).then(a.name.cmp(&b.name))
     });
     Ok(actions)
   }
@@ -740,8 +755,10 @@ impl ListResources for ResourceSyncListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: Some(100),
+        limit: None,
         page: page.saturating_sub(1),
+        sort_by: Default::default(),
+        sort_desc: false,
       })
       .await?
       .into_iter()
@@ -766,7 +783,7 @@ impl ListResources for ResourceSyncListItem {
       })
       .collect::<Vec<_>>();
     syncs.sort_by(|a, b| {
-      a.name.cmp(&b.name).then(a.info.state.cmp(&b.info.state))
+      a.info.state.cmp(&b.info.state).then(a.name.cmp(&b.name))
     });
     Ok(syncs)
   }
@@ -788,8 +805,10 @@ impl ListResources for BuilderListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: Some(100),
+        limit: None,
         page: page.saturating_sub(1),
+        sort_by: Default::default(),
+        sort_desc: false,
       })
       .await?
       .into_iter()
@@ -823,8 +842,10 @@ impl ListResources for AlerterListItem {
           // .tag_behavior(TagQueryBehavior::Any)
           .templates(filters.templates)
           .build(),
-        limit: Some(100),
+        limit: None,
         page: page.saturating_sub(1),
+        sort_by: Default::default(),
+        sort_desc: false,
       })
       .await?
       .into_iter()

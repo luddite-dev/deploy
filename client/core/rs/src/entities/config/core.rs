@@ -115,6 +115,8 @@ pub struct Env {
 
   /// Override `transparent_mode`
   pub komodo_transparent_mode: Option<bool>,
+  /// Override `default_pagination_limit`
+  pub komodo_default_pagination_limit: Option<u64>,
   /// Override `ui_write_disabled`
   pub komodo_ui_write_disabled: Option<bool>,
   /// Override `enable_new_users`
@@ -387,6 +389,12 @@ pub struct CoreConfig {
   /// This will be populated by TZ env variable in addition to KOMODO_TIMEZONE.
   #[serde(default)]
   pub timezone: String,
+
+  /// Set the default pagination limit for the API and UI to use.
+  /// Default: 30
+  /// Recommended: 100 or less
+  #[serde(default = "default_default_pagination_limit")]
+  pub default_pagination_limit: u64,
 
   /// Disable user ability to use the UI to update resource configuration.
   #[serde(default)]
@@ -810,6 +818,10 @@ fn default_private_key() -> String {
   String::from("file:/config/keys/iroh.key")
 }
 
+fn default_default_pagination_limit() -> u64 {
+  30
+}
+
 fn default_ui_path() -> String {
   "/app/ui".to_string()
 }
@@ -893,6 +905,7 @@ impl Default for CoreConfig {
       iroh_secret_key: Default::default(),
       iroh_periphery_endpoint_ids: Default::default(),
       timezone: Default::default(),
+      default_pagination_limit: default_default_pagination_limit(),
       ui_write_disabled: Default::default(),
       disable_confirm_dialog: Default::default(),
       disable_websocket_reconnect: Default::default(),
@@ -978,6 +991,7 @@ impl CoreConfig {
       },
       iroh_periphery_endpoint_ids: config.iroh_periphery_endpoint_ids,
       timezone: config.timezone,
+      default_pagination_limit: config.default_pagination_limit,
       first_server_endpoint_id: config.first_server_endpoint_id,
       first_server_name: config.first_server_name,
       jwt_secret: empty_or_redacted(&config.jwt_secret),

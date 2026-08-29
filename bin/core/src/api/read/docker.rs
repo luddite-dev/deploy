@@ -9,7 +9,8 @@ use komodo_client::{
     deployment::Deployment,
     docker::{
       container::{
-        Container, ContainerListItem, ContainerStateStatusEnum,
+        Container, ContainerListItem, ContainerSortBy,
+        ContainerStateStatusEnum,
       },
       image::{Image, ImageHistoryResponseItem},
       network::Network,
@@ -22,16 +23,10 @@ use komodo_client::{
   },
 };
 use mogh_resolver::Resolve;
-use periphery_client::api::{
-  self as periphery,
-  container::InspectContainer,
-  docker::{
-    ImageHistory, InspectImage, InspectNetwork, InspectVolume,
-  },
-};
+use periphery_client::api as periphery;
 
 use crate::{
-  api::read::ReadArgs,
+  api::read::{ReadArgs, list_limit},
   helpers::{periphery_client, query::get_all_tags},
   permission::{get_check_permissions, list_resources_for_user},
   resource,
@@ -39,11 +34,11 @@ use crate::{
   state::server_status_cache,
 };
 
-impl Resolve<ReadArgs> for GetDockerContainersSummary {
+impl Resolve<ReadArgs> for GetContainersSummary {
   async fn resolve(
     self,
     ReadArgs { user }: &ReadArgs,
-  ) -> mogh_error::Result<GetDockerContainersSummaryResponse> {
+  ) -> mogh_error::Result<GetContainersSummaryResponse> {
     let servers = resource::list_full_for_user::<Server>(
       Default::default(),
       None,
@@ -55,7 +50,7 @@ impl Resolve<ReadArgs> for GetDockerContainersSummary {
     .await
     .context("failed to get servers from db")?;
 
-    let mut res = GetDockerContainersSummaryResponse::default();
+    let mut res = GetContainersSummaryResponse::default();
 
     for server in servers {
       let cache = server_status_cache()
@@ -81,11 +76,11 @@ impl Resolve<ReadArgs> for GetDockerContainersSummary {
   }
 }
 
-impl Resolve<ReadArgs> for ListAllDockerContainers {
+impl Resolve<ReadArgs> for ListAllContainers {
   async fn resolve(
     self,
     ReadArgs { user }: &ReadArgs,
-  ) -> mogh_error::Result<ListAllDockerContainersResponse> {
+  ) -> mogh_error::Result<ListAllContainersResponse> {
     let all_tags = if self.tags.is_empty() {
       vec![]
     } else {
@@ -105,14 +100,10 @@ impl Resolve<ReadArgs> for ListAllDockerContainers {
     .await?;
 
     let mut containers = Vec::<ContainerListItem>::new();
-    let mut skipped = 0;
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    let limit_usize = limit as usize;
-    // Eg. page 1 skips until after 100 containers, page 2 after 200.
-    let skip = limit.saturating_mul(self.page);
+    let limit = list_limit(self.limit);
     // Match terms case insensitively.
     let terms = self
-      .containers
+      .terms
       .iter()
       .map(|term| term.to_lowercase())
       .collect::<Vec<_>>();
@@ -124,42 +115,72 @@ impl Resolve<ReadArgs> for ListAllDockerContainers {
       let Some(docker) = &cache.docker else {
         continue;
       };
-      let more = docker
-        .containers
-        .iter()
-        .filter(|container| {
-          // Apply state filter if defined.
-          (self.state.is_empty() || self.state.contains(&container.state)) &&
-          // Apply terms filter if defined
-          (terms.is_empty()
-            // Match when all terms contained within a name.
-            || {
-              let name = container.name.to_lowercase();
-              terms.iter().all(|term| name.contains(term))
-            })
-        });
-      for container in more {
-        if skipped < skip {
-          skipped += 1;
-        } else {
-          // push and maybe early return
-          containers.push(container.clone());
-          if limit > 0 && containers.len() >= limit_usize {
-            return Ok(containers);
-          }
-        }
-      }
+      containers.extend(
+        docker
+          .containers
+          .iter()
+          .filter(|container| {
+            // Apply state filter if defined.
+            (self.state.is_empty() || self.state.contains(&container.state)) &&
+            // Apply terms filter if defined
+            (terms.is_empty()
+              // Match when all terms contained within a name.
+              || {
+                let name = container.name.to_lowercase();
+                terms.iter().all(|term| name.contains(term))
+              })
+          })
+          .cloned(),
+      );
     }
 
-    Ok(containers)
+    // The containers all come from the in memory status cache,
+    // so all matching containers are collected and sorted
+    // before applying pagination.
+    let compare = |a: &ContainerListItem, b: &ContainerListItem| {
+      match self.sort_by {
+        ContainerSortBy::Name => a.name.cmp(&b.name),
+        ContainerSortBy::Server => a.server_name.cmp(&b.server_name),
+        ContainerSortBy::State => a.state.cmp(&b.state),
+        ContainerSortBy::Image => a.image.cmp(&b.image),
+        ContainerSortBy::Networks => {
+          a.networks.first().cmp(&b.networks.first())
+        }
+        ContainerSortBy::Ports => a
+          .ports
+          .first()
+          .map(|port| port.private_port)
+          .cmp(&b.ports.first().map(|port| port.private_port)),
+        ContainerSortBy::Volumes => {
+          a.volumes.first().cmp(&b.volumes.first())
+        }
+      }
+      // Fall back to name based sorting for equal sort keys.
+      // Inside `compare`, so descending sorts are fully descending,
+      // matching the List<Resource> apis.
+      .then_with(|| a.name.cmp(&b.name))
+    };
+    if self.sort_desc {
+      containers.sort_by(|a, b| compare(b, a));
+    } else {
+      containers.sort_by(|a, b| compare(a, b));
+    }
+
+    let skip = limit.saturating_mul(self.page) as usize;
+    let take = if limit == 0 {
+      usize::MAX
+    } else {
+      limit as usize
+    };
+    Ok(containers.into_iter().skip(skip).take(take).collect())
   }
 }
 
-impl Resolve<ReadArgs> for ListDockerContainers {
+impl Resolve<ReadArgs> for ListContainers {
   async fn resolve(
     self,
     ReadArgs { user }: &ReadArgs,
-  ) -> mogh_error::Result<ListDockerContainersResponse> {
+  ) -> mogh_error::Result<ListContainersResponse> {
     let server = get_check_permissions::<Server>(
       &self.server,
       user,
@@ -177,7 +198,7 @@ impl Resolve<ReadArgs> for ListDockerContainers {
   }
 }
 
-impl Resolve<ReadArgs> for InspectDockerContainer {
+impl Resolve<ReadArgs> for InspectContainer {
   async fn resolve(
     self,
     ReadArgs { user }: &ReadArgs,
@@ -202,7 +223,7 @@ impl Resolve<ReadArgs> for InspectDockerContainer {
     }
     let res = periphery_client(&server)
       .await?
-      .request(InspectContainer {
+      .request(periphery::container::InspectContainer {
         name: self.container,
       })
       .await?;
@@ -221,9 +242,13 @@ impl Resolve<ReadArgs> for GetResourceMatchingContainer {
       PermissionLevel::Read.into(),
     )
     .await?;
-    // first check deployments
-    if let Ok(deployment) =
-      resource::get::<Deployment>(&self.container).await
+
+    // Fork: no Deployment custom_name feature — check deployments by
+    // name/id only. The empty check is required to avoid matching
+    // deployments with an empty name when no container is passed.
+    if !self.container.is_empty()
+      && let Ok(deployment) =
+        resource::get::<Deployment>(&self.container).await
     {
       return Ok(GetResourceMatchingContainerResponse {
         resource: ResourceTarget::Deployment(deployment.id).into(),
@@ -361,11 +386,11 @@ impl Resolve<ReadArgs> for ListComposeProjects {
   }
 }
 
-impl Resolve<ReadArgs> for ListDockerNetworks {
+impl Resolve<ReadArgs> for ListNetworks {
   async fn resolve(
     self,
     ReadArgs { user }: &ReadArgs,
-  ) -> mogh_error::Result<ListDockerNetworksResponse> {
+  ) -> mogh_error::Result<ListNetworksResponse> {
     let server = get_check_permissions::<Server>(
       &self.server,
       user,
@@ -383,7 +408,7 @@ impl Resolve<ReadArgs> for ListDockerNetworks {
   }
 }
 
-impl Resolve<ReadArgs> for InspectDockerNetwork {
+impl Resolve<ReadArgs> for InspectNetwork {
   async fn resolve(
     self,
     ReadArgs { user }: &ReadArgs,
@@ -408,17 +433,19 @@ impl Resolve<ReadArgs> for InspectDockerNetwork {
     }
     let res = periphery_client(&server)
       .await?
-      .request(InspectNetwork { name: self.network })
+      .request(periphery::docker::InspectNetwork {
+        name: self.network,
+      })
       .await?;
     Ok(res)
   }
 }
 
-impl Resolve<ReadArgs> for ListDockerImages {
+impl Resolve<ReadArgs> for ListImages {
   async fn resolve(
     self,
     ReadArgs { user }: &ReadArgs,
-  ) -> mogh_error::Result<ListDockerImagesResponse> {
+  ) -> mogh_error::Result<ListImagesResponse> {
     let server = get_check_permissions::<Server>(
       &self.server,
       user,
@@ -436,7 +463,7 @@ impl Resolve<ReadArgs> for ListDockerImages {
   }
 }
 
-impl Resolve<ReadArgs> for InspectDockerImage {
+impl Resolve<ReadArgs> for InspectImage {
   async fn resolve(
     self,
     ReadArgs { user }: &ReadArgs,
@@ -458,13 +485,13 @@ impl Resolve<ReadArgs> for InspectDockerImage {
     }
     let res = periphery_client(&server)
       .await?
-      .request(InspectImage { name: self.image })
+      .request(periphery::docker::InspectImage { name: self.image })
       .await?;
     Ok(res)
   }
 }
 
-impl Resolve<ReadArgs> for ListDockerImageHistory {
+impl Resolve<ReadArgs> for ListImageHistory {
   async fn resolve(
     self,
     ReadArgs { user }: &ReadArgs,
@@ -489,17 +516,17 @@ impl Resolve<ReadArgs> for ListDockerImageHistory {
     }
     let res = periphery_client(&server)
       .await?
-      .request(ImageHistory { name: self.image })
+      .request(periphery::docker::ImageHistory { name: self.image })
       .await?;
     Ok(res)
   }
 }
 
-impl Resolve<ReadArgs> for ListDockerVolumes {
+impl Resolve<ReadArgs> for ListVolumes {
   async fn resolve(
     self,
     ReadArgs { user }: &ReadArgs,
-  ) -> mogh_error::Result<ListDockerVolumesResponse> {
+  ) -> mogh_error::Result<ListVolumesResponse> {
     let server = get_check_permissions::<Server>(
       &self.server,
       user,
@@ -517,7 +544,7 @@ impl Resolve<ReadArgs> for ListDockerVolumes {
   }
 }
 
-impl Resolve<ReadArgs> for InspectDockerVolume {
+impl Resolve<ReadArgs> for InspectVolume {
   async fn resolve(
     self,
     ReadArgs { user }: &ReadArgs,
@@ -539,7 +566,7 @@ impl Resolve<ReadArgs> for InspectDockerVolume {
     }
     let res = periphery_client(&server)
       .await?
-      .request(InspectVolume { name: self.volume })
+      .request(periphery::docker::InspectVolume { name: self.volume })
       .await?;
     Ok(res)
   }

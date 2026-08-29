@@ -1,5 +1,5 @@
 import { serverStateIntention } from "@/lib/color";
-import { useExecute, useRead } from "@/lib/hooks";
+import { useExecute, useListItem, useRead } from "@/lib/hooks";
 import { ICONS } from "@/lib/icons";
 import { RequiredResourceComponents } from "..";
 import { Types } from "komodo_client";
@@ -24,22 +24,30 @@ import ServerDiskUsage from "./diskUsage";
 import ServerCpuUsage from "./stats/current/cpu";
 import { HoverError } from "mogh_ui";
 
-export function useServer(id: string | undefined, useName?: boolean) {
-  return useRead("ListServers", {}).data?.find((r) =>
-    useName ? r.name === id : r.id === id,
-  );
+export function useServer(
+  id: string | undefined,
+  useName?: boolean,
+  refetchInterval?: number | false,
+) {
+  return useListItem("Server", id, useName, refetchInterval);
 }
 
-export function useFullServer(id: string) {
-  return useRead("GetServer", { server: id }, { refetchInterval: 30_000 }).data;
+export function useFullServer(id: string | undefined) {
+  return useRead(
+    "GetServer",
+    { server: id! },
+    { refetchInterval: 30_000, enabled: !!id },
+  ).data;
 }
 
 export const ServerComponents: RequiredResourceComponents<
   Types.ServerConfig,
   Types.ServerInfo,
-  Types.ServerListItemInfo
+  Types.ServerListItemInfo,
+  Types.ServerQuerySpecifics
 > = {
-  useList: () => useRead("ListServers", {}).data,
+  useList: (query, limit, page) =>
+    useRead("ListServers", { query, limit, page }).data,
   useListItem: useServer,
   useFull: useFullServer,
 
@@ -96,9 +104,7 @@ export const ServerComponents: RequiredResourceComponents<
 
   Icon: ({ id, size = "1rem", noColor }) => {
     const coreVersion = useRead("GetVersion", {}).data?.version;
-    const info = useRead("ListServers", {}).data?.find(
-      (r) => r.id === id,
-    )?.info;
+    const info = useServer(id)?.info;
     const state = info?.state;
     const color = noColor
       ? undefined
@@ -202,7 +208,6 @@ export const ServerComponents: RequiredResourceComponents<
           { server: id },
           {
             enabled: isServerAvailable,
-            refetchInterval: 5000,
           },
         ).data?.core_count ?? 0;
       return (
@@ -228,7 +233,7 @@ export const ServerComponents: RequiredResourceComponents<
         { server: id },
         {
           enabled: isServerAvailable,
-          refetchInterval: 5000,
+          refetchInterval: 5_000,
         },
       ).data;
 
@@ -255,7 +260,7 @@ export const ServerComponents: RequiredResourceComponents<
         { server: id },
         {
           enabled: isServerAvailable,
-          refetchInterval: 5000,
+          refetchInterval: 5_000,
         },
       ).data;
       return (
@@ -279,7 +284,7 @@ export const ServerComponents: RequiredResourceComponents<
         { server: id },
         {
           enabled: isServerAvailable,
-          refetchInterval: 5000,
+          refetchInterval: 5_000,
         },
       ).data;
       const diskTotalGb = stats?.disks.reduce(
@@ -319,10 +324,10 @@ export const ServerComponents: RequiredResourceComponents<
       const starting = useRead(
         "GetServerActionState",
         { server: id },
-        { refetchInterval: 5000 },
+        { refetchInterval: 5_000 },
       ).data?.starting_containers;
       const dontShow =
-        useRead("ListDockerContainers", {
+        useRead("ListContainers", {
           server: id,
         }).data?.every(
           (container) =>
@@ -331,7 +336,7 @@ export const ServerComponents: RequiredResourceComponents<
       if (dontShow) {
         return null;
       }
-      const pending = isPending || starting;
+      const pending = isPending || !!starting;
       return (
         server && (
           <ConfirmButton
@@ -353,9 +358,9 @@ export const ServerComponents: RequiredResourceComponents<
       const restarting = useRead(
         "GetServerActionState",
         { server: id },
-        { refetchInterval: 5000 },
+        { refetchInterval: 5_000 },
       ).data?.restarting_containers;
-      const pending = isPending || restarting;
+      const pending = isPending || !!restarting;
       return (
         server && (
           <ConfirmModalWithDisable
@@ -377,10 +382,10 @@ export const ServerComponents: RequiredResourceComponents<
       const pausing = useRead(
         "GetServerActionState",
         { server: id },
-        { refetchInterval: 5000 },
+        { refetchInterval: 5_000 },
       ).data?.pausing_containers;
       const dontShow =
-        useRead("ListDockerContainers", {
+        useRead("ListContainers", {
           server: id,
         }).data?.every(
           (container) =>
@@ -389,7 +394,7 @@ export const ServerComponents: RequiredResourceComponents<
       if (dontShow) {
         return null;
       }
-      const pending = isPending || pausing;
+      const pending = isPending || !!pausing;
       return (
         server && (
           <ConfirmModalWithDisable
@@ -412,10 +417,10 @@ export const ServerComponents: RequiredResourceComponents<
       const unpausing = useRead(
         "GetServerActionState",
         { server: id },
-        { refetchInterval: 5000 },
+        { refetchInterval: 5_000 },
       ).data?.unpausing_containers;
       const dontShow =
-        useRead("ListDockerContainers", {
+        useRead("ListContainers", {
           server: id,
         }).data?.every(
           (container) =>
@@ -424,7 +429,7 @@ export const ServerComponents: RequiredResourceComponents<
       if (dontShow) {
         return null;
       }
-      const pending = isPending || unpausing;
+      const pending = isPending || !!unpausing;
       return (
         server && (
           <ConfirmButton
@@ -444,9 +449,9 @@ export const ServerComponents: RequiredResourceComponents<
       const stopping = useRead(
         "GetServerActionState",
         { server: id },
-        { refetchInterval: 5000 },
+        { refetchInterval: 5_000 },
       ).data?.stopping_containers;
-      const pending = isPending || stopping;
+      const pending = isPending || !!stopping;
       return (
         server && (
           <ConfirmModalWithDisable

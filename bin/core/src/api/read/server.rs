@@ -16,7 +16,8 @@ use komodo_client::{
   entities::{
     permission::PermissionLevel,
     server::{
-      Server, ServerActionState, ServerListItem, ServerState,
+      Server, ServerActionState, ServerListItem, ServerSortBy,
+      ServerState,
     },
     stats::{SystemInformation, SystemProcess},
   },
@@ -28,13 +29,16 @@ use reqwest::StatusCode;
 use tokio::sync::Mutex;
 
 use crate::{
-  helpers::{periphery_client, query::get_all_tags},
+  helpers::{
+    periphery_client,
+    query::{get_all_tags, get_cached_server_state},
+  },
   permission::get_check_permissions,
   resource,
   state::{action_states, db_client, server_status_cache},
 };
 
-use super::ReadArgs;
+use super::{ReadArgs, list_limit};
 
 impl Resolve<ReadArgs> for GetServersSummary {
   async fn resolve(
@@ -69,14 +73,13 @@ impl Resolve<ReadArgs> for GetServersSummary {
         ServerState::NotOk => {
           res.unhealthy += 1;
         }
-        ServerState::Disabled => {
+        ServerState::Draining
+        | ServerState::Drained
+        | ServerState::Disabled => {
           if !server.template {
             res.disabled += 1;
           }
         }
-        // Draining/Drained are intentional operator-driven states; not counted
-        // as healthy, unhealthy, or disabled.
-        ServerState::Draining | ServerState::Drained => {}
       }
     }
     Ok(res)
@@ -109,15 +112,43 @@ impl Resolve<ReadArgs> for ListServers {
     } else {
       get_all_tags(None).await?
     };
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let states = self.query.specific.states.clone();
+    let limit = list_limit(self.limit);
+    let sort_by: resource::ListItemSort<ServerListItem> =
+      match self.sort_by {
+        ServerSortBy::Name => resource::ListItemSort::Name,
+        ServerSortBy::Region => {
+          resource::ListItemSort::DbField("config.region")
+        }
+        ServerSortBy::Version => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .version
+              .cmp(&b.info.version)
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+        ServerSortBy::State => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .state
+              .cmp(&b.info.state)
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+      };
     let servers = resource::list_items_for_user::<Server>(
       self.query,
       limit,
       self.page,
+      self.sort_desc,
+      sort_by,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-      |_| true,
+      |server| {
+        states.is_empty() || states.contains(&server.info.state)
+      },
     )
     .await?;
     Ok(servers)
@@ -134,15 +165,29 @@ impl Resolve<ReadArgs> for ListFullServers {
     } else {
       get_all_tags(None).await?
     };
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let states = self.query.specific.states.clone();
+    let limit = list_limit(self.limit);
     Ok(
-      resource::list_full_for_user::<Server>(
+      resource::list_full_for_user_filtered::<Server, _>(
         self.query,
-        limit as i64,
-        self.page * limit,
+        limit,
+        self.page,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
+        |server| {
+          let states = states.clone();
+          async move {
+            if states.is_empty()
+              || states
+                .contains(&get_cached_server_state(&server.id).await)
+            {
+              Some(server)
+            } else {
+              None
+            }
+          }
+        },
       )
       .await?,
     )
@@ -329,7 +374,7 @@ impl Resolve<ReadArgs> for GetHistoricalServerStats {
     let curr_ts = unix_timestamp_ms() as i64;
     let mut curr_ts = curr_ts
       - curr_ts % granularity
-      - granularity * STATS_PER_PAGE * page as i64;
+      - granularity * (page as i64).saturating_mul(STATS_PER_PAGE);
     for _ in 0..STATS_PER_PAGE {
       ts_vec.push(curr_ts);
       curr_ts -= granularity;
@@ -343,7 +388,6 @@ impl Resolve<ReadArgs> for GetHistoricalServerStats {
       },
       FindOptions::builder()
         .sort(doc! { "ts": -1 })
-        .skip((page as u64).saturating_mul(STATS_PER_PAGE as u64))
         .limit(STATS_PER_PAGE)
         .build(),
     )

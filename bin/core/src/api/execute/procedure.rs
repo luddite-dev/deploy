@@ -120,7 +120,7 @@ fn resolve_inner(
 
     // This will set action state back to default when dropped.
     // Will also check to ensure procedure not already busy before updating.
-    let _action_guard =
+    let action_guard =
       action_state.update(|state| state.running = true)?;
 
     update_update(update.clone()).await?;
@@ -155,6 +155,10 @@ fn resolve_inner(
     }
 
     update.finalize();
+
+    // Drop action guard before updating
+    // clients to requery action state
+    drop(action_guard);
 
     // Need to manually update the update before cache refresh,
     // and before broadcast with add_update.

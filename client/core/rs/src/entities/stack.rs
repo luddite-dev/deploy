@@ -159,6 +159,9 @@ pub struct StackListItemInfo {
   pub file_contents: bool,
   /// Linked repo, if one is attached.
   pub linked_repo: String,
+  /// The name of the linked repo, if one is attached.
+  #[serde(default)]
+  pub linked_repo_name: String,
   /// The git provider domain
   pub git_provider: String,
   /// The configured repo
@@ -175,6 +178,8 @@ pub struct StackListItemInfo {
   /// If deployed, will be `deployed_services`.
   /// Otherwise, its `latest_services`
   pub services: Vec<StackServiceWithUpdate>,
+  /// Whether stack has auto_update_all_services enabled.
+  pub auto_update_all_services: bool,
   /// Whether the compose project is missing on the host.
   /// Ie, it does not show up in `docker compose ls`.
   /// If true, and the stack is not Down, this is an unhealthy state.
@@ -188,13 +193,21 @@ pub struct StackListItemInfo {
   pub latest_hash: Option<String>,
 }
 
+impl StackListItemInfo {
+  pub fn update_available(&self) -> bool {
+    self.services.iter().any(|s| s.update_available)
+  }
+}
+
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct StackServiceWithUpdate {
   pub service: String,
-  /// The service's image
+  /// The service's (current) image
   pub image: String,
+  /// The latest image (if different than current)
+  pub latest_image: Option<String>,
   /// Whether there is a newer image available for this service
   pub update_available: bool,
 }
@@ -922,6 +935,23 @@ pub type StackQuery = ResourceQuery<StackQuerySpecifics>;
 
 #[typeshare]
 #[derive(
+  Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub enum StackSortBy {
+  /// Sort by name. Default.
+  #[default]
+  Name,
+  /// Sort by source repo.
+  Source,
+  /// Sort by host Server / Swarm name.
+  Host,
+  /// Sort by state.
+  State,
+}
+
+#[typeshare]
+#[derive(
   Serialize, Deserialize, Debug, Clone, Default, DefaultBuilder,
 )]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
@@ -941,6 +971,10 @@ pub struct StackQuerySpecifics {
   /// Query only for Stack with available image updates.
   #[serde(default)]
   pub update_available: bool,
+  /// Query only for Stacks matching these states.
+  /// If empty, does not filter by state.
+  #[serde(default)]
+  pub states: Vec<StackState>,
 }
 
 impl super::resource::AddFilters for StackQuerySpecifics {

@@ -36,6 +36,9 @@ pub struct ResourceSyncListItemInfo {
   pub resource_path: Vec<String>,
   /// Linked repo, if one is attached.
   pub linked_repo: String,
+  /// The name of the linked repo, if one is attached.
+  #[serde(default)]
+  pub linked_repo_name: String,
   /// The git provider domain.
   pub git_provider: String,
   /// The Github repo used as the source of the sync resources
@@ -429,6 +432,23 @@ pub struct ResourceSyncActionState {
 #[typeshare]
 pub type ResourceSyncQuery =
   ResourceQuery<ResourceSyncQuerySpecifics>;
+
+#[typeshare]
+#[derive(
+  Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub enum ResourceSyncSortBy {
+  /// Sort by name. Default.
+  #[default]
+  Name,
+  /// Sort by source repo.
+  Source,
+  /// Sort by branch.
+  Branch,
+  /// Sort by state.
+  State,
+}
 
 #[typeshare]
 #[derive(

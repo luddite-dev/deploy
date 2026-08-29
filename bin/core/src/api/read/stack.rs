@@ -8,7 +8,7 @@ use komodo_client::{
     permission::PermissionLevel,
     stack::{
       Stack, StackActionState, StackListItem, StackQuery,
-      StackService, StackState,
+      StackService, StackSortBy, StackState,
     },
   },
 };
@@ -19,14 +19,17 @@ use periphery_client::api::{
 };
 
 use crate::{
-  helpers::{periphery_client, query::get_all_tags},
+  helpers::{
+    periphery_client,
+    query::{get_all_tags, get_cached_stack_state},
+  },
   permission::get_check_permissions,
   resource,
   stack::setup_stack_execution,
   state::{action_states, stack_status_cache},
 };
 
-use super::ReadArgs;
+use super::{ReadArgs, list_limit};
 
 impl Resolve<ReadArgs> for GetStack {
   async fn resolve(
@@ -38,6 +41,120 @@ impl Resolve<ReadArgs> for GetStack {
         &self.stack,
         user,
         PermissionLevel::Read.into(),
+      )
+      .await?,
+    )
+  }
+}
+
+impl Resolve<ReadArgs> for ListStacks {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<Vec<StackListItem>> {
+    let all_tags = if self.query.tags.is_empty() {
+      vec![]
+    } else {
+      get_all_tags(None).await?
+    };
+    let only_update_available = self.query.specific.update_available;
+    let states = self.query.specific.states.clone();
+    let limit = list_limit(self.limit);
+    let sort_by: resource::ListItemSort<StackListItem> =
+      match self.sort_by {
+        StackSortBy::Name => resource::ListItemSort::Name,
+        StackSortBy::Source => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .files_on_host
+              .cmp(&b.info.files_on_host)
+              .then_with(|| {
+                a.info.linked_repo_name.cmp(&b.info.linked_repo_name)
+              })
+              .then_with(|| a.info.repo.cmp(&b.info.repo))
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+        StackSortBy::Host => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            // Fork: swarm support removed — host is always the server name.
+            a.info
+              .server_name
+              .cmp(&b.info.server_name)
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+        StackSortBy::State => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .state
+              .cmp(&b.info.state)
+              .then_with(|| {
+                // Use ! with update available to order 'true' first
+                (!a.info.update_available())
+                  .cmp(&!b.info.update_available())
+              })
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+      };
+    let stacks = resource::list_items_for_user::<Stack>(
+      self.query,
+      limit,
+      self.page,
+      self.sort_desc,
+      sort_by,
+      user,
+      PermissionLevel::Read.into(),
+      &all_tags,
+      |stack| {
+        (!only_update_available
+          || stack
+            .info
+            .services
+            .iter()
+            .any(|service| service.update_available))
+          && (states.is_empty() || states.contains(&stack.info.state))
+      },
+    )
+    .await?;
+    Ok(stacks)
+  }
+}
+
+impl Resolve<ReadArgs> for ListFullStacks {
+  async fn resolve(
+    self,
+    ReadArgs { user }: &ReadArgs,
+  ) -> mogh_error::Result<ListFullStacksResponse> {
+    let all_tags = if self.query.tags.is_empty() {
+      vec![]
+    } else {
+      get_all_tags(None).await?
+    };
+    let states = self.query.specific.states.clone();
+    let limit = list_limit(self.limit);
+    Ok(
+      resource::list_full_for_user_filtered::<Stack, _>(
+        self.query,
+        limit,
+        self.page,
+        user,
+        PermissionLevel::Read.into(),
+        &all_tags,
+        |stack| {
+          let states = states.clone();
+          async move {
+            if states.is_empty()
+              || states
+                .contains(&get_cached_stack_state(&stack.id).await)
+            {
+              Some(stack)
+            } else {
+              None
+            }
+          }
+        },
       )
       .await?,
     )
@@ -93,7 +210,7 @@ impl Resolve<ReadArgs> for ListAllStackServices {
 
     let mut services = Vec::<StackService>::new();
     let mut skipped = 0;
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let limit = list_limit(self.limit);
     let limit_usize = limit as usize;
     // Eg. page 1 skips until after 100 services, page 2 after 200.
     let skip = limit.saturating_mul(self.page);
@@ -316,64 +433,6 @@ impl Resolve<ReadArgs> for ListCommonStackBuildExtraArgs {
     let mut res = res.into_iter().collect::<Vec<_>>();
     res.sort();
     Ok(res)
-  }
-}
-
-impl Resolve<ReadArgs> for ListStacks {
-  async fn resolve(
-    self,
-    ReadArgs { user }: &ReadArgs,
-  ) -> mogh_error::Result<Vec<StackListItem>> {
-    let all_tags = if self.query.tags.is_empty() {
-      vec![]
-    } else {
-      get_all_tags(None).await?
-    };
-    let only_update_available = self.query.specific.update_available;
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    let stacks = resource::list_items_for_user::<Stack>(
-      self.query,
-      limit,
-      self.page,
-      user,
-      PermissionLevel::Read.into(),
-      &all_tags,
-      |stack| {
-        !only_update_available
-          || stack
-            .info
-            .services
-            .iter()
-            .any(|service| service.update_available)
-      },
-    )
-    .await?;
-    Ok(stacks)
-  }
-}
-
-impl Resolve<ReadArgs> for ListFullStacks {
-  async fn resolve(
-    self,
-    ReadArgs { user }: &ReadArgs,
-  ) -> mogh_error::Result<ListFullStacksResponse> {
-    let all_tags = if self.query.tags.is_empty() {
-      vec![]
-    } else {
-      get_all_tags(None).await?
-    };
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
-    Ok(
-      resource::list_full_for_user::<Stack>(
-        self.query,
-        limit as i64,
-        self.page * limit,
-        user,
-        PermissionLevel::Read.into(),
-        &all_tags,
-      )
-      .await?,
-    )
   }
 }
 

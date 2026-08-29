@@ -568,6 +568,23 @@ pub type DeploymentQuery = ResourceQuery<DeploymentQuerySpecifics>;
 
 #[typeshare]
 #[derive(
+  Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub enum DeploymentSortBy {
+  /// Sort by name. Default.
+  #[default]
+  Name,
+  /// Sort by image.
+  Image,
+  /// Sort by host Server / Swarm name.
+  Host,
+  /// Sort by state.
+  State,
+}
+
+#[typeshare]
+#[derive(
   Debug, Clone, Default, Serialize, Deserialize, DefaultBuilder,
 )]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
@@ -587,6 +604,11 @@ pub struct DeploymentQuerySpecifics {
   /// Query only for Deployments with available image updates.
   #[serde(default)]
   pub update_available: bool,
+
+  /// Query only for Deployments matching these states.
+  /// If empty, does not filter by state.
+  #[serde(default)]
+  pub states: Vec<DeploymentState>,
 }
 
 impl super::resource::AddFilters for DeploymentQuerySpecifics {

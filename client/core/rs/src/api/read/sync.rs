@@ -6,7 +6,7 @@ use crate::entities::{
   U64,
   sync::{
     ResourceSync, ResourceSyncActionState, ResourceSyncListItem,
-    ResourceSyncQuery,
+    ResourceSyncQuery, ResourceSyncSortBy,
   },
 };
 
@@ -74,13 +74,24 @@ pub struct ListResourceSyncs {
   pub page: U64,
 
   /// Set the limit for number of resources per-page.
-  /// `limit: 100` is default.
+  /// If not provided, uses the Core config
+  /// `default_pagination_limit` (default: 30).
   ///
   /// Passing `limit: 0` returns all results (unlimited).
   ///
   /// Note: the page logic relies on this being consistent
   /// across queries for more pages.
   pub limit: Option<U64>,
+
+  /// Sort the results by this field.
+  /// Defaults to Name. Non-Name sorts are applied in memory
+  /// after querying all matching resources.
+  #[serde(default)]
+  pub sort_by: ResourceSyncSortBy,
+
+  /// Reverse the sort direction.
+  #[serde(default)]
+  pub sort_desc: bool,
 }
 
 #[typeshare]
@@ -118,7 +129,8 @@ pub struct ListFullResourceSyncs {
   pub page: U64,
 
   /// Set the limit for number of resources per-page.
-  /// `limit: 100` is default.
+  /// If not provided, uses the Core config
+  /// `default_pagination_limit` (default: 30).
   ///
   /// Passing `limit: 0` returns all results (unlimited).
   ///

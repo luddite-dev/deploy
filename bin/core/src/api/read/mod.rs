@@ -64,6 +64,12 @@ pub struct ReadArgs {
   pub user: User,
 }
 
+/// Resolve the page limit for List apis, falling back to the
+/// configured `default_pagination_limit` when not provided.
+fn list_limit(limit: Option<u64>) -> u64 {
+  limit.unwrap_or(core_config().default_pagination_limit)
+}
+
 #[typeshare]
 #[derive(
   Serialize, Deserialize, Debug, Clone, Resolve, EnumDiscriminants,
@@ -93,21 +99,21 @@ enum ReadRequest {
   ListTerminals(ListTerminals),
 
   // ==== DOCKER ====
-  GetDockerContainersSummary(GetDockerContainersSummary),
-  ListAllDockerContainers(ListAllDockerContainers),
-  ListDockerContainers(ListDockerContainers),
-  InspectDockerContainer(InspectDockerContainer),
+  GetContainersSummary(GetContainersSummary),
+  ListAllContainers(ListAllContainers),
+  ListContainers(ListContainers),
+  InspectContainer(InspectContainer),
   GetResourceMatchingContainer(GetResourceMatchingContainer),
   GetContainerLog(GetContainerLog),
   SearchContainerLog(SearchContainerLog),
   ListComposeProjects(ListComposeProjects),
-  ListDockerNetworks(ListDockerNetworks),
-  InspectDockerNetwork(InspectDockerNetwork),
-  ListDockerImages(ListDockerImages),
-  InspectDockerImage(InspectDockerImage),
-  ListDockerImageHistory(ListDockerImageHistory),
-  ListDockerVolumes(ListDockerVolumes),
-  InspectDockerVolume(InspectDockerVolume),
+  ListNetworks(ListNetworks),
+  InspectNetwork(InspectNetwork),
+  ListImages(ListImages),
+  InspectImage(InspectImage),
+  ListImageHistory(ListImageHistory),
+  ListVolumes(ListVolumes),
+  InspectVolume(InspectVolume),
 
   // ==== SERVER STATS ====
   GetSystemInformation(GetSystemInformation),
@@ -322,6 +328,7 @@ impl Resolve<ReadArgs> for GetCoreInfo {
         config.webhook_base_url.clone()
       },
       transparent_mode: config.transparent_mode,
+      default_pagination_limit: config.default_pagination_limit,
       ui_write_disabled: config.ui_write_disabled,
       disable_confirm_dialog: config.disable_confirm_dialog,
       disable_non_admin_create: config.disable_non_admin_create,

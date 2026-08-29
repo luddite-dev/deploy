@@ -1,4 +1,4 @@
-import { useRead, useResourceName, useSelectedResources } from "@/lib/hooks";
+import { useSelectedResources } from "@/lib/hooks";
 import { Types } from "komodo_client";
 import { ICONS } from "@/lib/icons";
 import { Group, BoxProps } from "@mantine/core";
@@ -8,19 +8,36 @@ import { DeploymentComponents } from ".";
 import ResourceLink from "@/resources/link";
 import DeploymentUpdateAvailable from "./update-available";
 
+const SORT_KEYS = ["Name", "Image", "Host", "State"];
+
 export default function DeploymentTable({
   resources,
+  onServerSort,
   ...boxProps
 }: {
   resources: Types.DeploymentListItem[];
+  /** When provided, sorting is handled server side,
+   * and sort updates are passed to this callback. */
+  onServerSort?: (sort: {
+    sort_by?: string;
+    sort_desc?: boolean;
+  }) => void;
 } & BoxProps) {
-  const serverName = useResourceName("Server");
-
   const [_, setSelectedResources] = useSelectedResources("Deployment");
 
   return (
     <DataTable
       {...boxProps}
+      manualSorting={!!onServerSort}
+      onSortingStateChange={
+        onServerSort &&
+        ((sorting) => {
+          const sort = sorting.find((s) => SORT_KEYS.includes(s.id));
+          onServerSort(
+            sort ? { sort_by: sort.id, sort_desc: sort.desc } : {},
+          );
+        })
+      }
       tableKey="deployments"
       data={resources}
       selectOptions={{
@@ -29,6 +46,7 @@ export default function DeploymentTable({
       }}
       columns={[
         {
+          id: "Name",
           accessorKey: "name",
           header: ({ column }) => (
             <SortableHeader column={column} title="Name" />
@@ -42,6 +60,7 @@ export default function DeploymentTable({
           size: 200,
         },
         {
+          id: "Image",
           accessorKey: "info.image",
           header: ({ column }) => (
             <SortableHeader column={column} title="Image" />
@@ -59,10 +78,11 @@ export default function DeploymentTable({
           header: ({ column }) => (
             <SortableHeader column={column} title="Host" />
           ),
+          id: "Host",
           accessorKey: "info.server_id",
           sortingFn: (a, b) => {
-            const name_a = serverName(a.original.info.server_id);
-            const name_b = serverName(b.original.info.server_id);
+            const name_a = a.original.info.server_name;
+            const name_b = b.original.info.server_name;
 
             if (!name_a && !name_b) return 0;
             if (!name_a) return 1;
@@ -78,6 +98,7 @@ export default function DeploymentTable({
           size: 200,
         },
         {
+          id: "State",
           accessorKey: "info.state",
           header: ({ column }) => (
             <SortableHeader column={column} title="State" />
@@ -103,21 +124,17 @@ const Image = ({
   buildId: string | undefined;
   image: string;
 }) => {
-  const builds = useRead("ListBuilds", {}).data;
   if (buildId) {
-    const build = builds?.find((build) => build.id === buildId);
-    if (build) {
-      return <ResourceLink type="Build" id={buildId} />;
-    } else {
-      return undefined;
-    }
+    return <ResourceLink type="Build" id={buildId} />;
   } else {
-    const [img] = image.split(":");
-    return (
-      <Group wrap="nowrap">
-        <ICONS.Image size="1rem" />
-        {img}
-      </Group>
-    );
+    const img = image?.split(":")?.[0];
+    if (img) {
+      return (
+        <Group wrap="nowrap">
+          <ICONS.Image size="1rem" />
+          {img}
+        </Group>
+      );
+    }
   }
 };

@@ -1,5 +1,5 @@
 import { deploymentStateIntention } from "@/lib/color";
-import { useRead } from "@/lib/hooks";
+import { useListItem, useRead } from "@/lib/hooks";
 import { ICONS } from "@/lib/icons";
 import { RequiredResourceComponents } from "..";
 import { Types } from "komodo_client";
@@ -26,10 +26,12 @@ import BatchExecutions from "@/components/batch-executions";
 import NewResourceWithDeployTarget from "../new-with-deploy-target";
 import { hexColorByIntention } from "mogh_ui";
 
-export function useDeployment(id: string | undefined, useName?: boolean) {
-  return useRead("ListDeployments", {}).data?.find((r) =>
-    useName ? r.name === id : r.id === id,
-  );
+export function useDeployment(
+  id: string | undefined,
+  useName?: boolean,
+  refetchInterval?: number | false,
+) {
+  return useListItem("Deployment", id, useName, refetchInterval);
 }
 
 export function useFullDeployment(id: string) {
@@ -43,9 +45,11 @@ export function useFullDeployment(id: string) {
 export const DeploymentComponents: RequiredResourceComponents<
   Types.DeploymentConfig,
   Types.DeploymentInfo,
-  Types.DeploymentListItemInfo
+  Types.DeploymentListItemInfo,
+  Types.DeploymentQuerySpecifics
 > = {
-  useList: () => useRead("ListDeployments", {}).data,
+  useList: (query, limit, page) =>
+    useRead("ListDeployments", { query, limit, page }).data,
   useListItem: useDeployment,
   useFull: useFullDeployment,
 
@@ -110,9 +114,7 @@ export const DeploymentComponents: RequiredResourceComponents<
   Table: DeploymentTable,
 
   Icon: ({ id, size = "1rem", noColor }) => {
-    const info = useRead("ListDeployments", {}).data?.find(
-      (r) => r.id === id,
-    )?.info;
+    const info = useDeployment(id)?.info;
     const color = noColor
       ? undefined
       : info &&
@@ -206,7 +208,7 @@ export const DeploymentComponents: RequiredResourceComponents<
     Ports: ({ id }) => {
       const deployment = useDeployment(id);
       const container = useRead(
-        "ListDockerContainers",
+        "ListContainers",
         {
           server: deployment?.info.server_id!,
         },

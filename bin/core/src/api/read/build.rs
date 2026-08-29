@@ -11,7 +11,9 @@ use komodo_client::{
   api::read::*,
   entities::{
     Operation,
-    build::{Build, BuildActionState, BuildListItem, BuildState},
+    build::{
+      Build, BuildActionState, BuildListItem, BuildSortBy, BuildState,
+    },
     permission::PermissionLevel,
     update::UpdateStatus,
   },
@@ -25,7 +27,7 @@ use crate::{
   state::{action_states, build_state_cache, db_client},
 };
 
-use super::ReadArgs;
+use super::{ReadArgs, list_limit};
 
 impl Resolve<ReadArgs> for GetBuild {
   async fn resolve(
@@ -53,15 +55,42 @@ impl Resolve<ReadArgs> for ListBuilds {
     } else {
       get_all_tags(None).await?
     };
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let states = self.query.specific.states.clone();
+    let limit = list_limit(self.limit);
+    let sort_by: resource::ListItemSort<BuildListItem> =
+      match self.sort_by {
+        BuildSortBy::Name => resource::ListItemSort::Name,
+        BuildSortBy::Source => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .files_on_host
+              .cmp(&b.info.files_on_host)
+              .then_with(|| {
+                a.info.linked_repo_name.cmp(&b.info.linked_repo_name)
+              })
+              .then_with(|| a.info.repo.cmp(&b.info.repo))
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+        BuildSortBy::State => {
+          resource::ListItemSort::InMemory(Box::new(|a, b| {
+            a.info
+              .state
+              .cmp(&b.info.state)
+              .then_with(|| a.name.cmp(&b.name))
+          }))
+        }
+      };
     let builds = resource::list_items_for_user::<Build>(
       self.query,
       limit,
       self.page,
+      self.sort_desc,
+      sort_by,
       user,
       PermissionLevel::Read.into(),
       &all_tags,
-      |_| true,
+      |build| states.is_empty() || states.contains(&build.info.state),
     )
     .await?;
     Ok(builds)
@@ -78,15 +107,29 @@ impl Resolve<ReadArgs> for ListFullBuilds {
     } else {
       get_all_tags(None).await?
     };
-    let limit = self.limit.unwrap_or(DEFAULT_LIST_LIMIT);
+    let states = self.query.specific.states.clone();
+    let limit = list_limit(self.limit);
     Ok(
-      resource::list_full_for_user::<Build>(
+      resource::list_full_for_user_filtered::<Build, _>(
         self.query,
-        limit as i64,
-        self.page * limit,
+        limit,
+        self.page,
         user,
         PermissionLevel::Read.into(),
         &all_tags,
+        |build| {
+          let states = states.clone();
+          async move {
+            if states.is_empty()
+              || states
+                .contains(&resource::get_build_state(&build.id).await)
+            {
+              Some(build)
+            } else {
+              None
+            }
+          }
+        },
       )
       .await?,
     )

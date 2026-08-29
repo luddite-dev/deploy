@@ -6,7 +6,7 @@ use crate::entities::{
   I64, SearchCombinator, U64,
   deployment::{
     Deployment, DeploymentActionState, DeploymentListItem,
-    DeploymentQuery, DeploymentState,
+    DeploymentQuery, DeploymentSortBy, DeploymentState,
   },
   docker::container::{Container, ContainerListItem, ContainerStats},
   update::Log,
@@ -77,13 +77,24 @@ pub struct ListDeployments {
   pub page: U64,
 
   /// Set the limit for number of resources per-page.
-  /// `limit: 100` is default.
+  /// If not provided, uses the Core config
+  /// `default_pagination_limit` (default: 30).
   ///
   /// Passing `limit: 0` returns all results (unlimited).
   ///
   /// Note: the page logic relies on this being consistent
   /// across queries for more pages.
   pub limit: Option<U64>,
+
+  /// Sort the results by this field.
+  /// Defaults to Name. Non-Name sorts are applied in memory
+  /// after querying all matching resources.
+  #[serde(default)]
+  pub sort_by: DeploymentSortBy,
+
+  /// Reverse the sort direction.
+  #[serde(default)]
+  pub sort_desc: bool,
 }
 
 #[typeshare]
@@ -122,7 +133,8 @@ pub struct ListFullDeployments {
   pub page: U64,
 
   /// Set the limit for number of resources per-page.
-  /// `limit: 100` is default.
+  /// If not provided, uses the Core config
+  /// `default_pagination_limit` (default: 30).
   ///
   /// Passing `limit: 0` returns all results (unlimited).
   ///

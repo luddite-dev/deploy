@@ -1,58 +1,88 @@
 import ContainerPorts from "@/components/docker/container-ports";
 import DockerResourceLink from "@/components/docker/link";
 import { containerStateIntention } from "@/lib/color";
-import { useRead, useTagsFilter } from "@/lib/hooks";
+import { useDebouncedTermSearch, useRead, useTagsFilter } from "@/lib/hooks";
+import { keepPreviousData } from "@tanstack/react-query";
+import { Types } from "komodo_client";
 import { ICONS } from "@/lib/icons";
-import { DataTable, SortableHeader, useDebounce } from "mogh_ui";
+import { DataTable, SortableHeader } from "mogh_ui";
 import { Page } from "mogh_ui";
 import { StatusBadge } from "mogh_ui";
-import { Group, MultiSelect, Pagination, Stack } from "@mantine/core";
-import { useCallback, useMemo, useState } from "react";
+import { Group, Stack } from "@mantine/core";
+import { useEffect, useMemo, useState } from "react";
 import { DividedChildren } from "mogh_ui";
 import ResourceLink from "@/resources/link";
 import { SearchInput } from "mogh_ui";
 import TagsFilter from "@/components/tags/filter";
+import ResourceMultiSelector from "@/resources/multi-selector";
+import ListPagination from "@/components/list-pagination";
+
+const CONTAINER_SORT_KEYS = Object.values(Types.ContainerSortBy);
 
 export default function Containers() {
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
   const [selectedServers, setSelectedServers] = useState<string[]>([]);
 
-  const debouncedSearch = useDebounce(search, 700);
-  const containersQuery = useMemo(
-    () => debouncedSearch.split(" ").filter((term) => term),
-    [debouncedSearch],
-  );
+  const [page, setPage] = useState(0);
 
-  const servers = useRead("ListServers", {}).data;
-  const serverNames = useMemo(
-    () => servers?.map((server) => server.name) || [],
-    [servers],
-  );
-
-  const serverName = useCallback(
-    (id: string) => servers?.find((server) => server.id === id)?.name,
-    [servers],
-  );
+  const { search, setSearch, terms } = useDebouncedTermSearch({
+    onUpdate: () => setPage(0),
+  });
 
   const tags = useTagsFilter();
 
-  const containers =
-    useRead("ListAllDockerContainers", {
-      containers: containersQuery,
-      servers: selectedServers,
-      tags,
-      page,
-      limit: 300,
-    }).data ?? [];
+  // Server side sort, passed up from the table.
+  const [sort, setSort] = useState<{
+    sort_by?: Types.ContainerSortBy;
+    sort_desc?: boolean;
+  }>({});
 
-  const Table = useMemo(() => {
-    return (
+  // Set to page 0 whenever any filter or the sort changes,
+  // otherwise the query can point past the last page and come back empty.
+  useEffect(() => {
+    setPage(0);
+  }, [selectedServers, tags, sort.sort_by, sort.sort_desc]);
+
+  const containers =
+    useRead(
+      "ListAllContainers",
+      {
+        terms,
+        servers: selectedServers,
+        tags,
+        page,
+        sort_by: sort.sort_by,
+        sort_desc: sort.sort_desc,
+      },
+      {
+        refetchInterval: 15_000,
+        // Keep the previous rows visible while fetching after a query key
+        // change (page / sort / search / filters) to prevent table flashing.
+        placeholderData: keepPreviousData,
+      },
+    ).data ?? [];
+
+  const Table = useMemo(
+    () => (
       <DataTable
         data={containers}
         tableKey="containers-page-v1"
+        manualSorting
+        onSortingStateChange={(sorting) => {
+          const sort = sorting.find((s) =>
+            CONTAINER_SORT_KEYS.includes(s.id as Types.ContainerSortBy),
+          );
+          setSort(
+            sort
+              ? {
+                  sort_by: sort.id as Types.ContainerSortBy,
+                  sort_desc: sort.desc,
+                }
+              : {},
+          );
+        }}
         columns={[
           {
+            id: "Name",
             accessorKey: "name",
             size: 260,
             header: ({ column }) => (
@@ -67,11 +97,12 @@ export default function Containers() {
             ),
           },
           {
+            id: "Server",
             accessorKey: "server_id",
             size: 200,
             sortingFn: (a, b) => {
-              const sa = serverName(a.original.server_id!);
-              const sb = serverName(b.original.server_id!);
+              const sa = a.original.server_name;
+              const sb = b.original.server_name;
 
               if (!sa && !sb) return 0;
               if (!sa) return -1;
@@ -89,6 +120,7 @@ export default function Containers() {
             ),
           },
           {
+            id: "State",
             accessorKey: "state",
             size: 160,
             header: ({ column }) => (
@@ -105,6 +137,7 @@ export default function Containers() {
             },
           },
           {
+            id: "Image",
             accessorKey: "image",
             size: 300,
             header: ({ column }) => (
@@ -120,6 +153,7 @@ export default function Containers() {
             ),
           },
           {
+            id: "Networks",
             accessorKey: "networks.0",
             size: 200,
             header: ({ column }) => (
@@ -127,7 +161,7 @@ export default function Containers() {
             ),
             cell: ({ row }) =>
               (row.original.networks?.length ?? 0) > 0 ? (
-                <DividedChildren>
+                <DividedChildren wrap="nowrap" gap="xs">
                   {row.original.networks?.map((network) => (
                     <DockerResourceLink
                       key={network}
@@ -148,6 +182,7 @@ export default function Containers() {
               ),
           },
           {
+            id: "Ports",
             accessorKey: "ports.0",
             size: 200,
             sortingFn: (a, b) => {
@@ -178,13 +213,14 @@ export default function Containers() {
             ),
           },
           {
+            id: "Volumes",
             accessorKey: "volumes.0",
             size: 200,
             header: ({ column }) => (
               <SortableHeader column={column} title="Volumes" />
             ),
             cell: ({ row }) => (
-              <DividedChildren>
+              <DividedChildren wrap="nowrap" gap="xs">
                 {row.original.volumes?.map((volume) => (
                   <DockerResourceLink
                     key={volume}
@@ -198,39 +234,29 @@ export default function Containers() {
           },
         ]}
       />
-    );
-  }, [serverName, containers]);
+    ),
+    [containers],
+  );
 
   return (
     <Page
       title="Containers"
       icon={ICONS.Container}
-      description="See all containers across all servers."
+      description="See containers across all servers."
     >
       <Stack>
         <Group justify="space-between">
           <Group w={{ base: "100%", xs: "fit-content" }}>
-            <MultiSelect
-              placeholder="Filter by Servers"
+            <ResourceMultiSelector
+              type="Server"
               value={selectedServers}
               onChange={setSelectedServers}
-              data={serverNames}
-              searchable
-              clearable
             />
-            {/* PAGINATION */}
-            <Pagination.Root
-              total={containers.length >= 300 ? page + 2 : page + 1}
-              value={page + 1}
-              onChange={(page) => setPage(page - 1)}
-            >
-              <Group gap="0.2rem" justify="center">
-                <Pagination.First />
-                <Pagination.Previous />
-                <Pagination.Items />
-                <Pagination.Next />
-              </Group>
-            </Pagination.Root>
+            <ListPagination
+              page={page}
+              setPage={setPage}
+              count={containers.length}
+            />
           </Group>
 
           <Group w={{ base: "100%", xs: "fit-content" }}>

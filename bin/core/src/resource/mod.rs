@@ -1,5 +1,6 @@
 use std::{
   collections::{HashMap, HashSet},
+  future::Future,
   str::FromStr,
 };
 
@@ -70,7 +71,8 @@ pub use action::{
   refresh_action_state_cache, spawn_action_state_refresh_loop,
 };
 pub use build::{
-  refresh_build_state_cache, spawn_build_state_refresh_loop,
+  get_build_state, refresh_build_state_cache,
+  spawn_build_state_refresh_loop,
 };
 pub use deployment::setup_deployment_execution;
 pub use procedure::{
@@ -82,7 +84,8 @@ pub use refresh::{
   spawn_resource_refresh_loop,
 };
 pub use repo::{
-  refresh_repo_state_cache, spawn_repo_state_refresh_loop,
+  get_repo_state, refresh_repo_state_cache,
+  spawn_repo_state_refresh_loop,
 };
 pub use server::{rotate_server_keys, update_server_public_key};
 
@@ -289,6 +292,8 @@ pub async fn list_items_for_user<T: KomodoResource>(
   mut query: ResourceQuery<T::QuerySpecifics>,
   limit: u64,
   page: u64,
+  sort_desc: bool,
+  sort_by: ListItemSort<T::ListItem>,
   user: &User,
   permission: PermissionLevelAndSpecifics,
   all_tags: &[Tag],
@@ -302,41 +307,96 @@ pub async fn list_items_for_user<T: KomodoResource>(
     crate::permission::load_list_permits::<T>(user, permission)
       .await?;
 
-  let mut cursor = T::coll()
-    .find(filters)
-    .sort(doc! { "name": 1 })
-    .await
-    .with_context(|| {
+  let direction = if sort_desc { -1 } else { 1 };
+  let sort = match &sort_by {
+    ListItemSort::Name => doc! { "name": direction },
+    // Db field sorts use ascending name as the secondary sort.
+    ListItemSort::DbField(field) => {
+      doc! { *field: direction, "name": 1 }
+    }
+    // In-memory sorts pull items in ascending name db order,
+    // keeping name as the stable tiebreak for equal sort keys.
+    ListItemSort::InMemory(_) => doc! { "name": 1 },
+  };
+
+  let mut cursor =
+    T::coll().find(filters).sort(sort).await.with_context(|| {
       format!("Failed to query db for {}s", T::resource_type())
     })?;
 
-  let skip = page.saturating_mul(limit);
-  let mut skipped = 0;
+  let skip = page.saturating_mul(limit) as usize;
+  let take = if limit == 0 {
+    usize::MAX
+  } else {
+    limit as usize
+  };
   let mut items = Vec::new();
 
-  while let Some(resource) = cursor
-    .try_next()
-    .await
-    .context("Failed to pull next resource from db cursor")?
-  {
-    if !permits.permitted::<T>(&resource).await? {
-      continue;
+  if let ListItemSort::InMemory(compare) = sort_by {
+    // The sort can only be applied after all matching items
+    // are collected, so pagination also happens after the sort.
+    while let Some(resource) = cursor
+      .try_next()
+      .await
+      .context("Failed to pull next resource from db cursor")?
+    {
+      if !permits.permitted::<T>(&resource).await? {
+        continue;
+      }
+      let item = T::to_list_item(resource).await;
+      if !filter(&item) {
+        continue;
+      }
+      items.push(item);
     }
-    let item = T::to_list_item(resource).await;
-    if !filter(&item) {
-      continue;
+    // Stable sort keeps equal sort keys in ascending
+    // name order for both directions.
+    if sort_desc {
+      items.sort_by(|a, b| compare(b, a));
+    } else {
+      items.sort_by(|a, b| compare(a, b));
     }
-    if skipped < skip {
-      skipped += 1;
-      continue;
+    Ok(items.into_iter().skip(skip).take(take).collect())
+  } else {
+    let mut skipped = 0;
+    while let Some(resource) = cursor
+      .try_next()
+      .await
+      .context("Failed to pull next resource from db cursor")?
+    {
+      if !permits.permitted::<T>(&resource).await? {
+        continue;
+      }
+      let item = T::to_list_item(resource).await;
+      if !filter(&item) {
+        continue;
+      }
+      if skipped < skip {
+        skipped += 1;
+        continue;
+      }
+      items.push(item);
+      if take != usize::MAX && items.len() >= take {
+        break;
+      }
     }
-    items.push(item);
-    if limit != 0 && items.len() as u64 >= limit {
-      break;
-    }
+    Ok(items)
   }
+}
 
-  Ok(items)
+/// How the `List<Resource>` apis sort the list items.
+pub enum ListItemSort<I> {
+  /// Sort by name at the db level. Default.
+  Name,
+  /// Sort on a db stored field, keeping db level sort
+  /// and streaming pagination. Only usable when the db field
+  /// exactly matches the displayed list item field.
+  DbField(&'static str),
+  /// Compare list items in memory, required for fields computed
+  /// from the in memory caches (eg. state), or which diverge
+  /// from the db field (eg. linked repo sources).
+  /// Collects all matching items before applying pagination.
+  InMemory(Box<dyn Fn(&I, &I) -> std::cmp::Ordering + Send>),
 }
 
 pub async fn list_for_user<T: KomodoResource>(
@@ -443,6 +503,41 @@ pub async fn list_full_for_user_using_pattern<T: KomodoResource>(
       .filter(|resource| names.contains(resource.name.as_str()))
       .collect(),
   )
+}
+
+/// Same as [list_full_for_user], but applies an additional in-memory
+/// `filter` (eg. by state computed from the in memory caches), with
+/// limit / page applied after the filter. Required because such
+/// filters cannot be expressed in the db level query.
+///
+/// `filter` receives each resource by value, and returns
+/// `Some(resource)` to keep it in the results, or `None` to drop it.
+pub async fn list_full_for_user_filtered<T: KomodoResource, F>(
+  mut query: ResourceQuery<T::QuerySpecifics>,
+  limit: u64,
+  page: u64,
+  user: &User,
+  permission: PermissionLevelAndSpecifics,
+  all_tags: &[Tag],
+  filter: impl Fn(Resource<T::Config, T::Info>) -> F,
+) -> anyhow::Result<Vec<Resource<T::Config, T::Info>>>
+where
+  F: Future<Output = Option<Resource<T::Config, T::Info>>> + Send,
+{
+  validate_resource_query_tags(&mut query, all_tags)?;
+  let mut filters = Document::new();
+  query.add_filters(&mut filters);
+  let mut permits =
+    crate::permission::load_list_permits::<T>(user, permission)
+      .await?;
+  crate::permission::list_resources_with_permits::<T, _>(
+    &mut permits,
+    Some(filters),
+    Some(limit as i64),
+    Some(page.saturating_mul(limit)),
+    filter,
+  )
+  .await
 }
 
 pub async fn list_full_for_user<T: KomodoResource>(

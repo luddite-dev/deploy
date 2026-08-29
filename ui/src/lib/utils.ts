@@ -3,6 +3,8 @@ import { Types } from "komodo_client";
 import sanitizeHtml from "sanitize-html";
 import ConvertAnsiToHtml from "ansi-to-html";
 
+export const EXECUTION_ACTION_STATE_REQUERY_MS = 500;
+
 export function objectKeys<T extends object>(o: T): (keyof T)[] {
   return Object.keys(o) as (keyof T)[];
 }
@@ -120,6 +122,16 @@ export function hasMinimumPermissions(
     }
   }
   return true;
+}
+
+/**
+ * Returns true if the search term is shorthand for the given resource type keyword,
+ * eg. term 'cont' matches keyword 'containers'. This lets searches like 'cont my-name'
+ * scope to containers matching 'my-name'. Requires at least 3 characters so short
+ * terms like 'on' are still used to search by name.
+ */
+export function termMatchesTypeKeyword(keyword: string, term: string) {
+  return term.length >= 3 && keyword.startsWith(term);
 }
 
 export function usableResourcePath(resource: UsableResource) {
@@ -270,4 +282,17 @@ export function listsEqual(a: string[], b: string[]) {
     }
   }
   return true;
+}
+
+export function parseVersion(version: string): Types.Version {
+  const [major, minor, patch] = version
+    // In case of 'v2.0.0' fmt
+    .replaceAll("v", "")
+    .split(".")
+    .map(Number);
+  return {
+    major,
+    minor,
+    patch,
+  };
 }

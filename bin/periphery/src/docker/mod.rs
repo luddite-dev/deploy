@@ -3,11 +3,12 @@ use std::{path::Path, sync::OnceLock};
 use anyhow::{Context, anyhow};
 use bollard::Docker;
 use command::{
-  CommandOptions, run_komodo_standard_command, run_shell_command,
+  CommandOptions, run_komodo_standard_command, run_standard_command,
 };
 use komodo_client::entities::{
   TerminationSignal, docker::*, update::Log,
 };
+use shell_escape::unix::escape;
 
 pub mod compose;
 pub mod image;
@@ -120,10 +121,19 @@ pub async fn docker_login(
     None => crate::helpers::registry_token(domain, account)?,
   };
 
+  // The token is written to the child's stdin rather than interpolated into
+  // the command, so it never reaches the process arguments, where any user
+  // on the host could read it out of `ps`. This runs without a shell, and
+  // `--` keeps a domain beginning with `-` from being parsed as a flag.
   let cli = container_cli();
-  let log = run_shell_command(&format!(
-    "echo {registry_token} | {cli} login {domain} --username '{account}' --password-stdin",
-  ), CommandOptions::default())
+  let log = run_standard_command(
+    &format!(
+      "{cli} login --username {} --password-stdin -- {}",
+      escape(account.into()),
+      escape(domain.into()),
+    ),
+    CommandOptions::default().stdin(registry_token),
+  )
   .await;
 
   if log.success() {
@@ -147,7 +157,7 @@ pub async fn docker_login(
 #[instrument("PullImage")]
 pub async fn pull_image(image: &str) -> Log {
   let cli = container_cli();
-  let command = format!("{cli} pull {image}");
+  let command = format!("{cli} pull -- {image}");
   run_komodo_standard_command(
     "Docker Pull",
     command,
@@ -167,8 +177,9 @@ pub fn stop_container_command(
   let time = time
     .map(|time| format!(" --time {time}"))
     .unwrap_or_default();
+  // `--` so a name beginning with `-` is not parsed as a flag.
   let cli = container_cli();
-  format!("{cli} stop{signal}{time} {container_name}")
+  format!("{cli} stop{signal}{time} -- {container_name}")
 }
 
 fn convert_object_version(

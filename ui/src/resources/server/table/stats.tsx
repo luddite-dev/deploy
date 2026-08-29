@@ -7,6 +7,7 @@ import { useServerStats, useServerThresholds } from "@/resources/server/hooks";
 import { StatCell } from "mogh_ui";
 import ServerVersion from "@/resources/server/version";
 import ServerDiskUsage from "../diskUsage";
+import { useServer } from "..";
 
 export default function StatsServerTable({
   resources,
@@ -114,9 +115,12 @@ function DiskCell({ id }: { id: string }) {
 
 function LoadAvgCell({ id }: { id: string }) {
   const stats = useServerStats(id);
+  const server = useServer(id);
   const one = stats?.load_average?.one;
   const five = stats?.load_average?.five;
   const fifteen = stats?.load_average?.fifteen;
+  const logicalCores = server?.info.logical_core_count;
+  const physicalCores = server?.info.core_count;
   return (
     <Group gap="xs" wrap="nowrap">
       <Group gap="0.2rem" wrap="nowrap">
@@ -143,6 +147,11 @@ function LoadAvgCell({ id }: { id: string }) {
           {fifteen !== undefined ? fifteen.toFixed(2) : "N/A"}
         </Text>
       </Group>
+      {logicalCores && (
+        <Text c="dimmed" size="sm">
+          {logicalCores} / {physicalCores} Core{logicalCores === 1 ? "" : "s"}
+        </Text>
+      )}
     </Group>
   );
 }
