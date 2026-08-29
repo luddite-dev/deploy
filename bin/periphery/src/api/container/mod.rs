@@ -330,8 +330,10 @@ impl Resolve<crate::api::Args> for RemoveContainer {
     let RemoveContainer { name, signal, time } = self;
     let name = escape(name.into());
     let stop_command = stop_container_command(&name, signal, time);
-    let command =
-      format!("{stop_command} && {} container rm -- {name}", container_cli());
+    let command = format!(
+      "{stop_command} && {} container rm -- {name}",
+      container_cli()
+    );
     let log = run_komodo_shell_command(
       "Docker Stop and Remove",
       command,
@@ -340,8 +342,10 @@ impl Resolve<crate::api::Args> for RemoveContainer {
     .await;
     if log.stderr.contains("unknown flag: --signal") {
       let stop_command = stop_container_command(&name, None, time);
-      let command =
-        format!("{stop_command} && {} container rm -- {name}", container_cli());
+      let command = format!(
+        "{stop_command} && {} container rm -- {name}",
+        container_cli()
+      );
       let mut log = run_komodo_shell_command(
         "Docker Stop and Remove",
         command,
@@ -501,7 +505,8 @@ impl Resolve<crate::api::Args> for RestartAllContainers {
         {
           return None;
         }
-        let command = format!("{} restart -- {name}", container_cli());
+        let command =
+          format!("{} restart -- {name}", container_cli());
         Some(async move {
           run_komodo_standard_command(
             &command.clone(),
@@ -593,7 +598,8 @@ impl Resolve<crate::api::Args> for UnpauseAllContainers {
         {
           return None;
         }
-        let command = format!("{} unpause -- {name}", container_cli());
+        let command =
+          format!("{} unpause -- {name}", container_cli());
         Some(async move {
           run_komodo_standard_command(
             &command.clone(),

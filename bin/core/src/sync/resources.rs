@@ -5,8 +5,7 @@ use komodo_client::entities::{
   ResourceTargetVariant, action::Action, alerter::Alerter,
   build::Build, builder::Builder, deployment::Deployment,
   procedure::Procedure, repo::Repo, server::Server, stack::Stack,
-  sync::ResourceSync, tag::Tag, update::Log,
-  user::sync_user,
+  sync::ResourceSync, tag::Tag, update::Log, user::sync_user,
 };
 use partial_derive2::MaybeNone;
 
